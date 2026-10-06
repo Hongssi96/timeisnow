@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 
 import { ArrowUpRight, ArrowRight, ArrowLeft, Home, Repeat2, History, SlidersHorizontal, MapPin, BusFront, Footprints, TrainFront, Plus, X, Check, Clock3, ChevronRight, CircleHelp, Navigation, Leaf, Coffee, Sun, RefreshCw, LogIn, ShieldCheck } from 'lucide-react';
 import './styles.css';
+import { apiRequest, ApiError, isServerTime } from './api';
 
 // 합성 데이터만 사용합니다. 실제 위치·교통·인증 API는 호출하지 않습니다.
 const initialRoutines = [
   { id: 'work', name: '평일 출근', origin: '집', destination: '회사', time: '09:00', days: ['월','화','수','목','금'], bus: '143', transfer: false },
   { id: 'school', name: '학교 가는 길', origin: '집', destination: '학교', time: '09:00', days: ['월','화','수','목','금'], bus: '721', transfer: true },
 ];
-const log = (event) => { if (import.meta.env.DEV) console.info(JSON.stringify({ timestamp: new Date().toISOString(), event, mode: 'ui_demo' })); };
+const log = (event, requestId) => { if (import.meta.env.DEV) console.info(JSON.stringify({ timestamp: new Date().toISOString(), event, mode: 'ui_demo', ...(requestId ? { request_id: requestId } : {}) })); };
 export default function App() {
   const [page, setPage] = useState('home');
   const [routines, setRoutines] = useState(initialRoutines);
@@ -89,26 +90,38 @@ export default function App() {
 function PageHeading({eyebrow,title,description}) {return <div className="page-heading"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{description}</p></div></div>;}
 function ServerCheck() {
   const [state, setState] = useState({ phase: 'idle' });
+  const pending = useRef(null);
+  useEffect(() => () => pending.current?.abort(), []);
   async function check() {
+    if (pending.current) return;
+    const controller = new AbortController();
+    pending.current = controller;
     setState({ phase: 'loading' });
     try {
-      const res = await fetch('/api/v1/health');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = await res.json();
+      const body = await apiRequest('/api/v1/health', { signal: controller.signal });
+      if (body.data?.status !== 'ok' || !isServerTime(body.data.server_time)) {
+        throw new ApiError('INVALID_RESPONSE', { status: body.status, requestId: body.meta.request_id });
+      }
+      if (controller.signal.aborted) return;
       setState({ phase: 'ok', serverTime: body.data.server_time, requestId: body.meta.request_id });
-      log('ui.server.check.completed');
-    } catch {
-      setState({ phase: 'error' });
-      log('ui.server.check.failed');
+      log('ui.server.check.completed', body.meta.request_id);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const failure = error instanceof ApiError ? error : new ApiError('INVALID_RESPONSE');
+      setState({ phase: 'error', message: failure.message, requestId: failure.requestId });
+      log('ui.server.check.failed', failure.requestId);
+    } finally {
+      if (pending.current === controller) pending.current = null;
     }
   }
   const checkedAt = state.phase === 'ok' ? new Date(state.serverTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : null;
-  return <div role="status">
+  return <div role="status" aria-live="polite" aria-busy={state.phase === 'loading'}>
     {state.phase === 'idle' && <p className="muted small">아직 확인하지 않았어요.</p>}
     {state.phase === 'loading' && <p className="pill"><span className="dot"/>서버에 연결하는 중…</p>}
     {state.phase === 'ok' && <p className="pill"><span className="dot"/>연결됨 · 확인 시각 {checkedAt}</p>}
-    {state.phase === 'error' && <p className="muted small">서버에 연결할 수 없어요. 백엔드가 실행 중인지 확인하고 다시 시도해주세요.</p>}
+    {state.phase === 'error' && <p className="muted small">{state.message}</p>}
     <button className="secondary" onClick={check} disabled={state.phase === 'loading'}>{state.phase === 'error' ? '다시 확인하기' : '서버 연결 확인'} <RefreshCw size={15}/></button>
+    {state.requestId && <p className="muted small request-id">문의용 요청 ID: <code>{state.requestId}</code></p>}
   </div>;
 }
 function Modal({title,onClose,children}) {

@@ -5,6 +5,45 @@
 ## 실제 기록
 
 ### 2026-10-06 — 누적 변경 커밋/푸시 준비 검증
+- 사용자 요청: 현재까지의 변경 전체 커밋 및 origin/init 푸시. 공통 API 호출/오류/요청 ID·최소 JSON 로그 구현, D03~D05 정책 및 출발/조회 정책 문서 동기화를 포함한다.
+- 실제 검증: unittest discover 백엔드 전체41개, 프론트20개 및 프로덕션 빌드 통과. git diff --check 통과. 실제 .env의 키/비밀번호/AI URL 값과 Git 대상 파일 대조에서 일치0건, .env 추적 제외 확인.
+- 명세: 최신 Notion v0.28 재조회와 api_contract.md 전체 본문 대조 일치. 이번 작업은 커밋 준비이며 API 계약 추가 변경 없음. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+- 배운 개념/잔여: 테스트 성공과 배포·DB/외부 공급자 연결 성공은 별개다. 이번에는 DB/외부 API를 호출하지 않았으며 기존 미검증 상태와 다음 F01-01을 유지한다. 푸시 결과는 실행 후 최종 보고한다.
+
+### 2026-10-06 — F00-04 최소 JSON 요청 완료/오류 로그 완료
+- 목표/명세 확인: 최신 Notion v0.27·TODO·logging.md와 기존 API/응답 테스트·환경 예시·실행 안내 확인. 요청 ID로 성공/오류를 대조하며 개인정보/키/원문을 남기지 않는 최소 로그만 구현, 업무 API/새 UI/외부 수집기 추가 없음. Notion v0.28에 로그 필드/수준·경로/시간/비노출·보관 적용 범위를 선행 기록.
+- 구현: backend/app/request_logging.py에 전용 timeisnow.requests logger·JSONFormatter·이벤트 필터, stdout1줄·UTC·LOG_LEVEL INFO 기본/INFO·WARNING·ERROR. 프레임워크 메시지/args/traceback/무관한 extra를 출력하지 않음. main.py에서 단조 시계 처리시간·registered route.path 템플릿/unmatched·status/error_code·서버 request_id 기록. 예상 밖 예외는 종류만 ERROR 실패+같은 ID INFO 완료, 완료는 요청당1회. 404/405/422 사용자 입력 오류는 서버 예외로 기록하지 않음. 시간은 응답 생성까지이며 전송 완료시간 아님.
+- 환경/안내: .env.example에 누락된 카카오/AI 키·승인 URL 자리·LOG_LEVEL 추가, 공급자 키는 빈 값/AI URL은 .example 예시. 실제 .env 변경/키 출력 없음. backend/README.md에 기존 .env 덮어쓰기 방지·실행/LOG_LEVEL/ID 대조·테스트 명령 정리, Uvicorn --no-access-log 유지. stdout만 제공하며 로그14일 수집/회전은 배포F11에서 적용, 미구현.
+- 실제 테스트: test_request_logging.py7개 통과(완료1회/응답ID 일치·경로템플릿·쿼리/헤더/본문/응답/예외/extra 비노출·404/422·예상 밖500·handler 중복/DEBUG 방지). 기존 응답계약6개·진단21개·최신성6개 합계 백엔드40개 통과, 프론트20개 회귀 통과. DB/외부 API 호출 없음, DB 테스트는 재실행하지 않음. 프론트 코드/UI 변경 없어서 시각 검증/빌드 재실행 불필요.
+- 실서버: 이전 작업의 확인된 개발 PID14368만 재시작, 정상8000 서버에서200/404/405 호출. 각각응답 헤더/meta/실제 stdout ID 일치·호출당 완료1회 및 임의 클라이언트ID 무시 확인. 합성 privacy-sentinel을 경로/쿼리/Authorization/Cookie/본문에 넣어도stdout 포함0건. expected error에는오류코드,404route=unmatched 확인. 터미널 화면의 자동 줄바꿈은 실제 JSON 레코드와 구분. 환경 예시 필수 설정 존재/실제 API 키값 매치0건 확인.
+- 변경 파일: backend/app/request_logging.py·main.py·tests/test_request_logging.py·test_api_contract.py·.env.example·backend/README.md·README.md·logging.md·planning.md·api_contract.md·todo.md·feature_breakdown.md·policy_decisions.md·development_log.md. Notion v0.28 구현 상태/검증 결과 재조회·로컬 대조. API 성공/오류/헤더/ID 형식 변경 없음, 실행 로그 필드/정책 구현.
+- 최종 확인: Notion v0.28 재조회/로컬 본문 일치, TODO/기능 목록 F00-04 완료·F01-01 미완료 상태 일치, py_compile·git diff --check 통과(기존 줄바꿈 경고만). .env는 Git 변경에 포함되지 않음.
+- 완료/다음: F00-04만 기능 완료, 업무/AI/교통 로그·배포 수집/회전 미완료. 다음 F01-01 대표 출발 안내 사례/검증 목록을 기획 범위 안에서 정리하며 D02 실제 미검증/DB 연결 문제를 완료로 바꾸지 않음. 이번 변경 커밋/푸시 없음.
+- 배운 개념: 로그는 허용된 필드만 처음부터 구성해야 한다. HTTP 4xx와 예상 밖 서버 오류를 구분하고 응답·프론트·로그의 서버 ID를 맞춰야 실패 요청을 찾을 수 있다.
+
+### 2026-10-06 — F00-03 공통 API 호출/오류/요청 ID 연결 완료
+- 목표/명세 확인: 최신 Notion v0.26·TODO·기획/로깅·design_guide.md·screen_plan.md와 기존 JSX/CSS 확인. 직접 fetch하던 health 카드에 공통 호출·로딩/실패·서버 request_id 연결. 업무 API/인증/교통·AI 기능을 추가하지 않음. FastAPI 공식 오류 처리 문서 https://fastapi.tiangolo.com/tutorial/handling-errors/ 참고.
+- 계약 선행: Notion v0.27에 공통 클라이언트·404/405/422/500 형식/405 METHOD_NOT_ALLOWED·서버 ID 생성·민감 입력 비반사 기록 후 구현. 첫 Notion 편집은422 행 중복 매치로 거절됐으므로 고유 공통 오류 행 전체로 좁혀 성공, 변경 후 재조회. health 성공 객체/경로 유지, 다른 HTTP 오류는 기존 프레임워크 detail에서 error/meta로 맞춤.
+- 구현: frontend/src/api.js 공통 JSON 호출/응답 검증·same-origin 쿠키·헤더 전달·외부 경로 금지·리다이렉트 금지·기본10초 시간초과·취소·202 접수/204 본문 없음 구분·수동 재시도. 실패 메시지는 안전한 정적 문구, 원문/URL/본문 로그 없음. 헤더/본문 요청 ID 불일치·깨진 JSON·잘못된 health 데이터는 정상 연결로 표시하지 않음.
+- 화면: App.jsx 서버 연결 카드 로딩/비활성·성공·실패/재시도·지원용 요청 ID, 화면 이탈 요청 취소·오래된 상태 제외. 기존 클래스/색/카드 유지, styles.css request-id 줄바꿈만 추가. 프론트 개발 성공/실패 이벤트에 안전한 요청 ID만 연결.
+- 서버: backend/app/main.py 미들웨어에서 서버 request_id 생성, 클라이언트 임의 ID 무시. health/meta/헤더 일치.404/405/422 공통 handler·예상 밖500의 정적 오류, 검증 입력값/예외 원문 비반사. Allow 헤더 보존. 요청 완료/예상 밖 오류 구조화 로그는 아직 F00-04 미구현.
+- 실제 테스트: frontend App11개/API9개 합계20개 통과·프로덕션 빌드 통과. backend/tests/test_api_contract.py6개(ASGI 실제 응답/임의 ID·요청별 ID·404/405/422/500/입력 비반사) 통과, 기존 진단/매핑21개·최신성6개 합계27개 회귀 통과. DB 테스트는 이번 범위에서 재실행하지 않음, 기존 연결시간초과 미해결 유지.
+- 실행/시각 검증: 실제 로컬 health200·404·405(errorcode/Allow)에서 헤더/본문ID 일치 확인. 데스크톱 및390×844 실제 브라우저 성공/로딩/QA500실패·재시도/ID 교체/줄바꿈 확인. 임시 QA 서버는 응답2초 지연/의도적500만 주었고 프로덕션 코드에 QA 경로/스위치 없음. QA 플래그/파일 정리, 검증된 QA PID만 종료 후 정상 backend8000/frontend5173 재시작/최종 연결 성공 확인. Windows QA 종료가 Ctrl+C/Stop-Process로 끝나지 않아 확인된 PID에만 taskkill 적용. 브라우저 뷰포트 원복.
+- 변경 문서: api_contract.md·planning.md·screen_plan.md·design_guide.md·logging.md·README.md·backend/README.md·todo.md·feature_breakdown.md·policy_decisions.md·development_log.md. Notion v0.27 구현 상태/검증 결과 재조회·로컬 본문 대조. F00-03만 완료, F00-04는 미완료.
+- 배운 개념/남은 문제: 서버 요청 ID는 네트워크 요청을 묶는 식별자이고 네트워크 실패에 가짜 ID를 만들지 않는다. common JSON/HTTP 성공만으로 업무 데이터 정상이라고 판단하지 않는다. 다음 F00-04에서 같은 ID의 요청 완료/실패 로그를 추가하며 기능/API 데이터는 그대로 미구현이다.
+
+### 2026-10-06 — 위임에 따른 D03·D04·D05 정책 확정
+- 사용자 요청: 남은 결정을 에이전트가 기존 기획 기준으로 진행. 최신 Notion v0.25·todo·planning·약속 API/계획·개인화·로깅·DB/자연어 문서를 확인해 수치/정책을 확정했다. 환승·AI 도보 산정·저장 재사용·수동 확인 요구와 공급자 조건 추가 확인 생략 가정 유지, 길찾기 제품으로 범위 확대 없음.
+- D03: 도보30일·활성화면60초 조회·수신/검증 생성시각120초 중 이른 만료(경계 포함)·장소검색10분/여정검색5분·작업/내보내기24시간/다운로드10분·멱등24시간·자연어컨텍스트10분. 작업 상태는2→5→10→최대30초/Retry-After 우선이며 교통 조회와 구분. 기본 여유 첫탑승300초/환승120초·각0~1800초, 최대환승2회·목록20/100. 생성시각 unknown/미래/오류를 최신으로 만들지 않음.
+- 보관/삭제: 로그14일·개인 이동/품질90일·장소/루틴/현재프로필 삭제까지 유지. 매일 기간 청소·만료 접근 즉시 차단·삭제202 작업24시간 목표/실패 재시도·백업 최대7일 및 복원 삭제 재적용. 120초는1분 조회의 한 차례 지연을 허용하는 앱 정책이며 공급자 정확도 보장 아님. 현존 데이터를 삭제하거나 실행 환경을 설정한 것은 아님.
+- D04: 첫 출시 반응형 모바일 웹 활성화면 출발 안내 포함. 백그라운드 푸시/예약 알림과 자동 출발/GPS 감지는 후속, 새 푸시 API/알림 권한/UI 도입 없음.
+- D05: 약속 최대2명/혼자사용·초대24시간1회·추천3개5분·제목100자/채팅1000자·기존 속도제한 확정. 공유 기본꺼짐·종결/취소/철회/목표6시간후 종료·ETA최대120초. draft미사용30일 삭제·confirmed목표6시간후 자동종결(참석판정아님)·공동30일·재전송24시간·본인약속탈퇴와 계정탈퇴 메시지 처리/주최자탈퇴/개인trip 연결해제 구분. 기존 API 객체/경로 유지, 검증/만료/종결 동작 계약 확정.
+- 변경 파일: policy_decisions.md 신규, api_contract.md·planning.md·meeting_api.md·meeting_plan.md·personalization.md·logging.md·database_schema.md·natural_language_schedule.md·ai_prompts.md·provider_plan.md·public_arrivals_plan.md·provider_conditions.md·feature_breakdown.md·todo.md·development_log.md. Notion v0.26에 공통 값·예시/정책·약속·20절/변경 이력 동기화, 재조회 저장 확인. 자동 이스케이프(~)는 의미 동일함을 비교하고 로컬 원문에 반영.
+- 검증: 코드/실제API/UI/청소 변경 없음·실행 테스트 대상 없음. Notion/로컬 전체 본문 일치와 기존 API 경로 언급 목록 동일 확인. 문서 일관성 검사 첫 시도는 문구의 정확한 문자열 가정 때문에 실패해 실제 문서 표현으로 수정, 이후 결정 체크·120초 만료·백그라운드 후속·기능 미구현4개 확인 통과. git diff --check 통과(줄바꿈 경고만). 결정 완료 D03·D04·D05와 기능 미구현 체크를 구분, D02 실제 미검증/DB 연결시간초과를 숨기지 않음.
+- 다음: F00-03 공통 API 클라이언트·로딩/실패/request_id 연결 후 F00-04 요청 로그. 실제 구현에서 경계·만료·권한/동시 수락·삭제/재연결 회귀를 검증한다. 이번 문서 변경은 커밋/푸시하지 않았다.
+- 배운 개념: 경로 구조/실시간 예측/도보 산정은 서로 다른 유효기간을 가진다. 문서 정책 확정과 기능 실행·제3자 보장은 별개이며 종료 상태를 실제 참석 증거로 사용하지 않는다.
+
+### 2026-10-06 — 누적 변경 커밋/푸시 준비 검증
 - 사용자 요청: 현재까지 저장된 레포 변경 전체를 커밋 메시지와 함께 커밋/푸시. 현재 init 브랜치·기존 origin 사용, 새 기능/범위 추가 없음.
 - 비밀 검증: 추적/추가 후보 63개 파일에서 현재 .env의 실제 API 키와 전용 AI baseURL 값 대조, 노출 0건. .env·backend/.venv·frontend/node_modules·빌드 결과는 Git 제외 확인. .env.example은 예시 파일로만 포함.
 - 실제 검증: frontend npm test 7개 통과, npm run build 통과. backend 진단/매핑 테스트 21개·최신성 6개 합계 27개 통과. health 함수 HTTP 200·data.status·request_id 헤더/본문 일치 검사 통과(HTTP 서버 실호출 아님).

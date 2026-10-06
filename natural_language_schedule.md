@@ -17,7 +17,7 @@
 - 목적지 검색어는 장소 ID가 아니다. 검색 후보 선택 및 본인 저장 장소 소유권 검증 후 기존 저장 API로 전달한다. 기존 루틴은 목표 도착 시각 중심이므로 depart_at 입력은 그대로 저장하지 않고 미지원 안내 또는 목표 도착 입력 보완으로 처리한다.
 ### API 설계 초안
 - 신규 POST /api/v1/schedule-interpretations. 로그인·이메일 확인·CSRF 및 공통 응답/요청 추적 규칙 적용. 일정 저장 API와 분리한다.
-- 입력: text(1~1000자 제안), timezone(IANA), target_type(routine/meeting), 선택 clarification_context. 후속 문장은 전체 문맥으로 다시 제출한다. clarification_context는 서버 서명된 최초 reference_at·사용자·만료값으로 제한하며 임의 클라이언트 시각을 신뢰하지 않는다. 유효기간10분 제안.
+- 입력: text(1~1000자 확정), timezone(IANA), target_type(routine/meeting), 선택 clarification_context. 후속 문장은 전체 문맥으로 다시 제출한다. clarification_context는 서버 서명된 최초 reference_at·사용자·만료값으로 제한하며 임의 클라이언트 시각을 신뢰하지 않는다. 유효기간10분 확정.
 - 200 data: status(ready_for_review/clarification_required/unsupported), reference_at, timezone, clarification_context, draft, missing_fields, questions, warnings. ready_for_review는 저장 완료를 뜻하지 않는다.
 - draft: date(YYYY-MM-DD 또는 null), local_time(HH:mm 또는 null), time_basis(arrive_by/depart_at/unknown), recurrence(null 또는 frequency=weekly, weekdays=ISO 1~7, start_date, end_date 선택), destination_query(string 또는 null). 불확실한 필드는 null/unknown과 질문으로 반환한다.
 - 서버는 모델 출력 스키마·날짜·요일·구간·참조 소유권을 검증한다. 잘못된 출력은 저장하지 않는다. 본문/시간대 오류422 VALIDATION_ERROR, 인증401/403, 제한429, AI 실패503 AI_UNAVAILABLE, 출력 검증 실패502 AI_OUTPUT_INVALID. 문장 모호함은 200 해석 상태로 구분한다.
@@ -27,3 +27,5 @@
 - AI 전달은 필요한 문장과 기준 정보로 최소화하고 전체 채팅·주소록을 전달하지 않는다. 데이터 전송 조건과 모델 선택은 D02-04, 보관 기간은 D03 결정에 의존한다.
 - 평가: 상대 날짜, 자정/월말/연말/윤년, 반복 요일, 모호한 오전/오후, 과거·잘못된 날짜, 악성 지시문, 실패 시 수동 입력. 같은 합성 기준 시각에서 기대 구조 및 확인 전 저장 없음 검증.
 - F17은 F02 인증·F06 루틴 또는 F12 약속 생성 기능에 의존한다. 기존 착수 전 결정 순서는 유지한다. 기존 AI 도보/경로 설명 기능을 삭제하거나 대체하지 않는다.
+
+D03 후속 결정(2026-10-06): 서명 컨텍스트10분·작업 결과24시간·개인 품질90일, 원문 일반 로그/기본 영구 저장 제외. 사용자 위임 policy_decisions.md·Notion v0.26 기준. 입력/AI 실패 평가 기능은 미구현.

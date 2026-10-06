@@ -26,7 +26,7 @@ PK는 한 행의 고유 ID, FK는 다른 테이블의 행을 연결하는 ID다.
 - 설정 여유·소요 시간은 음수 금지. **계산 결과 slack_seconds는 음수가 가능**하다. AI 실패·정보 부족 결과에는 확정된 시간을 억지로 넣지 않는다.
 - 핵심 FK·소유권·정렬·조회 컬럼은 정규 컬럼으로 둔다. 공급자 근거·당시 응답 요약·가변 구조만 jsonb를 사용하고 스키마 버전을 함께 기록한다.
 - 개인 자원에는 user_id FK. 하위 테이블에도 소유자를 둘 경우 부모의 UNIQUE(user_id,id)와 복합 FK로 다른 사용자의 데이터를 연결하지 못하게 한다. 서버 인증/인가 검증도 필수다.
-- 보관 기간은 기존 실행 로그 14일/개인 품질 90일 제안이며 아직 운영 확정이 아니다. 모든 행에 무조건 영구 보관 정책을 적용하지 않는다.
+- 보관은 실행 로그14일·개인 이동/품질90일·공동 약속/채팅 종결후30일로 확정(policy_decisions.md). 장소/루틴/프로필은 사용자 삭제까지 유지, 캐시/결과는 별도TTL. 매일 청소/삭제 사본/백업 정리는 아직 미구현.
 - 외부 역·정류장·노선 ID는 provider와 함께 저장한다. 외부 ID를 서비스 회원 ID처럼 FK로 취급하지 않는다. 전국 교통 마스터 DB·PostGIS 도입은 현재 필수가 아니다.
 
 ## 3. 통근 MVP ER 다이어그램
@@ -67,7 +67,7 @@ routine → journey_plan은 반복 사용할 경로를 고르는 관계다. guid
 | 테이블 | 역할 / 핵심 컬럼 | 관계·제약 |
 | --- | --- | --- |
 | users | id, display_name, status, created_at, updated_at, version | 서비스 내부 회원 ID. 삭제 진행 중 접근 차단. 비밀번호 컬럼을 먼저 만들지 않음 |
-| user_profiles | user_id(PK/FK), walking_preference, first_boarding_buffer_seconds=300, transfer_buffer_seconds, route_preference, timezone, version | users와 1:1. 여유 >=0, 상한은 미정. 학습 계수는 여기서 수동 수정하지 않음 |
+| user_profiles | user_id(PK/FK), walking_preference, first_boarding_buffer_seconds=300, transfer_buffer_seconds, route_preference, timezone, version | users와 1:1. 여유 정수0~1800초, 첫 탑승 기본300초·환승 기본120초 확정. 학습 계수는 여기서 수동 수정하지 않음 |
 | saved_places | id, user_id, label, latitude, longitude, entrance_ref?, version, created_at, updated_at | users 1:N. 좌표 범위 CHECK. 집·회사 라벨을 고정 enum으로 제한하지 않음 |
 
 D01 확정: 이메일·비밀번호 로그인. auth_api.md에 auth_credentials/auth_sessions/auth_action_tokens/auth_mail_outbox 4개 후보를 정의한다. 소셜 auth_identities는 테스트 후 배포 확대 시 검토하며 현재 범위에서 제외한다.
@@ -131,7 +131,7 @@ reset 시 generation 증가 및 기본 계수 기록. reset 이전에 측정한 
 | jobs | id, user_id?, type, status, progress?, result_ref?, error_code?, created_at, started_at?, finished_at?, expires_at?, deletion_receipt_hash? | 비동기 검색·재산정·삭제·내보내기. 결과에 원문 비밀 금지. 계정 삭제 후 조회는 auth_api.md의 X-Deletion-Receipt 계약 적용 |
 | idempotency_requests | id, user_id, method, request_path, key_hash, request_hash, status, response_status?, response_ref?, expires_at | UNIQUE(user_id,method,request_path,key_hash). 경로는 자원 ID를 포함하는 정규 경로(키·좌표 쿼리 제외). 동시 실행은 unique+트랜잭션으로 제어 |
 
-멱등 키는 같은 버튼 재전송으로 루틴·이벤트가 두 번 생성되지 않게 한다. 같은 키에 다른 본문은 기존 409 계약을 따른다. 응답 재현에 필요한 최소 결과만 권한 있는 DB에 보관하고 실행 로그에 복제하지 않는다. 만료 키 청소와 계정/기록 삭제 시 연결된 응답 캐시 정리도 포함한다. 24시간은 기존 제안값이며 운영 확정 전이다.
+멱등 키는 같은 버튼 재전송으로 루틴·이벤트가 두 번 생성되지 않게 한다. 같은 키에 다른 본문은 기존 409 계약을 따른다. 응답 재현에 필요한 최소 결과만 권한 있는 DB에 보관하고 실행 로그에 복제하지 않는다. 만료 키 청소와 계정/기록 삭제 시 연결된 응답 캐시 정리도 포함한다. 24시간 보관은 D03 위임 결정으로 확정했다.
 
 ## 4. 약속 확장 ER 다이어그램
 
@@ -159,10 +159,10 @@ erDiagram
 | meetings | id, organizer_user_id, title, status, version, created_at | 공동 약속. 혼자 가는 일정도 구성 가능. 생성자도 member로 추가 |
 | meeting_members | id, meeting_id, user_id, role, participation_status, sharing_enabled=false, joined_at?, left_at?, version | UNIQUE(meeting_id,user_id). 출발지/집 주소는 공동 조회 필드에 넣지 않음 |
 | meeting_revisions | id, meeting_id, revision_no, target_arrival_at, timezone, destination_snapshot, confirmed_by_member_id, confirmed_at | UNIQUE(meeting_id,revision_no). 확정된 장소·시각의 불변 버전. 미확정 중에는 행을 만들지 않음 |
-| meeting_invites | id, meeting_id, inviter_member_id, token_hash, expires_at, accepted_by_user_id?, accepted_at?, revoked_at? | token_hash UNIQUE. 원본 초대 토큰 저장/로그 금지. 1회 수락 제안; 초대 만료·재발급 세부 계약 미정 |
+| meeting_invites | id, meeting_id, inviter_member_id, token_hash, expires_at, accepted_by_user_id?, accepted_at?, revoked_at? | token_hash UNIQUE. 원본 초대 토큰 저장/로그 금지. 활성1개/약속·24시간·1회 수락, 재발급은 기존 활성 토큰 철회. D05 확정 |
 | meeting_recommendations | id, meeting_id, request_version, input_fingerprint, candidates jsonb, algorithm_version, ai_execution_id?, expires_at | 두 사람의 이동 근거·순위·후보 시각. 추천 설명용 AI 실행은 개인 원문을 공유하지 않음. 확정 장소는 별도로 revision에 저장 |
 | meeting_journeys | id, member_id, meeting_revision_id, journey_plan_id, trip_id?, status, created_at | 해당 참여자의 개인 경로. trip_id UNIQUE(비NULL). 재계산·재출발 때 새 행; 동시에 활성 경로 하나만 허용하는 부분 unique 인덱스 제안 |
-| meeting_messages | id, meeting_id, sender_member_id, client_message_id, body, sent_at, deleted_at? | UNIQUE(sender_member_id,client_message_id). 멤버가 같은 약속 소속이고 참여 중인지 검증. 본문 1~1000자·본인 삭제·종료 후 30일 보관 제안, meeting_api.md 참고 |
+| meeting_messages | id, meeting_id, sender_member_id, client_message_id, body, sent_at, deleted_at? | UNIQUE(sender_member_id,client_message_id). 멤버가 같은 약속 소속이고 참여 중인지 검증. 본문1~1000자·본인 삭제·종결후30일 보관 확정, 계정탈퇴는 본인 본문 삭제. meeting_api.md 참고 |
 | meeting_share_events | id, meeting_id, member_id, meeting_journey_id?, event_type, source_event_revision_id?, client_event_id, source, occurred_at, received_at, eta?, eta_calculated_at?, expires_at?, payload_version | UNIQUE(member_id,client_event_id). 동의/철회/출발 신고/정정/ETA 변경 기록. 당시 trip 이벤트 revision으로 근거 추적 |
 
 공유 이벤트는 정밀 위치·집 주소·전체 개인 안내 JSON을 복사하지 않는다. 본인 신고는 source=manual로 표시하며 기록 수신을 GPS 검증으로 바꾸지 않는다. 공유 상태는 최신 이벤트로 계산하고 캐시는 권한 검사 후에만 제공한다.
@@ -181,7 +181,7 @@ erDiagram
 | 루틴 삭제 | 안내의 routine_id는 SET NULL 가능. 과거 출발 맥락은 스냅샷으로 조회. 공유 경로는 다른 참조가 없을 때 정리 |
 | 이벤트 정정 | 원본 revision 유지 + 새 revision/관측 생성. 영향을 받은 학습 계수를 재계산하고 새 산정 버전 생성 |
 | 이동 삭제 | 비동기 작업으로 관측·표본 연결·공유에 남은 개인 출발 근거·멱등 결과를 함께 정리. 남은 관측으로 계수 재생성 후 완료. 과거 예측을 새 계수로 수정하지 않음 |
-| 회원 탈퇴 | 접근 차단 → 개인 스냅샷/AI 근거/캐시/내보내기 포함 삭제 작업 → 완료. 공동 약속의 주최권·메시지 익명화/삭제 정책은 미정이며 확장 구현 전 결정 |
+| 회원 탈퇴 | 접근 차단 → 개인 스냅샷/AI 근거/캐시/내보내기 포함 삭제 작업 → 완료. 본인 메시지 본문/공유/티켓 삭제, 주최자는 약속 취소·상대 공동30일 열람. D05 확정 meeting_api.md 참고 |
 | 약속 취소/공유 철회 | 이후 공유 및 조회 차단, 상대 화면에 취소/철회 반영. 미출발·불성실로 해석하지 않음 |
 | 만료 데이터 | 참조 중인 산정·안내를 단순 TTL CASCADE로 삭제하지 않음. 참조·보관 정책에 맞춰 종속 정리 및 필요 최소 스냅샷 유지 여부 결정 |
 
@@ -246,7 +246,7 @@ CASCADE는 부모와 수명이 같은 자식(예: 삭제 대상 이벤트의 정
 
 [meeting_api.md](./meeting_api.md)가 신규 약속 REST/WS의 세부 기준이다. 기존 표는 논리 관계를 나타내며 아래 컬럼·2개 테이블을 추가 제안한다. 전체 DDL 미적용.
 
-- meetings: max_members=2 제안, last_event_seq(bigint), closed_at?, delete_after?. 이벤트 seq는 행 잠금으로 증가시키고 서버 이벤트 저장과 같은 트랜잭션으로 처리한다.
+- meetings: max_members=2 확정, last_event_seq(bigint), closed_at?, delete_after?. 이벤트 seq는 행 잠금으로 증가시키고 서버 이벤트 저장과 같은 트랜잭션으로 처리한다.
 - meeting_members: private_origin jsonb?, origin_version, recommendation_consent=false, sharing_enabled=false, sharing_expires_at?. private_origin은 본인 조회/서버 계산 전용.
 - meeting_recommendations: job_id, target_arrival_at, input_versions jsonb(참여자와 출발지 버전), status, outcome, error_code?. 확정/계산 완료 시 입력 버전 재검증.
 - meeting_messages: version, body_hash. 삭제 본문은 NULL, 중복 재전송으로 복구되지 않도록 멱등 캐시도 정리.
@@ -257,9 +257,13 @@ CASCADE는 부모와 수명이 같은 자식(예: 삭제 대상 이벤트의 정
 
 | 테이블 | 주요 컬럼 | 관계·제약 |
 | --- | --- | --- |
-| meeting_realtime_events | id, meeting_id, seq bigint, type, entity_ref jsonb, occurred_at, expires_at | UNIQUE(meeting_id,seq). 약속 FK. 본문·좌표·ETA 원문 없이 변경된 자원 ID만 저장. 24시간 재생 제안 |
-| meeting_realtime_tickets | id, member_id, token_hash, auth_session_ref, expires_at, consumed_at? | token_hash UNIQUE. 30초·1회 사용 제안. 권한/세션 상실 시 차단. 티켓 응답은 멱등 캐시에 저장하지 않음 |
+| meeting_realtime_events | id, meeting_id, seq bigint, type, entity_ref jsonb, occurred_at, expires_at | UNIQUE(meeting_id,seq). 약속 FK. 본문·좌표·ETA 원문 없이 변경된 자원 ID만 저장. 24시간 재생 확정 |
+| meeting_realtime_tickets | id, member_id, token_hash, auth_session_ref, expires_at, consumed_at? | token_hash UNIQUE. 30초·1회 사용 확정. 권한/세션 상실 시 차단. 티켓 응답은 멱등 캐시에 저장하지 않음 |
 
 기존 31개 제안에 2개를 더한 33개 논리 테이블 후보다. 최초 ERD는 핵심 관계를 유지하며 events는 meetings 1:N, tickets는 meeting_members 1:N으로 추가된다. D01 결정으로 auth_session_ref는 auth_sessions.id를 참조한다. 인증 후보 4개를 추가한 전체 논리 테이블 후보는 37개이며 실제 생성은 미완료다.
 
 운영 보관/탈퇴/주최자 계정 삭제 처리의 상세 제안은 meeting_api.md 11절을 따른다. 제안 승인 전 해당 데이터 삭제 정책을 확정된 운영 정책으로 배포하지 않는다.
+
+## D03·D05 후속 결정 — 2026-10-06
+
+[policy_decisions.md](./policy_decisions.md)·Notion v0.26 참조. 약속 최대2명·draft 미사용30일 삭제·confirmed 목표시각6시간후 자동종결·종결후 공동30일·개인90일·재전송24시간·공유ETA120초. 주최자 탈퇴/비주최자 탈퇴/메시지 본문 삭제·개인trip 연결해제 규칙은 meeting_api.md 확정 계약을 적용한다. 기존 논리 테이블을 통한 시간/상태/만료 정책이며 신규 DDL/물리 삭제 실행 없음.
