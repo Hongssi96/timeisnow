@@ -10,8 +10,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 from app.request_logging import record_request
+from app.auth import router as auth_router, AuthError
 
 app = FastAPI(title="지금이니? API", version="0.1.0")
+app.include_router(auth_router)
 
 
 def utc_now_iso() -> str:
@@ -28,6 +30,12 @@ def error_response(request, status, code, message, details=None, headers=None):
     )
 
 
+@app.exception_handler(AuthError)
+async def auth_error(request: Request, exception: AuthError):
+    return error_response(request, exception.status, exception.code, exception.message,
+                          headers={'Cache-Control': 'no-store', **(exception.headers or {})})
+
+
 @app.middleware("http")
 async def request_identity(request: Request, call_next):
     started_at = perf_counter()
@@ -40,6 +48,8 @@ async def request_identity(request: Request, call_next):
         # Only the exception class is logged; no message or traceback.
         response = error_response(request, 500, "INTERNAL_ERROR", "처리를 완료할 수 없습니다.")
     response.headers["X-Request-ID"] = request.state.request_id
+    if request.url.path.startswith('/api/v1/auth/') or request.url.path == '/api/v1/me':
+        response.headers['Cache-Control'] = 'no-store'
     record_request(request, response.status_code, started_at, unexpected)
     return response
 

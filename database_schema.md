@@ -1,7 +1,7 @@
 # 지금이니? — 테이블·연관관계 설계 초안
 
 - 버전: 0.3 / 작성일: 2026-10-02
-- 상태: **설계 제안, DDL·마이그레이션 미적용**. 이번 조회에서 PostgreSQL public 업무 테이블은 없었다.
+- 상태: **회원 인증5개 테이블은0002_member_auth로 적용**, 나머지 이동/장소/약속 DDL은 설계 제안·미적용.
 - 기준: [API 명세](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa), [기획](./planning.md), [개인화](./personalization.md), [약속 확장](./meeting_plan.md).
 - DB: PostgreSQL 17 / 로컬 Docker. 실행은 [database.md](./database.md).
 - 표는 핵심 컬럼·관계의 논리 설계다. 최종 컬럼 길이·상태값·전체 DDL은 기능별 마이그레이션 전에 확정한다. 인증·약속 API 등 미정 계약을 이번 설계로 확정하지 않는다.
@@ -70,7 +70,7 @@ routine → journey_plan은 반복 사용할 경로를 고르는 관계다. guid
 | user_profiles | user_id(PK/FK), walking_preference, first_boarding_buffer_seconds=300, transfer_buffer_seconds, route_preference, timezone, version | users와 1:1. 여유 정수0~1800초, 첫 탑승 기본300초·환승 기본120초 확정. 학습 계수는 여기서 수동 수정하지 않음 |
 | saved_places | id, user_id, label, latitude, longitude, entrance_ref?, version, created_at, updated_at | users 1:N. 좌표 범위 CHECK. 집·회사 라벨을 고정 enum으로 제한하지 않음 |
 
-D01 확정: 이메일·비밀번호 로그인. auth_api.md에 auth_credentials/auth_sessions/auth_action_tokens/auth_mail_outbox 4개 후보를 정의한다. 소셜 auth_identities는 테스트 후 배포 확대 시 검토하며 현재 범위에서 제외한다.
+D01 변경(2026-10-06): 이메일 중복 확인·비밀번호 로그인, 메일 인증/복구 후순위. users/auth_credentials/user_profiles/auth_sessions/auth_rate_limit_buckets를 적용했다. auth_credentials는 user_id·email_normalized UNIQUE·password_hash, auth_sessions는 token_hash PK·user_id nullable·csrf_token_hash·절대/미사용 만료, rate_limit_buckets는 scope/key_hash/window_start 복합PK·count/expires_at다. 인증 관련 메일 토큰/outbox는 만들지 않는다. 실제 DDL은0002_member_auth가 기준이며 UUID 세션 참조·WS 연결은 해당 후속 기능에서 추가한다.
 
 ### B. 경로 검색과 루틴
 

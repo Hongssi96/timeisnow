@@ -1,7 +1,7 @@
 # 마이그레이션 사용 안내
 
 2026-10-02 / F00-05b 완료. Alembic 1.20.0, SQLAlchemy 2.1.1.
-현재 개발 DB revision은 `0001_baseline`이다. `alembic_version`만 존재하고 업무 테이블은 없다.
+현재 개발 DB revision은 `0002_member_auth`다(2026-10-06). 회원·자격정보·프로필·서버 세션·요청 제한 테이블5개가 존재하며 이동/장소/약속 테이블은 아직 없다. 임시 스키마의 upgrade/downgrade 왕복 검증 후 개발 DB에 적용했다. 기존 public 데이터 삭제/초기화는 하지 않았다.
 
 ## 실행
 
@@ -32,15 +32,11 @@ current는 DB 적용 위치, history는 파일의 변경 순서다. upgrade head
 되돌리기는 downgrade의 내용을 실행하는 기능이며 데이터 백업을 대신하지 않는다. 업무 테이블 삭제 등을 포함할 수 있으므로 실제 데이터가 생긴 뒤에는 내용을 확인하고 백업/복구 계획을 세운다. 이번 baseline의 downgrade는 업무 데이터를 변경하지 않는다.
 
 ```powershell
-# 명시한 이전 revision으로 돌아가는 형식 (이번 빈 baseline 확인용)
-& backend/.venv/Scripts/python.exe backend/migrate.py downgrade base
-& backend/.venv/Scripts/python.exe backend/migrate.py upgrade head
-
-# 현재 baseline 전용 통합 테스트
+# 임시 스키마에서 현재 head의 upgrade/downgrade 왕복 검증
 & backend/.venv/Scripts/python.exe -m unittest discover -s backend/tests -v
 ```
 
-테스트는 고유 migration_test_* 스키마만 생성하고 마지막에 제거한다. public은 수정하지 않는다. baseline upgrade 재실행, downgrade 및 반복 왕복을 검증했다. 새 업무 마이그레이션을 추가하면 기대 테이블·head와 롤백 검증도 함께 갱신해야 한다. 향후 public을 명시하는 DDL·확장 설치 등은 스키마 격리만으로 충분하지 않으므로 별도 테스트 DB를 사용한다.
+테스트는 고유 migration_test_* 스키마만 생성하고 마지막에 제거한다. public은 수정하지 않는다. 현재 head의 테이블/이력·upgrade 재실행·downgrade 및 반복 왕복을 검증한다. 개발 public에서 downgrade base를 실행하면 회원 데이터가 삭제되므로 왕복 검증은 임시 스키마에서만 수행한다. 새 마이그레이션에는 기대 테이블·head도 함께 갱신한다.
 
 ## 파일과 로그
 

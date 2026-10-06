@@ -173,7 +173,7 @@ flowchart LR
 
 ## React 화면 미리보기
 
-화면 구성은 [screen_plan.md](./screen_plan.md)에 정리했습니다. [frontend](./frontend)는 예시 데이터로 홈·루틴·이동 중·기록·설정을 확인하는 React 프로토타입입니다. 실제 인증·교통·AI API는 아직 연결되지 않았습니다.
+화면 구성은 [screen_plan.md](./screen_plan.md)에 정리했습니다. [frontend](./frontend)는 예시 데이터로 홈·루틴·이동 중·기록·설정을 확인하는 React 프로토타입입니다. 회원가입·로그인·회원 조회·로그아웃은 실제 API를 연결했습니다. 교통·AI 및 계정별 장소/루틴 저장은 아직 연결되지 않았습니다.
 
 ```powershell
 cd C:\projects\timeisnow\frontend
@@ -221,7 +221,7 @@ AI 모델은 GPT-5.6 Luna (`gpt-5.6-luna`)로 확정했으며 사용자 승인�
 
 프론트 작업 전 [디자인 가이드](./design_guide.md)를 읽어 현재 색상·글꼴·컴포넌트·반응형 톤을 유지합니다. 준수 규칙은 AGENTS.md 7절에 있습니다.
 
-이메일·비밀번호 인증 결정과 API 설계: [auth_api.md](./auth_api.md). 소셜 로그인은 테스트 후 배포 확대 시 검토하며 인증 구현은 아직 미완료입니다.
+이메일·비밀번호 인증 결정과 API 설계: [auth_api.md](./auth_api.md). 기본 가입·로그인·회원 조회·로그아웃은 구현했고, 이메일 소유 확인·복구는 사용자 요청으로 후순위입니다.
 
 지원 지역 서울·경기도 및 카카오맵 사용은 확정입니다. 공급자 실제 미검증과 조건 추가 확인 생략의 사용자 결정은 [공급자 검증 계획](./provider_plan.md)을 따릅니다. D03~D05 결정/F00-03~04 기반 작업은 완료됐고 현재/다음 구현은 todo.md를 따릅니다.
 
