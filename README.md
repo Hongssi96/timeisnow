@@ -1,5 +1,7 @@
 # 지금이니?
 
+진행 현황과 남은 작업은 [TODO 체크리스트](./todo.md)를 확인하세요.
+
 집에서 기다리다가, 대중교통을 놓치지 않을 만큼 여유 있게 출발하도록 돕는 개인화 통근·등교 서비스.
 
 - 프론트엔드: React
@@ -168,3 +170,60 @@ flowchart LR
 - 실행하지 않은 테스트나 미구현 기능을 완료로 기록하지 않습니다.
 
 
+
+## React 화면 미리보기
+
+화면 구성은 [screen_plan.md](./screen_plan.md)에 정리했습니다. [frontend](./frontend)는 예시 데이터로 홈·루틴·이동 중·기록·설정을 확인하는 React 프로토타입입니다. 실제 인증·교통·AI API는 아직 연결되지 않았습니다.
+
+```powershell
+cd C:\projects\timeisnow\frontend
+npm install
+npm run dev
+```
+
+출력된 로컬 주소를 브라우저에서 여세요. 테스트는 `npm test`, 빌드는 `npm run build`입니다. 루틴과 기록은 미리보기 메모리에만 저장되어 새로고침하면 초기화됩니다.
+
+## 확장 기획: 약속과 출발 상태 공유
+
+일회성 약속, 중간 만남 추천, 약속별 채팅과 출발 상태·예상 도착 공유를 기획에 추가했습니다. 반복 확인 연락과 기다림의 불확실성을 줄여 약속에 대한 신뢰 형성을 돕는 것이 목적입니다.
+
+초기 출발 표시는 본인 입력이며 실제 이동의 자동 검증을 뜻하지 않습니다. 현재는 미구현 확장 기획입니다. [상세 기획](./meeting_plan.md)을 참고하세요.
+
+
+## 백엔드 개발 환경
+
+F00-01로 `backend/app/main.py`와 프로젝트 전용 가상환경, 고정 의존성 목록을 준비했습니다. [백엔드 실행 안내](./backend/README.md)를 참고하세요. 아직 업무 API와 React 연결은 없습니다.
+## 개발 DB
+
+PostgreSQL을 Docker 컨테이너로 실행합니다. [DB 실행·접속·종료 안내](./database.md)를 참고하세요. DB 연결과 마이그레이션 기반은 검증했으며 업무 테이블은 미생성입니다. [마이그레이션 안내](./migrations.md)를 참고하세요.
+
+## 데이터 모델
+
+[테이블·연관관계 설계](./database_schema.md)에서 통근 MVP와 약속 확장의 ERD·주요 컬럼·생성 순서를 확인할 수 있습니다. 실제 테이블 생성은 후속 작업입니다.
+
+## 친구 약속·채팅 API
+
+[상세 API 초안](./meeting_api.md)에 REST 요청·응답, 권한, 오류와 WebSocket 인증·알림·복구 규격을 정리했습니다. 제안 정책 검토와 실제 구현은 남아 있습니다.
+
+AI 모델은 GPT-5.6 Luna (`gpt-5.6-luna`)로 확정했으며 사용자 승인된 커스텀 서버로 최소 연결을 확인했습니다. 예산·운영 데이터 처리 조건·서비스 품질 검증은 남아 있습니다. 연결 확인은 `backend/.venv/Scripts/python.exe backend/check_ai.py`로 실행하며 루트 `.env`의 키·baseURL·모델을 사용합니다.
+
+## 디자인 기준
+
+경기 공개 사례 ID 매핑 진단은 `backend/.venv/Scripts/python.exe backend/check_gyeonggi_mapping.py`입니다. 노선 후보를 이름·정류장 순서·양끝 좌표로 대조한 단일 사례 도착 ID 일치까지 확인했으며 전체/운영 매핑·최신성은 미완료입니다. 상세는 public_arrivals_plan.md를 따릅니다.
+
+경기 기반정보 권한 진단 도구는 `backend/check_public_baseinfo.py`입니다. 노선 정차순서는 조회되며 정류소 검색/경유노선은 403으로 추가 활용승인 확인이 필요합니다. 만료 진단 헬퍼는 요청시각을 생성시각으로 대체하지 않으며 전체 매핑과 운영 정책은 미완료입니다.
+
+공공 실시간 도착 API 신청·키 설정·검증 순서는 [public_arrivals_plan.md](./public_arrivals_plan.md)를 따릅니다. 개인 버스/지하철 키 발급과 카카오 ID 매핑은 미완료이며 서울역 공개 sample 응답 구조만 확인했습니다. 지하철 내부 이동 결과는 GPS 판정 대신 사용자 수동 탑승 확인으로 검증하는 정책입니다.
+
+카카오 경로 최소 검증은 `backend/.venv/Scripts/python.exe backend/check_kakao_routes.py`로 실행합니다. 공개 역 주변 도보/대중교통을 각 1회 호출해 상태·시간·거리·좌표 형식과 ID 필드 존재 여부만 요약합니다. 원본 경로 저장/AI 전달 없음. 실제 출입구·역 내부 이동·실시간 도착/공공 매핑은 별도 검증 대상입니다.
+
+카카오 REST 키의 장소 검색 연결 확인은 `backend/.venv/Scripts/python.exe backend/check_kakao.py`로 실행합니다. 루트 `.env`의 `KAKAO_REST_API_KEY`를 사용하며 공개 장소 검색 1회 결과의 개수/형식만 출력합니다. 지도 SDK와 도보/대중교통 경로 검증은 별도입니다.
+
+프론트 작업 전 [디자인 가이드](./design_guide.md)를 읽어 현재 색상·글꼴·컴포넌트·반응형 톤을 유지합니다. 준수 규칙은 AGENTS.md 7절에 있습니다.
+
+이메일·비밀번호 인증 결정과 API 설계: [auth_api.md](./auth_api.md). 소셜 로그인은 테스트 후 배포 확대 시 검토하며 인증 구현은 아직 미완료입니다.
+
+지원 지역 서울·경기도 및 카카오맵 사용은 확정입니다. 실시간 공급자·ID 매핑·저장/AI 전달 조건·실호출 검증은 미완료이며 [공급자 검증 계획](./provider_plan.md)을 따릅니다. 현재는 착수 전 결정 D02를 진행합니다.
+
+
+자연어 일정 입력 기획: [natural_language_schedule.md](./natural_language_schedule.md). 사용자 확인 후 저장하며 기능은 미구현입니다.
