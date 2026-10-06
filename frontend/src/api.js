@@ -18,12 +18,21 @@ const messages = {
 };
 
 export class ApiError extends Error {
-  constructor(code, { status = 0, requestId = null } = {}) {
-    super(messages[code] || messages.HTTP_ERROR);
+  constructor(code, { status = 0, requestId = null, fields = [] } = {}) {
+    const fieldMessages = {
+      'body.email': '이메일 형식을 확인해주세요. 예: name@example.com',
+      'body.password': '비밀번호는 15~128자여야 하며, 흔한 비밀번호는 사용할 수 없어요.',
+      'body.display_name': '이름은 앞뒤 공백을 제외하고 1~30자로 입력해주세요.',
+    };
+    const safeFields = [...new Set(Array.isArray(fields) ? fields.filter(field => typeof field === 'string' && Object.hasOwn(fieldMessages, field)) : [])];
+    super(code === 'VALIDATION_ERROR' && safeFields.length
+      ? safeFields.map(field => fieldMessages[field]).join(' ')
+      : messages[code] || messages.HTTP_ERROR);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
     this.requestId = requestId;
+    this.fields = code === 'VALIDATION_ERROR' ? safeFields : [];
   }
 }
 
@@ -73,7 +82,8 @@ export async function apiRequest(path, { signal, timeoutMs = 10000, body: input,
     if (!response.ok) {
       const code = typeof body?.error?.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(body.error.code)
         ? body.error.code : 'HTTP_ERROR';
-      throw new ApiError(code, { status, requestId });
+      const fields = Array.isArray(body?.error?.details) ? body.error.details.map(detail => detail?.field) : [];
+      throw new ApiError(code, { status, requestId, fields });
     }
     if (!body || !Object.hasOwn(body, 'data') || !bodyId || !isServerTime(body.meta.server_time)) {
       throw new ApiError('INVALID_RESPONSE', { status, requestId });

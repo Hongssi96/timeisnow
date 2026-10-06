@@ -15,6 +15,18 @@ async function open() {
   return userEvent.setup();
 }
 describe('실제 계정 폼', () => {
+  it('비밀번호 검증 오류에 조건과 해당 필드를 안내한다', async () => {
+    const u = await open(); await u.click(screen.getByRole('button', {name:'회원가입'}));
+    await u.type(screen.getByLabelText('이메일'),'test@example.invalid');
+    await u.type(screen.getByLabelText('이름'),'테스트');
+    await u.type(screen.getByLabelText('비밀번호'),'passwordpassword');
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockRejectedValueOnce(new ApiError('VALIDATION_ERROR', {fields:['body.password'],requestId:'req_validation'}));
+    await u.click(screen.getByRole('button',{name:'계정 만들기'}));
+    expect(await screen.findByText('비밀번호는 15~128자여야 하며, 흔한 비밀번호는 사용할 수 없어요.')).toBeTruthy();
+    expect(screen.getByLabelText('비밀번호').getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByLabelText('비밀번호').getAttribute('aria-describedby')).toBe('account-feedback');
+    expect(screen.getByText('req_validation')).toBeTruthy();
+  });
   it('StrictMode 재마운트에서도 계정 확인 로딩이 끝난다', async () => {
     apiRequest.mockRejectedValue(new ApiError('AUTH_REQUIRED'));
     render(<React.StrictMode><AccountForm/></React.StrictMode>);
