@@ -4,6 +4,17 @@
 
 ## 실제 기록
 
+### 2026-10-06 — 메일 인증 후순위·이메일 중복 기반 회원 인증 구현
+- 사용자 변경: 메일 인증은 후순위, 기존 회원 중복만 확인하는 가입/로그인으로 단순화. main(78fcaf7)에서 만든 기능 브랜치를 codex/member-auth로 변경. 이전 Mailpit/Resend 준비용 .env.example·compose·기획/DB/실행 안내 변경을 먼저 HEAD로 복구, auth_preparation.md 제거 및 이번에 만든 Mailpit 컨테이너 정지/제거. 운영 메일 선정·pending7일 정책을 현재 계약에서 철회했으며 외부 메일 발송 없음.
+- 명세 선행: 최신 Notion v0.31 확인 후 v0.32로17절 기본 인증 재정의. 가입 즉시active, 이메일 정규화/중복409·201 user_id만·자동 로그인 없음, login/GET me의 이메일 확인 필드 제거. 메일 소유 확인/복구/outbox/token/pending을 후순위로 이동. 이메일 중복 확인은 소유권 인증이 아님. CSRF/서버 세션·프로필 기본값·공통 오류/요청 제한 유지. 저장 재조회 후 api_contract.md·auth_api.md 및 관련 문서 동기화.
+- 구현 파일: backend/app/auth.py·main.py, 0002_member_auth 마이그레이션, requirements 및 인증/응답/마이그레이션 테스트. users/auth_credentials/user_profiles/auth_sessions/auth_rate_limit_buckets5개 적용. UNIQUE 정규 이메일로 동시 가입 중복 방지·트랜잭션 정리, Argon2id19MiB/time2/p1, 서버 난수 세션/CSRF 해시 저장·HttpOnly/SameSite 쿠키, Origin+CSRF 검사, 로그인ID 교체·절대7일/미사용24시간, PostgreSQL HMAC 버킷/429. 기존 계정 비밀번호 덮어쓰기 없음.
+- 화면: AccountForm.jsx·테스트, App.jsx 계정 모달/API 실제 연결 및 api.js 오류 문구·기존 CSS 토큰의 auth-tabs만 추가. 회원 가입 후 로그인 전환·중복/입력/연결 실패/요청ID·로그인 회원/첫 여유·로그아웃·요청 중 비활성/이탈 취소. 이동 데모는 그대로이며 회원별 장소/루틴 저장과 연결하지 않음. design_guide.md·screen_plan.md 갱신.
+- 실제 검증: 백엔드 전체54개 통과(인증13개: 동시/대소문자 중복·로그인/없는 계정 동일401·CSRF/Origin·정상/만료/이전 세션·CSRF 재발급·다른 회원 me·공백 비밀번호·프로필·가입/로그인 제한·운영 쿠키/설정·DB 오류; 마이그레이션 upgrade 재실행/downgrade 왕복 포함). 프론트25개·build·pip check·git diff --check 통과. 임시 스키마 및 브라우저 테스트용 합성 회원 정리, 개발 DB0002_member_auth 적용. DB 연결은 이번 실제 실행에서 정상 확인.
+- 실제 UI: Vite 프록시/uvicorn을 확인된 프로젝트 PID만 재시작. 데스크톱1440×900·모바일390×844 로그인 폼/성공·중복409/요청ID·모바일 로그아웃 확인, 기존 초록/미색/카드·줄바꿈/입력·닫기/반응형 유지. 실제 화면에서 StrictMode 첫 요청 취소로 로딩 고착, DB datetime의 쿠키 GMT 변환 실패를 발견해 수정·각 회귀 테스트 추가. 기존 Vite 실행의 잘못된 root 인자를 직접 Node 실행으로 수정. 개인 주소/메일/운영 자격증명은 테스트에 쓰지 않음.
+- 환경/보안: 기존 .env 값은 보존하고 없던 독립 AUTH_RATE_LIMIT_SECRET만 로컬 난수로 추가(값 출력 없음), .env.example에는 빈 자리·origin만 기록. Git 파일과 실제 KEY/PASSWORD/BASE_URL/SECRET 대조 일치0건, .env 추적 제외. 메일 캡처/SMTP 설정은 최종 변경에 없음. AGENTS.md에 사용자 브랜치/MR 작업 흐름 기록.
+- 배운 개념: 가입 중복은 DB UNIQUE가 최종 보장하며 UI 검사만으로 동시 요청을 막지 못한다. 메일 주소 중복 검사와 이메일 소유 확인은 다르다. 개발 StrictMode의 정리/재실행과 쿠키 GMT 시각 변환은 실제 브라우저 경로로도 확인해야 한다.
+- 완료/잔여: F02-01/02/05만 완료. 메일 인증/복구·재인증·탈퇴·업무 API 전체 소유권/WS·전체 유출 비밀번호 목록은 후속. 개발 스키마 회원 기능 검증이며 운영 배포/실제 메일 소유 검증 완료 아님. 사용자가 브랜치 검토 후 MR/병합, 이후 F03-01. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
 ### 2026-10-06 — F01 단계 삭제 문서 커밋 준비
 - 사용자 요청: 사례 선정 및 데이터 공급자 검증 단계 삭제에 따른 문서6개 변경을 커밋하고 origin/init에 푸시.
 - 검증: 최신 Notion v0.30과 api_contract.md 전체 본문 일치, TODO/기능 목록의 F01 활성 항목 제거 및 다음 F02-00 확인, git diff --check 통과. 실제 환경 키/비밀번호/AI URL의 변경 파일 일치0건, .env 제외.
