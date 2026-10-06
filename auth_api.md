@@ -1,7 +1,7 @@
 # 지금이니? — 기본 회원 인증 계약
 
-- 버전0.3 / 2026-10-06 / Notion v0.32 기준
-- 메일 준비 변경은 사용자 요청으로 복구했으며 기본 회원 인증만 구현한다.
+- 버전0.4 / 2026-10-06 / Notion v0.33 기준
+- 메일 인증은 후순위, 개발 loopback 주소 호환 및 운영 origin 검증을 유지한다.
 
 ## 17. 이메일·비밀번호 회원 인증 — 첫 버전
 사용자 변경(2026-10-06): 메일 소유 확인은 후순위다. 정규 이메일 중복만 확인해 가입시키며 이메일을 실제 소유한다고 표현하지 않는다. 가입 즉시 active, 자동 로그인 없음. 확인메일/복구메일/메일 토큰/outbox/pending 계정 및 메일 공급자 준비는 현재 구현 범위에서 제외한다.
@@ -14,7 +14,7 @@
 - 서버 저장 세션:256비트 이상 난수, DB에는 SHA256 해시만 저장. 로그인7일 절대 만료·미사용24시간, 로그인 전 임시 세션15분. 인증 세션은 회원 active 상태를 검사한다.
 - 운영 쿠키 __Host-timeisnow_session,Secure,HttpOnly,SameSite=Lax,Path=/,Domain 없음. 개발 HTTP 쿠키 timeisnow_dev_session,Secure=false. AUTH_ENV=development/production 및 고정 AUTH_PUBLIC_ORIGIN 설정; 운영 HTTPS 필수, 개발 origin은 [localhost/127.0.0.1만](http://localhost/127.0.0.1만) 허용. 잘못된 설정/DB 장애는503 SERVICE_UNAVAILABLE.
 - GET /auth/csrf는 임시/기존 세션의 CSRF 토큰을 교체해 반환한다. CSRF 원문은 프론트 메모리에만 유지하며 서버에는 해시를 저장한다. 새로고침 시 재조회.
-- 가입/로그인/로그아웃 POST는 정확히 일치하는 Origin 및 X-CSRF-Token 검사, 실패403 CSRF_INVALID. 로그인 시 기존 세션을 삭제하고 새 세션/CSRF로 교체, 로그아웃 시 세션 삭제/쿠키 제거. X-Forwarded-For를 임의 신뢰하지 않는다.
+- 가입/로그인/로그아웃 POST는 Origin 및 X-CSRF-Token을 검사, 실패403 CSRF_INVALID. 운영은 설정된 HTTPS Origin과 정확히 일치해야 한다. 개발은 AUTH_PUBLIC_ORIGIN에 설정된 동일 HTTP 포트의 `localhost`와 `127.0.0.1` 두 origin만 허용하며 기본80 포트 표기는 정규화한다. 다른 포트·외부 도메인·Origin 누락/null은 거절한다. CSRF 토큰·세션 쿠키 검사는 유지하며 요청 Host/전달 헤더로 허용 origin을 만들지 않는다. 로그인 시 기존 세션 삭제/새 세션·CSRF 교체, 로그아웃 시 세션 삭제/쿠키 제거.
 - 모든 인증 응답 Cache-Control:no-store, 공통 data/meta 또는 error/meta 및 요청 ID. 비밀번호/쿠키/CSRF/이메일 원문을 로그에 남기지 않는다.
 ### API
 <table header-row="true">
@@ -55,4 +55,4 @@ PostgreSQL 공통 버킷에 목적별 HMAC-SHA256(email/IP)만 저장하고 고�
 메일 소유 확인·메일 복구·재인증·DELETE /me의 실제 인증/삭제 구현은 후속이다. 기존 삭제 영수증24시간·삭제 접수202 계약은 유지한다. 현재 메일 확인을 요구하는 업무 접근 차단은 적용하지 않는다. first release는 회원 중복 확인/가입·로그인·/me·로그아웃까지다.
 ### 구현 상태
 F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 저장 구현 완료. PostgreSQL 마이그레이션과 임시 스키마 통합 검증·React 계정 폼·데스크톱1440×900/모바일390×844 실제 화면 확인. 로그인/로그아웃·중복409/요청 ID 확인. 메일 관련 준비 파일·Compose 서비스는 복구/제거, F02-00 메일 인증 준비는 후순위다. 첫 가입의 이메일 소유 확인·복구·업무 데이터 API는 미구현. 사용자가 검토 후 MR 생성/병합한다.
-- 실제 최종 검증: 백엔드54개(인증13개·마이그레이션 왕복 포함)·프론트25개 및 빌드/pip check 통과. 임시 auth_test/migration_test 스키마 정리, 브라우저용 합성 계정 삭제 확인. 실제 `.env` 키 비노출/Git 제외. 개발 DB head=0002_member_auth. StrictMode 재마운트와 DB에서 읽은 쿠키 만료시각 UTC 변환 오류를 실제 화면에서 발견해 수정/회귀 검증.
+- 실제 최종 검증: 백엔드56개(인증15개·마이그레이션 왕복 포함)·프론트25개 및 빌드/pip check 통과. 임시 auth_test/migration_test 스키마 정리, 브라우저용 합성 계정 삭제 확인. 실제 `.env` 키 비노출/Git 제외. 개발 DB head=0002_member_auth. StrictMode 재마운트와 DB에서 읽은 쿠키 만료시각 UTC 변환 오류를 실제 화면에서 발견해 수정/회귀 검증.

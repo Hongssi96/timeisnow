@@ -1,5 +1,7 @@
 # 백엔드 실행 환경
 
+개발 앱은 http://localhost:5173 또는 http://127.0.0.1:5173으로 열 수 있다. AUTH_PUBLIC_ORIGIN의 같은 포트에서만 두 loopback 주소를 허용하며 운영은 설정한 HTTPS origin과 정확히 일치해야 한다. CSRF 토큰/세션 쿠키 검증은 양쪽 모두 적용한다.
+
 F00-01~04 및 기본 회원 인증 구현 완료. 상태 API·요청 ID·공통 HTTP 오류·JSON 요청 로그와 React 연결을 제공한다. 이동/장소/약속 API는 미구현이다. PostgreSQL은 health 요청과 분리하며 [DB 안내](../database.md)를 참고한다.
 
 2026-10-06 기본 회원 인증 구현: GET /auth/csrf, POST /auth/register·login·logout, GET /me. 이메일 중복만 확인하며 메일 인증/복구는 후순위다. 실행 전에 DB와0002_member_auth 마이그레이션을 준비한다. `.env.example`의 AUTH_ENV/AUTH_PUBLIC_ORIGIN 및32자 이상 독립 난수 AUTH_RATE_LIMIT_SECRET을 로컬 `.env`에 설정한다(기존 .env 덮어쓰기 금지). 운영은 HTTPS origin·Secure 쿠키를 사용한다. health는 DB/인증 설정 없이 계속 동작한다. 현재 업무 API는 미구현.

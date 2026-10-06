@@ -128,6 +128,20 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.call('/auth/register', self.credentials(), origin='https://foreign.invalid'))[0], 403)
         self.assertEqual((await self.call('/auth/register', self.credentials()))[0], 201)
 
+    async def test_development_loopback_alias_and_port_boundary(self):
+        await self.prepare()
+        self.assertEqual((await self.call('/auth/register',self.credentials(),origin='http://localhost:5173'))[0],201)
+        for origin in ('http://localhost:5174','http://127.0.0.1:8000','http://localhost.attacker.invalid:5173','null',''):
+            self.assertEqual((await self.call('/auth/login',{'email':'member@example.invalid','password':PASSWORD},origin=origin))[0],403)
+        self.assertEqual((await self.call('/auth/login',{'email':'member@example.invalid','password':PASSWORD},origin='http://localhost:5173'))[0],200)
+
+    async def test_production_keeps_exact_origin(self):
+        with patch.dict(os.environ,{'AUTH_ENV':'production','AUTH_PUBLIC_ORIGIN':'https://public.invalid'}):
+            await self.prepare()
+            self.assertEqual((await self.call('/auth/register',self.credentials(),origin='http://localhost:5173'))[0],403)
+            self.assertEqual((await self.call('/auth/register',self.credentials(),origin='https://other.invalid'))[0],403)
+            self.assertEqual((await self.call('/auth/register',self.credentials(),origin='https://public.invalid'))[0],201)
+
     async def test_wrong_and_missing_member_are_same_and_rate_limited(self):
         await self.prepare()
         await self.call('/auth/register', self.credentials())

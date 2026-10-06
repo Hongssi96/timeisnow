@@ -107,7 +107,13 @@ def session(connection, request, secure, required=False):
 def require_csrf(connection, request, origin, secure):
     row = session(connection, request, secure)
     supplied = request.headers.get('x-csrf-token', '')
-    if (request.headers.get('origin') != origin or not row or not supplied
+    allowed_origins = {origin}
+    if not secure:
+        # Only the two configured development loopback aliases at the same port.
+        port = urlsplit(origin).port
+        suffix = f':{port}' if port and port != 80 else ''
+        allowed_origins = {f'http://localhost{suffix}', f'http://127.0.0.1{suffix}'}
+    if (request.headers.get('origin') not in allowed_origins or not row or not supplied
             or not hmac.compare_digest(row['csrf_token_hash'], digest(supplied))):
         raise AuthError(403, 'CSRF_INVALID', '화면을 새로고침하고 다시 시도해주세요.')
     return row

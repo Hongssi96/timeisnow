@@ -4,6 +4,13 @@
 
 ## 실제 기록
 
+### 2026-10-06 — localhost 회원가입 CSRF 차단 수정
+- 증상/근거: 사용자 화면의 req_7634d878dc6b49c888608d9ab60a82a7은 POST register403 CSRF_INVALID. 사용자가 앱 주소 http://localhost:5173을 확인했다. 개발 설정은 http://127.0.0.1:5173이며 정확한 Origin 비교가 localhost를 거절했다. 수정 전 같은 쿠키/CSRF 절차의 실제 프록시 POST는127.0.0.1에서204, localhost에서403으로 재현했다.
+- 선행 계약/구현: 최신 Notion v0.32 읽고 v0.33에 개발 AUTH_PUBLIC_ORIGIN 동일 HTTP 포트의 localhost/127.0.0.1만 허용하도록 기록. backend/app/auth.py에 설정값에서만 계산한 두 origin 집합 적용, 기본80 정규화. 운영은 기존 HTTPS origin 정확한 일치 유지, CSRF 토큰·쿠키·외부/다른 포트/null 거절 유지. 요청 Host/X-Forwarded-For를 신뢰하거나 wildcard CORS를 추가하지 않았다.
+- 검증: 개발 alias 가입/로그인·다른 포트/외부/null 거절, 운영 origin 정확한 검사 테스트2개 추가. 백엔드56개 통과. 확인된 개발 서버 PID5072만 종료/재시작 후 실제 Vite 프록시/쿠키/CSRF POST가 두 주소 모두204 확인. 기존 사용자 계정/가입 제한 버킷을 수정하거나 검증용 신규 가입으로 사용자 호출 제한을 소모하지 않았다. 프론트/UI 코드 변경 없음으로 시각 검증·프론트 테스트 반복 대상 없음.
+- 문서/배운 개념: .env.example·backend README·auth_api.md·api_contract.md 동기화, Notion v0.33 저장 재조회. localhost와127.0.0.1은 같은 로컬 서버를 가리켜도 브라우저 origin 문자열이 다르다. 개발 주소의 제한된 호환과 운영 origin 검증을 구분한다. API 경로/응답 변경 없음, 개발 허용 origin 정책만 구체화.
+- 완료/다음: codex/member-auth의 회원 기능 후속 수정 완료, 사용자 검토 후 MR/병합 및 기존 다음 F03-01 유지. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
 ### 2026-10-06 — 회원가입 입력 검증 오류 안내 개선
 - 사용자 증상: 회원가입 실패. 서버/프론트 프록시는 정상이며 실제 요청 기록에서 register/login422 VALIDATION_ERROR 확인. 요청 제한은 초과하지 않았다. 사용자 입력 원문이나 비밀번호는 읽거나 기록하지 않았으므로 사용자의 어느 항목이 틀렸는지는 미확인이다. 기존15~128자 비밀번호·이메일 형식·이름 조건은 변경하지 않는다.
 - 변경: frontend/src/api.js에서 error.details의 허용 필드3개만 안전한 고정 설명으로 변환, 원문 message/reason/임의 필드/객체는 제외. AccountForm.jsx에 설명 연결과 해당 입력 aria-invalid/aria-describedby. 기존 "입력값을 확인해주세요"만 보여주는 문제 개선, screen_plan.md 갱신. codex/member-auth의 동일 회원 기능 후속 수정이며 새 기능/MR/병합 없음.
