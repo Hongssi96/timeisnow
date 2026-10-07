@@ -1,5 +1,7 @@
 # 지금이니? — 디자인 가이드
 
+- F03-05a(2026-10-07): OriginReview는 기존 MapPinPicker·small/muted·info-box·primary/wide를 재사용한다. 새 색상/공통 값 없음. 지도 확인·측정치·정책 안내·명시 확인 순서이며 지도 로딩 실패/만료는 확인 버튼을 차단한다. 합성 좌표로 1440×1000/390×844 실제 브라우저 검증, 실제 기기 GPS는 미검증.
+
 - 버전: 1.1 / 2026-10-06
 - 사용자가 현재 프론트 디자인을 유지하도록 요청했다. 이 문서는 개발자·AI가 새 화면에도 같은 시각적 톤을 적용하기 위한 기준이다.
 - 기준 구현: [styles.css](./frontend/src/styles/styles.css), [App.jsx](./frontend/src/app/App.jsx), [화면 구성](./screen_plan.md).

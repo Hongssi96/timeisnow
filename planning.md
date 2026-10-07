@@ -1,6 +1,8 @@
 # 지금이니? — 개발 기획서
 
-F04-01(2026-10-07, Notion v0.40): 카카오 대중교통 후보 조회 POST /journey-searches202·본인 GET 결과 및 /jobs 상태를 구현했다. depart_now부터 지원하며 arrive_by는 명시적으로 준비 중 오류다. 후보는 provider_estimate/insufficient_data, 도착 시각 null이고 AI 도보·실시간·역 내부/출입구·중간 지역 검증은 후속이다. 입력 GPS/지도 좌표·원본 geometry는 DB/로그에 저장하지 않는다. 검색300초·작업/멱등24시간·재시작60초 실패 처리, 저장 장소 존재/위치 버전 재검사. 상세 [journey_api.md](./journey_api.md). F03-05a는 별도 codex/origin-quality/0168464에 구현됐고 main 병합 전이며 GPS 수치 정책 보류를 유지한다.
+F04-01(2026-10-07, Notion v0.40): 카카오 대중교통 후보 조회 POST /journey-searches202·본인 GET 결과 및 /jobs 상태를 구현했다. depart_now부터 지원하며 arrive_by는 명시적으로 준비 중 오류다. 후보는 provider_estimate/insufficient_data, 도착 시각 null이고 AI 도보·실시간·역 내부/출입구·중간 지역 검증은 후속이다. 입력 GPS/지도 좌표·원본 geometry는 DB/로그에 저장하지 않는다. 검색300초·작업/멱등24시간·재시작60초 실패 처리, 저장 장소 존재/위치 버전 재검사. 상세 [journey_api.md](./journey_api.md). F03-05a는 main8b4b40b에 병합됐으며 GPS 수치 정책 보류를 유지한다.
+
+2026-10-07 F03-05a 사용자 결정: GPS 수치는 보류하고 수동 확인만 구현한다. 측정 시각·정확도는 표시하며 지도 로딩 후 사용자가 실제 출발 위치를 확인한다. user_confirmed는 본인 보고이며 GPS 정확성/최신성/출입구 일치 인증이 아니다. 저장 장소는 직접 선택하고 근접으로 자동 연결하지 않는다. GPS 경과 시간/정확도/미래 시각 허용폭·자동 일치 반경은 미정이다. 600초 화면 유효기간은 GPS 최신성 기준이 아니다. 상세 [origin_api.md](./origin_api.md), [Notion v0.39](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa).
 
 - 작성일: 2026-09-30 / 수정일: 2026-10-06
 - 버전: 0.32

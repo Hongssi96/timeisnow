@@ -25,4 +25,4 @@
 
 마이그레이션: `backend/.venv/Scripts/python.exe backend/migrate.py upgrade head`. 최신 head0006_journey_searches는 기존 회원/장소를 보존한다. 카카오 키는 기존 서버 .env를 사용하고 프론트에 전달하지 않는다. [카카오 공식 REST 문서](https://developers.kakao.com/docs/ko/kakaomap/rest-api)의 대중교통 경로 스키마를 따른다.
 
-실제 검증: 백엔드105개·기존 main 프론트73개·빌드 통과. 공개 강남역→서울역 카카오 후보15개, 로컬202/200·no-store·요청ID·멱등 재현 확인. 실제 기기 GPS/휴대전화·AI 도보·실시간·목표 도착·비교 화면/완전한 방향·역 내부 검증은 수행하지 않았다. 상세 development_log.md.
+실제 검증: 백엔드106개·프론트79개·빌드 통과. 공개 강남역→서울역 카카오 후보15개, 로컬202/200·no-store·요청ID·멱등 재현 확인. 실제 기기 GPS/휴대전화·AI 도보·실시간·목표 도착·비교 화면/완전한 방향·역 내부 검증은 수행하지 않았다. 상세 development_log.md.

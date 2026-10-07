@@ -1,6 +1,6 @@
-# 지금이니? — 출발지 선택 (F03-04)
+# 지금이니? — 출발지 선택 (F03-04·F03-05a)
 
-- 기준: [Notion v0.38 5.2.1절](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa), 2026-10-07 저장 재조회 확인.
+- 기준: [Notion v0.39 5.2.1~2절](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa), 2026-10-07 저장 재조회 확인.
 - 범위: 다른 곳에서 출발 → 로그인 확인 → 현재 위치1회/지도 핀/본인 저장 장소 선택 → 서버 확인 → 화면 메모리. 실제 경로/출발 시간은 F04~07 후속이다.
 
 ## POST /api/v1/origin-validations
@@ -15,13 +15,26 @@
 
 알 수 없는 종류/필드·잘못된 형식422 VALIDATION_ERROR. 지원지역 밖/바다422 UNSUPPORTED_REGION, 공급자 실패503 PROVIDER_UNAVAILABLE/잘못된 응답502 PROVIDER_RESPONSE_INVALID. 인증401·CSRF403·DB503·제한429은 기존 공통 계약이다.
 
-200 data는 origin, label, location, location_address, expires_at, quality_status. saved_place origin은 현재 location_version을 포함한다. label은 현재 위치/지도 선택 위치/현재 저장 이름. expires_at은 서버 확인후600초, 프론트는 meta.server_time과 차이로 만료를 처리한다.
+200 data는 origin, label, location, location_address, expires_at, quality_status, quality, place_match. saved_place origin은 현재 location_version을 포함한다. label은 현재 위치/지도 선택 위치/현재 저장 이름. expires_at은 서버 확인후600초, 프론트는 meta.server_time과 차이로 만료를 처리한다.
+
+## F03-05a 수동 확인 — 사용자 결정 2026-10-07
+
+GPS 수치는 보류하고 수동 확인만 구현한다. 경과 시간/정확도/미래 시각 허용폭·저장 장소 근접 반경을 임의로 정하지 않는다. 형식·유한 값·서울/경기 검사는 기존대로 유지한다.
+
+- current_location에 location_confirmed 선택 boolean(default false, 엄격한 자료형)을 추가한다. false는 pending, true는 user_confirmed. true는 사용자 보고이며 서버가 실제 GPS 정확성을 검증했다는 뜻이 아니다. 지도/저장 장소에 이 필드를 넣으면422.
+- quality.assessment: 현재 위치 unassessed, 지도/저장 장소 user_selected. quality.confirmation: 현재 false required/true reported, 나머지 not_applicable. quality.numeric_policy는 모두 deferred.
+- quality.time_relation: 현재 captured_at이 서버 처리 시각보다 앞서면 future, 나머지는 past_or_present. 지도/저장 장소는 not_applicable. 자동 거절/승인 기준으로 사용하지 않는다.
+- place_match.status: 현재/지도 unconfirmed, 저장 장소 selected_by_user. 저장 장소 선택도 실제 현장/출입구와 GPS가 일치한다는 보증이 아니다.
+- 현재 위치 첫 응답은 지도·시각·정확도 미리보기만 표시한다. 지도 로딩 성공 후 ‘이 위치가 실제 출발 위치예요’를 누르면 동일 측정치에 location_confirmed:true를 보내고 성공 응답 후 적용한다. 확인 실패/잘못된 응답은 적용하지 않는다.
+- 핀 이동은 map_pin 수동 선택으로 전환한다. 방법 전환/재측정/화면 이탈/인증 만료는 확인 초안을 제거한다. 600초 초안 만료 시 재측정을 요구하며 자동으로 GPS를 다시 요청하지 않는다. 확인 요청도 기존10회/분 제한에 포함한다.
+- 기존 클라이언트의 필드 없는 요청은 false/pending으로 호환한다. 새 응답 필드는 추가이며 user_confirmed는 true를 보낸 새 요청에서만 발생한다. 후속 경로 API는 품질/소유권을 다시 검사해야 한다.
+- GPS 수치/자동 일치 판정은 F03-05 보류이며 상위 TODO를 완료로 표시하지 않는다.
 
 ```json
 {"origin":{"type":"current_location","latitude":37.5665,"longitude":126.978,"accuracy_meters":10,"captured_at":"2026-10-07T11:00:00+09:00"}}
 ```
 
-위 공개 좌표 합성 입력은 current_location 그대로, captured_at=2026-10-07T02:00:00Z·quality_status=pending으로 반환한다. F03-04는 측정치 형식/전달만 구현하며 최신성/정확도 임계값·미래 시각·저장 장소/출입구 일치 여부는 F03-05에서 처리한다. 600초 선택 유효기간은 GPS 최신성 보장이 아니다. 근처라는 이유로 저장 집으로 변환하지 않는다.
+위 공개 좌표 합성 입력은 current_location 그대로, captured_at=2026-10-07T02:00:00Z·location_confirmed=false·quality_status=pending으로 반환한다. location_confirmed:true를 추가해 다시 보내면 user_confirmed이며 quality.assessment=unassessed·place_match.status=unconfirmed를 유지한다. 600초 선택 유효기간은 GPS 최신성 보장이 아니다. 근처라는 이유로 저장 집으로 변환하지 않는다.
 
 ## 화면과 개인정보
 
