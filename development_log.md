@@ -4,6 +4,23 @@
 
 ## 실제 기록
 
+### 2026-10-07 — F03-04 현재 위치·지도·본인 장소 출발지 선택
+- 목표: 홈 ‘다른 곳에서 출발’의 미연동 예시를 로그인 기반 출발지 선택으로 연결했다. 실제 경로/출발 시간은 F04~07 후속이며 실제 선택에 가상 집의 출발 안내·이동 체험을 적용하지 않는다.
+- Git/명세 확인: F03-03 49a0a2f의 최신 main30b62a9 병합을 fetch/ancestor로 확인하고 깨끗한 상태에서 codex/current-origin 생성. 최신 Notion v0.37·TODO·기능 목록·기획/개인화/프롬프트/로그·디자인/화면/기존 JSX/CSS/장소/auth 코드를 비교했다. 사용자 검토 후 MR 생성/병합은 사용자 수행.
+- 계약/동기화: Notion v0.38에5.2.1·API 목록·합성 요청/응답 예시·공통 구현 상태/변경 이력·다음F03-05를 갱신하고 저장 재조회 확인. api_contract.md는 전체 본문을 복사해 목차 매크로/끝 개행을 제외하고 대조한다. 신규 side-effect-free POST /origin-validations는 생성 멱등 결과 대상이 아니며 기존 auth/장소/경로 객체는 유지한다.
+- 변경 파일: backend/app/origins.py/main.py·test_origins.py; frontend/src/OriginSelector.jsx/테스트·currentOrigin.js/테스트·App.jsx/App.origin.test.jsx·MapPinPicker.jsx·styles.css; origin_api.md·api_contract.md·place_api.md·README.md·backend/README.md·planning.md·screen_plan.md·design_guide.md·logging.md·todo.md·feature_breakdown.md·development_log.md. DB 마이그레이션/AI 프롬프트 블록/개인화 계산 공식 변경 없음, head0005 유지.
+- 서버: current_location/map_pin/saved_place discriminated 입력·좌표/정확도 유한값/시간대ISO 문자열/UTC 정규화, 서울·경기 지역 확인, 본인 장소404/위치 버전409/현재 저장 이름. 로그인/Origin·CSRF/no-store·사용자10회/분·공급자 실패도 제한 소비. 위치 원문 저장소/로그/AI 전달 없음, 기존 HMAC 버킷/세션만 갱신. 현재GPS 품질pending은 F03-05 판정 전이며 집 근처라도 저장 집으로 바꾸지 않는다.
+- 화면: 인증 재확인 후 명시 클릭 getCurrentPosition1회(high accuracy/maximumAge0/native10초), 권한 대기 포함 전체15초. 거절/시간초과/미지원/위치 불가 시 지도·재시도. 초기 중심은 본인 장소/공개 서울시청이며 핀 명시 선택 전 확인 차단. 기존 지도·5m 방향 버튼·현재/지도/본인 목록/빈 상태/더보기/실패 재조회. 방법 변경/이탈 취소·늦은GPS 무시. 선택은 App 메모리600초, 만료 안내·재선택·새로고침/계정/인증 만료 인지 시 제거. 실제 선택 중 예시 홈 경로/시간/출발 버튼을 숨긴다.
+- 실제 검증:
+  - Python unittest 전체94개(기존90+신규4) 통과: 실제 임시 PostgreSQL/ASGI 인증·CSRF·타인/삭제404·위치 버전409·이름 변경 수용·시각/정확도/좌표 형식·지원지역/공급자 실패·10실패 후429/Retry-After·600초/no-store·로그 ID 일치 및 위치/쿠키/키 비노출. 테스트 임시 스키마는 각 tearDown에서 제거.
+  - Vitest 전체73개(기존57+신규16)·Vite build 통과: 단발 측정/메타데이터·거절/불가/시간초과/미지원·15초 총대기/취소·늦은 결과, 지도 초깃값 차단, 인증 만료 시 GPS 호출 전 차단·목록 제거, 저장 장소 충돌, 실제 선택의 예시 이동 차단/10분 만료/계정 진입 제거. 실패했던 테스트는 jest-dom 미설치 matcher/타이머 도구 적용 시점/다른 계정 준비 시 기존 세션 사용 문제를 고쳐 재실행 통과했다.
+  - 실행 서버 로컬 HTTP에서 공개 서울시청 합성 current_location 입력200/no-store·quality_status=pending·UTC captured_at=2026-10-07T02:00:00Z 확인. req_d945912b44dc4de398ba91f572296b2e 응답 ID와 서버 JSON 완료 로그 대조, 위치 원문 출력 없음.
+  - 실제 브라우저1440×1000/390×844에서 합성 회원 로그인·지도/방향 버튼(데스크톱 Enter 키)·지역 확인/준비 카드·재선택·빈 저장 장소·새로고침 초기화 확인. 모바일 clientWidth/scrollWidth 모두390·실제 출발 버튼0. 화면 캡처 f03-04-desktop.jpg/f03-04-mobile.jpg(개인 위치 없음). 실제 기기 GPS/권한 승인·실제 휴대전화는 요청하지 않았고 성공/거절/타임아웃은 모의 검증이다.
+- 실행 문제/조치: 장시간 Vite가 이전 브랜치 PlacesCard의 빈 변환 모듈을 반환해 브라우저 export 오류/빈 화면이 발생했다. 해당 확인된 Vite만 재시작해 정상 렌더링·지도를 검증했다. 백엔드도 신규 API 반영 후 PID9780/8000 재시작, 프론트5173 실행 유지. npm 옵션 전달 문제는 직접 node Vite CLI 실행으로 복구했다. 이번에 만든 합성 QA 회원만 이메일/표시이름으로 한정 삭제(1명), 잔여 인증0건 확인.
+- 배운 개념: 기기 위치 측정·지원지역 확인·GPS 품질 판단·경로 계산은 다른 단계다. native timeout은 권한 대기를 온전히 제한하지 않아 앱 전체 타이머가 필요하다. 메모리 선택600초는 GPS 최신성을 보증하지 않으며 후속 계산 때 재검증해야 한다. 근거: https://www.w3.org/TR/geolocation/.
+- 남은 일/다음: F03-05 최신성/정확도 임계값·미래/오래된 측정 재확인·저장 장소/실제 출입구 일치 판정. F04~07 경로/출발 안내는 미구현. 실제 기기 위치/모바일 GPS 검증은 별도. F03-04 기능 브랜치를 커밋/푸시하고 사용자 검토/병합을 기다린다.
+- Notion: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
 ### 2026-10-07 — F03-03 내 장소 이름 수정·삭제
 - 목표: 기존 목록/상세·위치/출입구 수정에 저장 이름(label) 수정과 삭제 확인/취소·DELETE204를 추가했다. 실제 루틴·도보·경로 저장소는 아직 없으므로 해당 연결 처리는 F04~06 후속이다.
 - Git/선행 확인: 최신 main4225eea(init→main, F03-02 병합)를 fetch하고 깨끗한 상태에서 codex/place-management 생성. Notion v0.36, TODO/기능 목록, 장소 API·기획·DB·정책·디자인·화면·개인화·프롬프트·로그·일지와 기존 JSX/CSS/API를 비교했다. 기능 브랜치 커밋/푸시, MR 생성·병합은 사용자 수행.

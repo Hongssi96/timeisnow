@@ -33,3 +33,5 @@
 .location-confirmation { margin: 16px 0; }
 .location-confirmation .info-box, .location-confirmation p[role] { font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
 @media(max-width:680px) { .place-map { height: 260px; } .pin-controls { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+/* F03-04: shared palette and buttons for temporary origin selection. */
+.origin-methods{display:flex;gap:8px;margin:20px 0;flex-wrap:wrap}.origin-methods button{flex:1;min-height:44px;white-space:nowrap}.origin-methods button[aria-pressed=true]{background:var(--green);color:white}.origin-selector .wide{margin-top:14px}.origin-places{display:grid;gap:10px}.origin-places button{text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:54px}.origin-places span{font-size:13px;overflow-wrap:anywhere}.origin-summary{max-width:760px}.origin-summary h2{margin-top:18px}.origin-summary .info-box{margin:24px 0}.origin-summary .button-row{flex-wrap:wrap}.origin-selector .place-map{height:250px}
