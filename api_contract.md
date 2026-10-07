@@ -1,7 +1,7 @@
 # 지금이니? API 설계 초안
-- 문서 버전: 0.43 · 작성일: 2026-09-30 · 수정일: 2026-10-07 (F04-05 경로 없음/지원 범위/정보 부족 안내)
+- 문서 버전: 0.44 · 작성일: 2026-09-30 · 수정일: 2026-10-07 (F06-01 루틴 저장·상세·장소 삭제 연동)
 - 프론트엔드: React · 백엔드: Python FastAPI
-- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. F03-05a 수동 확인은 구현/검증 완료이며 GPS 수치/자동 일치 판정은 사용자 결정으로 보류. F04-01 depart_now 대중교통 후보 조회 API 및F04-02 공통 구간 모델은 구현, F04-03 후보 비교 화면은 구현. AI/실시간/목표 도착·실제 출발 안내/루틴·약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
+- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. F03-05a 수동 확인은 구현/검증 완료이며 GPS 수치/자동 일치 판정은 사용자 결정으로 보류. F04-01 depart_now 대중교통 후보 조회 API 및F04-02 공통 구간 모델은 구현, F04-03 후보 비교 화면은 구현. F06-01 루틴 저장·상세 API와 비교 화면 저장 연동은 구현. AI/실시간/목표 도착·실제 출발 안내/루틴 목록·수정·삭제·요일·목표 도착·약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
 - 기준: 대화에서 확정한 요구사항 및 프로젝트 `C:/projects/timeisnow` 폴더의 `planning.md`, `feature_breakdown.md`, `personalization.md`, `logging.md`, `ai_prompts.md`.
 - 이 페이지는 수동 관리하는 설계 문서다. 코드와 자동 동기화되는 상태가 아니다.
 ## 1. 읽는 방법
@@ -148,7 +148,7 @@ GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1\~2절 출발�
 <td>필요</td>
 <td>없음</td>
 <td>204: 본문 없음</td>
-<td>본인 장소 즉시 삭제204, 저장 재시도 키는NULL 삭제 표시. 실제 연관 루틴needs_attention 처리는 F06 후속</td>
+<td>본인 장소 즉시 삭제204, 저장 재시도 키는NULL 삭제 표시. 연관 루틴은 해당 출발·도착 참조를 해제하고 status를 needs_attention으로 바꾼다(5.3)</td>
 </tr>
 </table>
 ### 03. 경로·AI 도보
@@ -203,38 +203,38 @@ GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1\~2절 출발�
 <td>필요</td>
 <td>cursor?, limit?</td>
 <td>200: items\[\], next_cursor</td>
-<td>출근·퇴근 루틴 목록</td>
+<td>출근·퇴근 루틴 목록. F06-03에서 구현</td>
 </tr>
 <tr>
 <td>`POST /routines`</td>
 <td>필요</td>
-<td>name, origin_place_id, destination_place_id, search_id, candidate_id, weekdays, target_arrival_local_time?, timezone</td>
+<td>name, origin_place_id, destination_place_id, search_id, candidate_id. weekdays·target_arrival_local_time·timezone은 F06-02에서 추가</td>
 <td>201: routine</td>
-<td>본인 검색의 유효 후보만 저장. 실시간 도착 시각을 영구 경로로 저장하지 않음</td>
+<td>본인 검색의 유효 후보만 저장하고 journey_plans 스냅샷을 만든다(5.3). 실시간 도착 시각을 영구 경로로 저장하지 않음. F06-01 구현</td>
 </tr>
 <tr>
 <td>`GET /routines/{routine_id}`</td>
 <td>필요</td>
 <td>경로: routine_id</td>
 <td>200: routine</td>
-<td>루틴 상세</td>
+<td>루틴 상세. F06-01 구현</td>
 </tr>
 <tr>
 <td>`PATCH /routines/{routine_id}`</td>
 <td>필요</td>
 <td>변경 필드, expected_version; 경로 변경 시 search_id, candidate_id</td>
 <td>200: routine</td>
-<td>요일·이름·목표 시각·경로 변경</td>
+<td>요일·이름·목표 시각·경로 변경. F06-03에서 구현</td>
 </tr>
 <tr>
 <td>`DELETE /routines/{routine_id}`</td>
 <td>필요</td>
 <td>없음</td>
 <td>204: 본문 없음</td>
-<td>기존 이동 기록은 당시 스냅샷 유지, 삭제된 루틴 참조는 표시용으로만 사용</td>
+<td>기존 이동 기록은 당시 스냅샷 유지, 삭제된 루틴 참조는 표시용으로만 사용. F06-03에서 구현</td>
 </tr>
 </table>
-약속·초대·중간 추천·채팅·공유 API의 입력/응답/권한/이벤트 상세는 이 페이지 16절에 있다. 모든 신규 API는 미구현 설계 초안이다.
+약속·초대·중간 추천·채팅·공유 API의 입력/응답/권한/이벤트 상세는 이 페이지 16절에 있다. F06-01의 POST /routines·GET /routines/{routine_id}는 구현했고 나머지 루틴 API와 약속·출발 안내·이동 관측 API는 미구현 설계 초안이다.
 ### 05. 출발 안내
 <table header-row="true">
 <tr>
@@ -504,7 +504,15 @@ origin/destination은 saved_place 또는 좌표 출발 객체다. 권한 거절 
 - 입력 양 끝 지역은 POST202 접수 후 worker에서 확인한다. 지역 밖은 GET200 data.status=failed/error.code=UNSUPPORTED_REGION으로 반환한다. 기존 위치 선택 POST /origin-validations는 지역 밖422이며 경로 작업 실패와 구분한다. 화면은 검색 만료와 구분해 서울·경기 지원 안내 및 출발/도착 재선택 행동을 제공한다. 입력 선택/후보/검색 snapshot은 제거하며 잘못된 입력의 자동 재전송은 없다. 중간 경로 REGION_PATH_UNVERIFIED는 지역 밖으로 확정하지 않고 미확인 근거로 표시한다.
 - 후보가 있는 insufficient_data는 삭제하거나 이용 가능으로 승격하지 않는다. 목록에 ‘구간 정보 확인 필요’와 상세에서 접근/환승/마지막 도보·방향·출입구/승강장·실시간·AI·지역/시간 불일치 사유를 구분해 표시한다. 알 수 없는 누락 사유는 일반 미확인 안내, 누락값을0으로 채우지 않는다. 결과 재확인은 기존GET이며 새 조회는 새POST/키를 사용한다.
 - API 경로/필드/인증/소유권/기한/보관/로깅 및 journey.v1 모델 유지. 사유 정밀화는 기존 unavailable_reasons 필드 안의 동작 보완이며 이전 클라이언트의 TRANSFER_LIMIT 안내와 호환된다. GPS 수치·자동 판정과 실제 경로 선택/저장·출발 안내는 이번 범위에 포함하지 않는다.
-### 5.3 도보 결과
+### 5.3 F06-01 루틴 저장 계약
+- 구현/검증(2026-10-07): main 2367681에서 helpycode/routine-save 브랜치로 구현했다. 백엔드 unittest 123개(루틴 6개 신규 포함), 프론트 테스트 109개(루틴 8개 신규 포함), Vite 빌드 통과. 실제 카카오 공급자로 PC1440×1000과 모바일390×844에서 후보 저장 버튼·저장 완료 표시·토스트와 가로넘침 없음을 확인했다. 근거는 `development_log.md`다.
+- `POST /api/v1/routines`(인증+CSRF, Idempotency-Key 선택 1~128 ASCII): 입력 `{name, origin_place_id, destination_place_id, search_id, candidate_id}`. name은 1~30자(앞뒤 공백 제거), origin과 destination은 서로 다른 본인 저장 장소다. search_id는 본인 검색이고 status=succeeded이며 만료 전이고, candidate_id는 그 검색 결과 후보 중 하나여야 한다. 요청 장소의 현재 location_version이 검색 당시와 같아야 하고 다르면 409 VERSION_CONFLICT로 경로 재조회를 요구한다. 검색 없음·만료·미완료·타인 자원·후보·장소 없음은 404 RESOURCE_NOT_FOUND, 장소가 검색 참조와 일치하지 않으면 422 VALIDATION_ERROR다.
+- 저장 시 그 후보를 journey.v1로 보강한 스냅샷을 journey_plans(user_id+search_id+candidate_id 고유)에 남긴다. 위치 좌표·참고 시각은 저장하지 않는다. 같은 후보를 다시 저장하면 스냅샷을 재사용하고 루틴만 새로 만든다. 요일·목표 도착·timezone은 F06-02에서 추가한다.
+- 성공 201 data: `{routine_id, name, origin_place:{place_id,label,name,address}|null, destination_place:동일 형태|null, route:{journey_plan_id,type,total_seconds,transfer_count}, status, version, created_at, updated_at}`. status는 active|needs_attention, version은 1부터다. 좌표·참고 시각은 응답 어디에도 없다.
+- `GET /api/v1/routines/{routine_id}`(인증): 본인 루틴만 200으로 같은 형태를 돌려준다. 없거나 타인이면 404다.
+- 멱등: 같은 키+같은 본문은 최초 201 응답을 재현하고, 같은 키+다른 본문은 409 IDEMPOTENCY_CONFLICT다. 저장에 성공한 루틴이 삭제되면 24시간 동안 같은 키 재시도는 404로 막는다(장소 저장과 동일한 삭제 표시).
+- 장소 삭제 연동: DELETE /places/{place_id}는 그 장소를 출발이나 도착으로 참조하는 루틴의 해당 참조를 NULL로 해제하고 status=needs_attention, version+1로 바꾼다. 이전 경로 스냅샷은 유지되며 복구는 F06-04 안내에 따른다. 응답 스키마 변화는 없다.
+### 5.6 도보 결과
 `GET /api/v1/walking-estimates/estimate_demo_01`의 data 예시:
 ```json
 {
@@ -523,7 +531,7 @@ origin/destination은 saved_place 또는 좌표 출발 객체다. 권한 거절 
 }
 ```
 `source`는 산정 방식이고 `reused`는 이번 조회에서 저장값을 사용했는지를 뜻한다. source는 ai_estimate 또는 profile_recalculation이다. reused=true여도 실시간 교통 정보까지 저장값이라는 뜻은 아니다.
-### 5.4 출발·여유 안내
+### 5.7 출발·여유 안내
 `POST /api/v1/guidance-queries`
 ```json
 {
@@ -558,7 +566,7 @@ departure_basis=now라면 selected_departure_at은 현재 시각이고 같은 �
 status는 ready/insufficient_data/no_feasible_journey/stale. 부족하거나 만료된 정보에 slack_seconds를 임의로 채우지 않고 null과 사유를 반환한다. 정상적인 ‘경로 없음’은 200 상태 결과이며 공급자 장애로 처리를 못한 경우는 503이다.
 origin_override에는 현재 위치 또는 지도 핀 객체를 전달한다. 이동 중 trip_id가 있으면 남은 경로를 산정해야 하며 전체 도보 시간을 다시 빼지 않는다.
 transfers의 각 항목은 leg_id, estimated_alighting_at, transfer_walk_seconds, transfer_buffer_seconds, next_boarding_at, feasibility, time_source를 포함한다. 실시간 근거가 없는 연결은 estimated 또는 unknown으로 표시한다.
-### 5.5 실제 이동 이벤트
+### 5.8 실제 이동 이벤트
 `POST /api/v1/trips/trip_demo_01/events`
 ```json
 {
@@ -1357,6 +1365,7 @@ F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프�
 - 기존 경로/응답 객체 유지, 설정 상한·만료·공유 ETA120초·자동 종료/삭제·출시 알림 범위가 변경/확정됐다. 아직 서비스가 미구현이므로 배포된 클라이언트 마이그레이션 없음. 422/404/409 등 기존 오류 사용, 소유권·동시 수락·기한 경계·삭제 사본 검증은 구현 시 수행한다.
 - 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회/수정/삭제 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. F03-04 main0402d67·R01 mainca8cd93 병합 확인, F03-01\~04 구현/검증 완료. F03-05a 수동 확인은main8b4b40b에 병합 완료다. GPS 수치/자동 일치 판정은 보류한다. F04-01은 main0402d67에서codex/journey-search로 시작해최신main8b4b40b를통합한뒤구현/검증, F04-01은main9670281에병합완료, F04-02는main63674ac에병합완료. F04-03은main4f94af1에병합완료, F04-04는사용자요청으로보류. F04-05는codex/journey-unavailable에서F04-03을통합해구현/검증했다. 사용자MR/병합 후 다음F05-01 도보근거수집이며 미확인물리근거를확정값으로채우지않는다.
 ## 변경 이력
+- 2026-10-07 v0.44: F06-01 POST/GET /routines 저장·상세 계약을 구체화하고 구현으로 표시했다. 검색 후보 journey_plans 스냅샷, 멱등·소유권·location_version 검증, 장소 삭제 시 루틴 needs_attention 연동을 추가했다. weekdays·목표 도착은 F06-02, 목록·수정·삭제는 F06-03으로 단계 표기했다. 3절 루틴 표와 장소 삭제 규칙을 갱신하고 5.3에 F06-01 계약을 신설, 기존 예시 절을 5.6~5.8로 재번호했다. 기존 클라이언트 계약 변화는 없다.
 - 2026-10-07 v0.43: 사용자 요청으로 F04-04 보류/F04-05 우선. 무경로·지점 연결 불가·환승 제한·지원 지역 밖·구간 정보 부족 구분과 복구 행동 추가, 환승 제외에 NO_ROUTE 중복 사유 제거. 기존 모델/권한/보관/기한 유지.
 - 2026-10-07 v0.42: F04-03 출발/도착 직접 선택·접수/조회/중지/재시도/만료·후보비교/상세/미확인근거 화면흐름 추가. 기존API모델/권한/보관/입력비저장 유지, Retry-After 클라이언트노출 추가. AI/실시간·루틴/출발안내는 후속.
 2026-10-07 v0.41: F04-02 journey.v1 공통 구간/도보 역할·승하차/정류장 순서·차량 세부분류·환승 연결/시간 분해 추가. 이전 후보는 조회 시 보강, 기존 필드/권한/작업/기한/입력 비저장 유지. 실시간/물리 방향·출입구/플랫폼·AI/화면은 후속.

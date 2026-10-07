@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Footprints, BusFront, TrainFront, ChevronDown, ChevronUp } from 'lucide-react';
+import { Footprints, BusFront, TrainFront, ChevronDown, ChevronUp, Repeat2 } from 'lucide-react';
 import { formatJourneyTime, missingWalk, sortCandidates } from '../lib/journeys';
 
 const kinds={BUS:'버스',SUBWAY:'지하철',BUS_AND_SUBWAY:'버스·지하철',WALKING:'도보'};
@@ -13,15 +13,29 @@ const vehicleNames=leg=>[...new Set(leg.vehicles)].slice(0,3).join(' / ');
 const vehicleDetails=leg=>[...new Set(leg.vehicle_options.map(v=>v.name+(v.provider_type?' ('+v.provider_type+')':'')))].slice(0,3).join(' / ');
 const icon=kind=>kind==='BUS'?BusFront:kind==='SUBWAY'?TrainFront:Footprints;
 
-export default function JourneyCandidates({ candidates, preference, onRecheck }) {
+export default function JourneyCandidates({ candidates, preference, onRecheck, onSavedLocations, onSaved, defaultRoutineName }) {
   const [expanded,setExpanded]=useState(null);
+  const [naming,setNaming]=useState(null);
+  const eligible = !!onSaved && !!onSavedLocations && typeof defaultRoutineName==='string' && defaultRoutineName.length>=1;
   return <div className="journey-candidates"><div className="section-heading"><h2>경로 후보 {candidates.length}개</h2><button className="text-button" onClick={onRecheck}>결과 다시 확인</button></div>
-    <div className="info-box">카카오 예상 시간으로 비교해요. 운행 시간과 지금 이용 가능 여부는 확인이 필요해요. 실시간 도착·개인 도보 시간·출입구와 승강장 정보는 확인 중이에요. 출발 안내와 루틴 저장은 준비 중이에요.</div>
+    <div className="info-box">카카오 예상 시간으로 비교해요. 운행 시간과 지금 이용 가능 여부는 확인이 필요해요. 실시간 도착·개인 도보 시간·출입구와 승강장 정보는 확인 중이에요. 요일·목표 도착 설정은 준비 중이에요.</div>
     <div className="candidate-grid">{sortCandidates(candidates,preference).map((c,index)=>{
       const open=expanded===c.candidate_id,TitleIcon=c.type==='SUBWAY'?TrainFront:BusFront;
+      const saveState = eligible ? (onSavedLocations(c.candidate_id) ?? 'idle') : null;
+      const namingThis = naming?.id===c.candidate_id && saveState!=='saved';
       return <article className={'card route-candidate '+(open?'expanded':'')} key={c.candidate_id}>
         <div className="section-heading"><h3><TitleIcon size={20}/> {kinds[c.type]} 경로 {index+1}</h3><span className="tag">예상값</span></div>
         <p className="candidate-note">구간 정보 확인 필요 · 상세에서 미확인 근거를 확인해주세요.</p>
+        {saveState!==null&&saveState!=='saved'&&<button className="secondary wide" disabled={saveState==='saving'} onClick={()=>setNaming({id:c.candidate_id,name:defaultRoutineName})}><Repeat2 size={17}/>{saveState==='saving'?'루틴 저장 중…':'이 경로를 루틴에 저장'}</button>}
+        {saveState==='saved'&&<button className="secondary wide" disabled><Repeat2 size={17}/>루틴에 저장했어요</button>}
+        {namingThis&&<form className="routine-name-panel" onSubmit={event=>{event.preventDefault();onSaved(c.candidate_id,naming.name.trim()||defaultRoutineName);}}>
+          <label htmlFor={'routine-name-'+c.candidate_id}>루틴 이름</label>
+          <input id={'routine-name-'+c.candidate_id} maxLength={30} value={naming.name} autoFocus disabled={saveState==='saving'}
+            onChange={event=>setNaming({id:naming.id,name:event.target.value})} placeholder="예: 아침 출근"/>
+          <p className="candidate-note">비워두면 '{defaultRoutineName}' 이름으로 저장해요. 요일·목표 도착 설정은 저장 후에 준비돼요.</p>
+          <div className="routine-name-actions"><button className="primary" type="submit" disabled={saveState==='saving'}>루틴 저장</button><button className="text-button" type="button" disabled={saveState==='saving'} onClick={()=>setNaming(null)}>취소</button></div>
+        </form>}
+        {saveState==='saved'&&<p className="candidate-note">루틴 요일·목표 도착 설정은 내 루틴에서 준비 중이에요.</p>}
         <dl className="candidate-metrics"><div><dt>총 예상 시간</dt><dd>약 {formatJourneyTime(c.total_seconds)}</dd></div><div><dt>환승</dt><dd>{c.transfer_count}회</dd></div><div><dt>{missingWalk(c)?'제공된 일부 도보':'제공된 도보'}</dt><dd>{missingWalk(c)&&c.walking_seconds===0?'확인 필요':`약 ${formatJourneyTime(c.walking_seconds)}`}</dd></div></dl>
         <p className="candidate-line">{c.ordered_legs.filter(leg=>leg.type!=='WALKING').map(leg=>vehicleNames(leg)).join(' → ')}</p>
         {missingWalk(c)&&<p className="candidate-note">빠진 도보 구간이 있어 전체 도보 시간은 확인이 필요해요.</p>}

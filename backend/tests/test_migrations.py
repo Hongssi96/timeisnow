@@ -47,10 +47,12 @@ class MigrationTest(unittest.TestCase):
                     command.upgrade(config, 'head')
                     self.assertEqual(connection.execute(text(
                         "SELECT version_num FROM alembic_version")).scalars().all(),
-                        ["0006_journey_searches"])
+                        ["0007_routines"])
                     self.assertEqual(sorted(inspect(connection).get_table_names(schema=schema)),
                                      ['alembic_version', 'auth_credentials', 'auth_rate_limit_buckets',
-                                      'auth_sessions', 'journey_search_keys', 'journey_searches', 'place_creation_keys', 'place_location_confirmations', 'place_searches', 'saved_places', 'user_profiles', 'users'])
+                                      'auth_sessions', 'journey_plans', 'journey_search_keys', 'journey_searches',
+                                      'place_creation_keys', 'place_location_confirmations', 'place_searches',
+                                      'routine_creation_keys', 'routines', 'saved_places', 'user_profiles', 'users'])
                     connection.commit()
                     command.downgrade(config, "base")
                     self.assertEqual(connection.execute(text(
