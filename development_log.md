@@ -4,6 +4,21 @@
 
 ## 실제 기록
 
+### 2026-10-07 — F03-02 지도 핀·출입구 확인/수정
+- 목표/범위: 다음 TODO F03-02. 검색 후보/저장 장소를 지도에서 확인 → 핀 클릭/드래그/방향 버튼으로 수정 → 서버 지역 확인 → 생성/수정 저장. 출입구 설명은 사용자 직접 입력이며 공식 출입구 ID/실내 이동 인증과 구분한다. GPS·라벨 수정/삭제·실제 경로 계산은 다음 단계다.
+- Git: 깨끗한 codex/fixed-place-search에서 main fetch, F03-01 병합 main0204e7e 확인 후 codex/place-map-pin 생성. 기능별 커밋/푸시, MR 생성/병합은 사용자 수행.
+- 선행 명세/문서: Notion 최신 v0.35·todo/feature_breakdown/place_api/planning/database_schema/관련 JSX·CSS/design_guide/screen_plan 및 이전 일지/프롬프트/개인화/로그 근거를 확인. 공식 Kakao 지도 가이드·클릭/SDK 문서·coord2regioncode API를 확인했다. https://apis.map.kakao.com/web/guide/ 및 https://developers.kakao.com/docs/ko/local/dev-guide 기준. 공급자 저장/전달 조건 추가 확인 생략 지시 유지, 전체 조건 확인 완료로 표시하지 않음.
+- 계약: Notion v0.36에5.1.2 상세·지도 설정/확인 API 표·PATCH/생성 필드·DB/구현 상태·변경 이력 갱신 후 저장 재조회. GET /map-config는 공개 JavaScript SDK 키만(로그인/no-store), REST 키 반환 없음. POST /place-location-confirmations는 서울/경기 법정동 확인·600초 본인 결과·10회/분. PATCH는 본인 행 잠금/expected_version, 확인 ID 소유권·만료·좌표 일치. 지원 범위 밖422 UNSUPPORTED_REGION·버전409·타인/만료404. 생성의 신규 선택 필드 null/생략은 기존 멱등 해시 유지.
+- 구현 변경: backend/app/places.py·main.py, 0004_place_map_pin.py, test_place_map_pin.py·test_migrations.py; frontend/src/MapPinPicker.jsx·LocationConfirmation.jsx·kakaoMap.js와 테스트3개, PlacesCard.jsx/기존 테스트·api.js·styles.css; .env.example 및 api_contract/place_api/README/backend README/planning/database_schema/migrations/screen_plan/design_guide/logging/TODO/기능 목록/본 일지 동기화.
+- 저장: 기존 장소에 entrance_note/location_source/location_address 추가 및 place_location_confirmations 테이블/만료 인덱스. 원래 검색 name/address 보존, 실제 핀 좌표와 법정동 명칭 별도 기록. 좌표/출처/설명 변경이면version+1, 동일값은 유지, 설명null은 제거. 장소 version이 이전 경로/도보 근거의 유효성 기준이며 실제 경로/도보 저장소·무효화 처리는 F04/F05 후속.
+- DB/백엔드 검증: 전체80개 통과(새 핀12개). 기존 장소가 있는0003에서0004 upgrade/중복 적용/downgrade0003/re-upgrade·base 왕복 두 차례, 좌표/버전/기본값search/null/null 유지 확인. 개발 public0004 upgrade/head 확인, 기존 회원/장소 보존. 본인 핀 생성·설명/좌표 수정·같은 값 유지·설명 제거·오래된 버전409·동시 수정200/409, 타인 확인/장소404·만료/불명확인404·좌표 변조422·CSRF403·지원지역/바다422·429/Retry-After·청소·기존 멱등 해시 호환 확인.
+- 로그/키: 지도 설정/좌표 확인/PATCH200/200/200의 요청ID/로그 일치, 공개 SDK 키·확인ID·좌표/주소/출입구 설명 비노출 확인. REST/AI 키는 서버 전용, JavaScript 키만 도메인 제한용 공개키로 지도 SDK에 전달. 일반 원문/예외/공급자 응답 로그 추가 없음, AI 전달 없음.
+- 프론트 검증: 전체49개 통과/빌드 성공. 지도 클릭/드래그/방향 버튼 및 요청 중 조작 차단·정리, SDK 동시 로딩1개/오류 재시도/10초 무응답, 핀 변경·확인 재요청·만료 시 저장 차단, 지원지역 밖/세션 만료/다른 좌표 응답/이탈 취소, PATCH expected_version·409 최신 장소 재조회/재확인 검증. 마지막 지도 초기 비활성 보완 후 관련3개 재검증 및 최종 빌드 통과.
+- 실제 실행: 이전 작업에서 시작한8000 백엔드를 최신 코드로 재시작(PID15072)하여 현재 서버를 유지한다. 사용자 계정에 접근하지 않고 본 작업의 정확한 합성 이메일/표시명 계정에서 공개 강남역 검색·Kakao 지도 렌더링·클릭/마커 드래그/5m 방향 버튼·법정동 확인200·핀 생성201·수정200 및 새로고침 유지 확인. 실제 저장 version1→2→3·source=map_pin 확인. 카카오 JS 키와 현재127.0.0.1:5173 도메인 SDK 동작 확인, 운영/다른 도메인 전체 설정 검증은 아님.
+- 시각/정리: 데스크톱1440×1000·모바일390×844 지도/수정 폼·방향 버튼 배치·저작권 표시 확인. 모바일 documentWidth375<=viewport390으로 가로 넘침 없음. 지도 핀 이동 후 저장 비활성 및 재확인 후 저장 가능 확인. 기존 홈/루틴과 계정 모달 흐름 회귀 확인, 지도 조작과 현재 위치 권한 요청은 분리. 정확한 QA 회원1명 및 연결 장소/확인/세션을 정리, 사용자 데이터 유지. 모바일 검증 이미지는 Codex visualizations 폴더에 보관, Git 제외. 실제 휴대전화/지도 위치 정확도/실내 출입구·GPS는 미검증.
+- 배운 개념: 지도에서 보이는 좌표와 서버가 허용한 저장 좌표는 다르므로 본인·기한이 있는 확인 결과를 연결한다. 공식 지도 SDK 공개키와 서버 REST 비밀키는 용도가 다르다. optimistic version은 오래된 화면이 새 장소 위치를 덮어쓰지 않게 하며, 이후 산정 재사용은 place_id/version을 함께 검사해야 한다.
+- 완료/다음: F03-02 체크 완료, F03-03은 목록/상세/위치 수정 부분 완료지만 라벨 수정·삭제/연결 데이터 처리 전까지 미완료 유지. 다음 F03-03. 현재 위치/정확도·매일 확인 결과 청소/F11·F04/F05 산정 재사용 무효화는 남음. 명세 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
 ### 2026-10-07 — F03-01 고정 장소 검색·저장
 - 목표: TODO 순서의 F03-01을 작은 기능 단위로 진행. ‘내 설정 → 내 장소’에서 주소/장소 검색 → 후보 선택 → 집·회사 등 이름 저장 → 본인 목록을 제공한다. F03-02~05는 후속이며 F03 전체 완료와 구분한다.
 - Git: 깨끗한 작업 폴더에서 origin/main fetch(ac28d5f) 후 codex/fixed-place-search 생성. 기존 회원 오류 안내 main 병합 내용 보존. 이 브랜치에 커밋/푸시하며 MR 생성·병합은 사용자 수행.

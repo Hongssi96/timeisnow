@@ -64,6 +64,8 @@ routine → journey_plan은 반복 사용할 경로를 고르는 관계다. guid
 
 ### A. 회원과 고정 장소
 
+F03-02 적용(2026-10-07): 0004_place_map_pin이 saved_places에 entrance_note(사용자 입력, null/1~100자), location_source(search/map_pin), location_address(null/법정동 명칭)를 추가하고 place_location_confirmations(본인 좌표/법정동 명칭/600초)을 생성한다. 기존 장소 기본값 search/null/null 유지 및0003↔0004 왕복에서 데이터 보존 검증. PATCH는 본인 행 잠금/expected_version, 좌표 확인 ID/기한/일치 검사 후 좌표·설명·출처가 바뀌면 version 증가. 도보/경로 캐시 테이블은 아직 생성하지 않으며 향후 place_id/version 불일치로 재사용 제외한다.
+
 F03-01 적용(2026-10-07): 0003_saved_places로 saved_places(name/address/좌표/라벨/버전 포함), place_searches(본인 최소 후보 jsonb/10분 만료), place_creation_keys(본인 저장 요청 해시/장소 참조/24시간)를 실제 생성했다. 검색어/공급자 원본은 저장하지 않는다. name/address는 선택 결과 표시용 최소 데이터, entrance_ref는 이번 API에서 null만 허용. 기능별 소유권/만료/멱등·임시 스키마 왕복 검증 완료, 수정/삭제·루틴 FK·산정 무효화는 미구현이다.
 
 | 테이블 | 역할 / 핵심 컬럼 | 관계·제약 |

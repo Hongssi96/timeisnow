@@ -19,3 +19,13 @@
 .place-candidate span { font-size: 14px; margin-top: 4px; }
 .place-candidate.selected { background: #eff4e8; border-color: var(--green); }
 .places-card .primary, .places-card .secondary { min-height: 44px; }
+.place-map { width: 100%; height: 280px; border-radius: 10px; border: 1px solid var(--line); background: #fafbf7; overflow: hidden; }
+.pin-controls { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; margin: 12px 0; }
+.pin-controls .secondary { padding: 8px 4px; font-size: 13px; }
+.pin-actions { display: flex; gap: 10px; margin: 16px 0; flex-wrap: wrap; }
+.pin-actions button { flex: 1; min-width: 110px; }
+.saved-place { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.saved-place > .text-button { min-height: 44px; margin-left: 52px; }
+.location-confirmation { margin: 16px 0; }
+.location-confirmation .info-box, .location-confirmation p[role] { font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+@media(max-width:680px) { .place-map { height: 260px; } .pin-controls { grid-template-columns:repeat(2,minmax(0,1fr)); } }
