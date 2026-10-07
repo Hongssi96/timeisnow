@@ -127,4 +127,71 @@ describe('장소 검색과 저장', () => {
     expect(screen.queryByRole('button',{name:'위치·출입구 저장'})).toBeNull();
     expect(screen.getByText('출입구: 다른 화면의 수정 · 직접 입력')).toBeTruthy();
   });
+  it('이름만 수정할 때 지도 호출 없이 현재 버전과 이름을 전송한다',async()=>{
+    apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));render(<PlacesCard onLogin={vi.fn()}/>);
+    const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'집 이름 수정'}));
+    await user.clear(screen.getByLabelText('장소 이름'));expect(screen.getByRole('button',{name:'이름 저장'}).disabled).toBe(true);
+    await user.type(screen.getByLabelText('장소 이름'),'우리 집');
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockResolvedValueOnce(reply({...place,label:'우리 집',version:2}));
+    await user.click(screen.getByRole('button',{name:'이름 저장'}));await screen.findByText('장소 이름을 저장했어요.');
+    const updated=apiRequest.mock.calls.find(([,options])=>options?.method==='PATCH');
+    expect(updated[1].body).toEqual({label:'우리 집',expected_version:1});
+    expect(apiRequest.mock.calls.some(([path])=>path.includes('map-config')||path.includes('location-confirmations'))).toBe(false);
+    expect(screen.getByRole('button',{name:'우리 집 삭제'})).toBeTruthy();
+  });
+  it('삭제 확인을 취소하면 삭제 요청을 하지 않는다',async()=>{
+    apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));render(<PlacesCard onLogin={vi.fn()}/>);
+    const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'집 삭제'}));
+    expect(screen.getByText('집을(를) 삭제할까요?')).toBeTruthy();
+    await user.click(screen.getByRole('button',{name:'삭제 취소'}));
+    expect(apiRequest.mock.calls.length).toBe(1);expect(screen.getByText('서울 합성 주소')).toBeTruthy();
+  });
+  it('삭제204 후 목록 첫 페이지를 다시 조회한다',async()=>{
+    apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:'cursor_test'}));render(<PlacesCard onLogin={vi.fn()}/>);
+    const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'집 삭제'}));
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockResolvedValueOnce({status:204,data:null}).mockResolvedValueOnce(reply({items:[],next_cursor:null}));
+    await user.click(screen.getByRole('button',{name:'장소 삭제 확인'}));await screen.findByText('장소를 삭제했어요.');
+    expect(screen.queryByText('서울 합성 주소')).toBeNull();expect(screen.queryByRole('button',{name:'장소 더 보기'})).toBeNull();
+    const deleted=apiRequest.mock.calls.find(([,options])=>options?.method==='DELETE');expect(deleted[1].body).toBeUndefined();
+    expect(apiRequest.mock.calls.at(-1)[0]).toBe('/api/v1/places');
+  });
+  it('삭제 실패 뒤 같은 대상의404 재시도는 이미 삭제된 상태로 처리한다',async()=>{
+    apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));render(<PlacesCard onLogin={vi.fn()}/>);
+    const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'집 삭제'}));
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockRejectedValueOnce(new ApiError('NETWORK_ERROR'));
+    await user.click(screen.getByRole('button',{name:'장소 삭제 확인'}));await screen.findByRole('alert');
+    expect(screen.getByText('서울 합성 주소')).toBeTruthy();
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockRejectedValueOnce(new ApiError('RESOURCE_NOT_FOUND')).mockResolvedValueOnce(reply({items:[],next_cursor:null}));
+    await user.click(screen.getByRole('button',{name:'장소 삭제 확인'}));await screen.findByText('이미 삭제된 장소예요. 목록을 다시 확인했어요.');
+    expect(screen.queryByText('서울 합성 주소')).toBeNull();
+  });
+  it('삭제 후 목록 조회만 실패하면 삭제한 장소를 복원하지 않는다',async()=>{
+    apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));render(<PlacesCard onLogin={vi.fn()}/>);
+    const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'집 삭제'}));
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockResolvedValueOnce({status:204,data:null}).mockRejectedValueOnce(new ApiError('NETWORK_ERROR'));
+    await user.click(screen.getByRole('button',{name:'장소 삭제 확인'}));await screen.findByText(/장소는 삭제됐어요/);
+    expect(screen.queryByText('서울 합성 주소')).toBeNull();expect(screen.getByRole('button',{name:'목록 다시 확인'})).toBeTruthy();
+  });
+  it('삭제 요청 중 중복 실행을 막고 화면 이탈 시 취소한다',async()=>{
+    apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));const view=render(<PlacesCard onLogin={vi.fn()}/>);
+    const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'집 삭제'}));
+    apiRequest.mockImplementation(()=>new Promise(()=>{}));await user.click(screen.getByRole('button',{name:'장소 삭제 확인'}));
+    expect(screen.getByRole('button',{name:'삭제 중…'}).disabled).toBe(true);
+    expect(screen.getByRole('button',{name:'삭제 취소'}).disabled).toBe(true);
+    view.unmount();expect(apiRequest.mock.calls.at(-1)[1].signal.aborted).toBe(true);
+  });
+  it('다른 화면의 이름 수정과 충돌하면 최신 이름으로 재확인한다',async()=>{
+    apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));render(<PlacesCard onLogin={vi.fn()}/>);
+    const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'집 이름 수정'}));
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockRejectedValueOnce(new ApiError('VERSION_CONFLICT')).mockResolvedValueOnce(reply({...place,label:'새 집',version:2}));
+    await user.click(screen.getByRole('button',{name:'이름 저장'}));await screen.findByText('장소가 변경됐어요. 최신 위치를 다시 확인해주세요.');
+    expect(screen.queryByRole('button',{name:'이름 저장'})).toBeNull();expect(screen.getByRole('button',{name:'새 집 이름 수정'})).toBeTruthy();
+  });
+  it('충돌 뒤 최신 조회에서 세션이 만료되면 이전 계정의 장소를 지운다',async()=>{
+    apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));render(<PlacesCard onLogin={vi.fn()}/>);
+    const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'집 이름 수정'}));
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockRejectedValueOnce(new ApiError('VERSION_CONFLICT')).mockRejectedValueOnce(new ApiError('SESSION_EXPIRED'));
+    await user.click(screen.getByRole('button',{name:'이름 저장'}));await screen.findByText('로그인이 만료됐어요. 다시 로그인해주세요.');
+    expect(screen.queryByText('서울 합성 주소')).toBeNull();expect(screen.getByRole('button',{name:'로그인하고 장소 저장'})).toBeTruthy();
+  });
 });

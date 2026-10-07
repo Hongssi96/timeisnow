@@ -99,7 +99,7 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
                      {'expected_version':1}, {'expected_version':1,'location':None},
                      {'expected_version':1,'location':{'latitude':37,'longitude':127}},
                      {'expected_version':1,'entrance_note':' '}, {'expected_version':1,'entrance_note':'a'*101},
-                     {'expected_version':1,'label':'회사','entrance_note':'정문'}):
+                     {'expected_version':1,'name':'회사','entrance_note':'정문'}):
             response = await self.update(place_id, body)
             self.assertEqual(response[0],422)
             self.assertEqual(response[1][b'cache-control'],b'no-store')
