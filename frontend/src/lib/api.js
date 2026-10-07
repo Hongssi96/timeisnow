@@ -24,7 +24,7 @@ const messages = {
 };
 
 export class ApiError extends Error {
-  constructor(code, { status = 0, requestId = null, fields = [] } = {}) {
+  constructor(code, { status = 0, requestId = null, fields = [], retryAfterMs = null } = {}) {
     const fieldMessages = {
       'body.email': '이메일 형식을 확인해주세요. 예: name@example.com',
       'body.password': '비밀번호는 15~128자여야 하며, 흔한 비밀번호는 사용할 수 없어요.',
@@ -37,12 +37,15 @@ export class ApiError extends Error {
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
+    this.retryAfterMs = retryAfterMs;
     this.requestId = requestId;
     this.fields = code === 'VALIDATION_ERROR' ? safeFields : [];
   }
 }
 
 const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : null;
+const retryAfter = value => typeof value === 'string' && /^\d{1,4}$/.test(value)
+  && Number(value) >= 1 && Number(value) <= 3600 ? Number(value) * 1000 : null;
 export const isServerTime = value => typeof value === 'string'
   && /T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value));
 
@@ -73,6 +76,7 @@ export async function apiRequest(path, { signal, timeoutMs = 10000, body: input,
       headers, ...(input !== undefined ? { body: JSON.stringify(input) } : {}),
     });
     status = response.status;
+    const retryAfterMs = retryAfter(response.headers?.get('Retry-After'));
     const headerId = safeId(response.headers?.get('X-Request-ID'));
     requestId = headerId;
     if (status === 204) {
@@ -89,12 +93,12 @@ export async function apiRequest(path, { signal, timeoutMs = 10000, body: input,
       const code = typeof body?.error?.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(body.error.code)
         ? body.error.code : 'HTTP_ERROR';
       const fields = Array.isArray(body?.error?.details) ? body.error.details.map(detail => detail?.field) : [];
-      throw new ApiError(code, { status, requestId, fields });
+      throw new ApiError(code, { status, requestId, fields, retryAfterMs });
     }
     if (!body || !Object.hasOwn(body, 'data') || !bodyId || !isServerTime(body.meta.server_time)) {
       throw new ApiError('INVALID_RESPONSE', { status, requestId });
     }
-    return { data: body.data, meta: body.meta, status };
+    return { data: body.data, meta: body.meta, status, ...(retryAfterMs !== null ? { retryAfterMs } : {}) };
   } catch (error) {
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
     if (timedOut) throw new ApiError('TIMEOUT', { status, requestId });

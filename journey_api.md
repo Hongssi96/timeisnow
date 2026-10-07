@@ -1,6 +1,6 @@
-# 지금이니? — F04-01·02 대중교통 후보·공통 구간 모델
+# 지금이니? — F04-01~03 대중교통 후보·구간 모델·비교 화면
 
-기준: [Notion v0.41](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa). 현재는 API 구현이며 후보 비교 화면은 F04-03 후속이다.
+기준: [Notion v0.42](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa). 홈 ‘경로 후보 비교’에서 실제 후보 조회·정렬·구간 상세를 사용할 수 있다. AI/실시간/실제 출발 안내·루틴 저장은 후속이다.
 
 ### 5.2.3 F04-01 대중교통 경로 후보 조회 (구현 단계 계약)
 - 범위: 로그인 사용자의 출발/도착 입력으로 카카오 대중교통 후보를 비동기 조회한다. 이번 단계는 depart_now(Asia/Seoul)만 실행하며 arrive_by는422 UNSUPPORTED_TIMING으로 명시한다. 목표 도착 검색·AI 도보 산정·실시간 도착·비교 화면·루틴 저장은 후속이며 기존 설계에서 삭제하지 않는다.
@@ -27,6 +27,17 @@
 - timing_breakdown=\{walking_seconds,in_vehicle_seconds,legs_total_seconds,provider_total_seconds,unallocated_seconds,status\}. 합계가 공급자 총시간 이하이면 unallocated_seconds=차이/status=unallocated, 동일하면0/status=consistent. 차이를 실시간 대기·환승 여유로 단정하지 않는다. 단계 합계가 총시간을 넘으면 unallocated_seconds:null/status=inconsistent 및 DURATION_TOTAL_MISMATCH로 표시하고 공급자 total_seconds는 바꾸지 않는다.
 - `app/journey_models.py` 공통 모델로 새 공급자 정규화와 GET 결과를 검증하며 GET200 OpenAPI SearchEnvelope/Candidate/Leg/Connection/Breakdown 스키마를 노출한다. 정수초/미터(음수·bool 거절), 이름/목록/순서·연결 참조/일관성을 확인하며 좌표/원문guidance/landingURL 등 미정 필드가 응답으로 유입되지 않게 한다. 신형 JSONB 후보는 저장 전 검증한다. 이전 F04-01 후보는 GET 시 기존leg ID/순서/시간/정류장명으로 보강하고 차량 세부종류는null, connection_id는 candidate_id+교통legID 기반으로 안정적으로 생성한다. 재조회마다 ID가 바뀌지 않고 새 공급자 호출/입력좌표 저장/DB migration은 없다.
 - 호환성: 기존 필드/ID/시간값과 선택/작업 계약 유지, 추가 필드를 무시하는 클라이언트는 계속 동작한다. 신형 모델 검증 실패는502 PROVIDER_RESPONSE_INVALID, worker 단계 실패는 기존failed/data.error이다. F04-02 모델 완료와 실제 물리 방향/환승·내부이동·사용자 비교 화면 검증 완료는 구분한다.
+
+### 5.2.5 F04-03 경로 후보 비교 화면
+- 구현/검증(2026-10-07): 최신main63674ac에서codex/journey-comparison 구현. 프론트97개·빌드1899모듈·백엔드115개 회귀 통과. 실제합성계정/공개강남역→서울역 위치직접선택→POST202/GET200→15후보 비교/로컬정렬·상세/정류장순서·누락도보·키보드 Enter를확인했다. PC1440×1000/모바일390×844 카드·상세/하단메뉴·홈/설정/계정 회귀·가로넘침없음/콘솔error0, 자연검색만료시후보/상세제거 확인. 숨김/재시도/빈결과/실패/인증만료/늦은응답은 모의검증, 실제GPS권한/측정·실시간/운행시간표·AI/출발안내·루틴저장은미검증. 합성계정/장소/검색/작업/세션제거. 근거 `development_log.md`.
+- 홈 '경로 후보 비교' 진입으로 기존 내비게이션/미색·초록 디자인을 유지한 비교 페이지를 제공한다. 아직 유효한 홈 출발지는 초기값으로 사용할 수 있으며 출발/도착은 기존 current_location/map_pin/saved_place 확인 흐름을 재사용한다. 도착 위치도 목적을 표시해 직접 선택한다. 로그인 전 기기 위치를 요청하지 않고 GPS 수동 확인/수치 보류를 유지한다.
+- 출발/도착·선호를 명시 선택한 뒤 '경로 후보 조회'를 누를 때만 기존 POST /journey-searches를 호출한다. depart_now/AsiaSeoul 및balanced/fewer_transfers/less_walking만사용하며현재시각·주소원문을임의로입력하지않는다. 최초 접수에 새 Idempotency-Key, 접수 응답을 못 받은 네트워크/시간초과 재시도는 동일 본문/키를 유지한다. 입력 변경/새 검색은 새 키, 접수된 검색의 조회 실패는 GET만 재시도하며 POST 자동 재전송 없음.
+- queued/running 접수는 완료로 표시하지 않는다. 최초2초→5→10→최대30초 간격으로 GET 결과 조회, 유효한 Retry-After 초 헤더를 우선하고1\~3600초 범위를 처리한다. 비활성 화면은 새 조회를 멈추며 진행 중 GET을 취소, 복귀 시 같은 search_id를 이어서 조회한다. 페이지 이탈/방법·입력 변경/로그인 모달·인증 만료 인지/입력600초 및검색300초 기한은 타이머·요청을 취소하고 늦은 응답을 무시한다. meta.server_time/expires_at 차이로 만료를 계산하며 입력 선택 유효기한보다 연장하지 않는다.
+- 화면 상태: 위치 미선택/로그인 필요·접수/조회중·succeeded 후보/정상무결과·failed 안전한오류·네트워크조회재시도·권한/장소버전충돌·만료/재선택. 인증 실패는 좌표/목록/후보를 제거하고로그인행동,409 VERSION_CONFLICT는입력재선택,404 결과조회는만료/재검색. 숨겨진 화면/새로고침/계정변경에서 URL/DB/localStorage로 개인 위치/후보를 복원하지 않는다.
+- 비교 카드: 카카오 예상 total_seconds·transfer_count·교통구간수기반차이가있으면횟수확인필요·제공된 walking_seconds 및누락여부. 접근/환승/마지막 도보가 빠지면0분으로확정하지않고‘도보 확인 필요/일부 도보·미확인 구간 있음’으로표시한다. DURATION_TOTAL_MISMATCH는총시간확인필요,unallocated_seconds는대기/여유로채우지않는다. 도착시각·출발까지카운트다운·탑승보장 없음. 실제응답에심야노선이포함될수있으므로 운행시간과지금이용가능여부는확인필요로표시하고시간표를추정해제외/인증하지않는다.
+- 전체 예상 시간/환승수/제공된 도보시간 기준으로 로컬 정렬하며새 공급자요청을자동발생시키지않는다. 상세보기는화면메모리의한후보구간을펼치는동작이며실제이동/루틴저장이아니다. WALKING 역할과seconds/meters, BUS/SUBWAY 차량명·선택적세부분류/승하차 정류장순서를표시한다. 운행방향/공공ID·물리정류장일치·연결 feasibility는검증되지않았음을쉬운문구로표시한다. 연결 도보null과0을구분하며빠진접근/마지막도보·AI/실시간/출입구/플랫폼·중간지역·미정GPS 근거를안내한다.
+- 프론트는journey.v1 후보/순서/ID/시간분해/연결참조·응답ID/기한·상태를검증하고깨진형식/미지원모델버전은성공으로표시하지않는다. 공급자/서버오류원문·주소·키/본문·좌표/후보를로그에출력하지않는다. React 텍스트출력·기존lucide/카드/버튼/CSS 변수·44px 행동·키보드 상세보기·모바일 줄바꿈을 유지한다.
+- 기존API경로·입출력/권한/DB DDL·작업/보관·지도공급자 계약은 유지한다. 공통클라이언트는Retry-After 파싱 결과만 추가노출하고 자동재시도는추가하지않는다. API모델의실시간/AI/목표도착 미구현 상태를화면에서검증됨으로바꾸지않는다.
 
 ## 실행 예시
 

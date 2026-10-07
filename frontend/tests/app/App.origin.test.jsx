@@ -5,8 +5,14 @@ import userEvent from '@testing-library/user-event';
 import App from '../../src/app/App';
 vi.mock('../../src/components/PlacesCard',()=>({default:()=>null}));
 vi.mock('../../src/components/AccountForm',()=>({default:()=> <p>검증용 계정</p>}));
+vi.mock('../../src/components/JourneyComparison',()=>({default:({onBack})=><><p>검증용 경로 비교</p><button onClick={onBack}>홈 복귀</button></>}));
 vi.mock('../../src/components/OriginSelector',()=>({default:({onSelect})=><button onClick={()=>onSelect({label:'지도 선택 위치',location_address:'서울 합성동',origin:{type:'map_pin'},deadline:Date.now()+600000})}>검증용 출발지 확인</button>}));
 afterEach(()=>vi.useRealTimers());
+it('opens actual comparison without mixing it with synthetic departure guidance',async()=>{
+  render(<App/>);const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'경로 후보 비교'}));
+  expect(screen.getByText('검증용 경로 비교')).toBeTruthy();expect(screen.queryByRole('button',{name:'지금 출발할게요'})).toBeNull();
+  await user.click(screen.getByRole('button',{name:'홈 복귀'}));expect(screen.getByRole('button',{name:'지금 출발할게요'})).toBeTruthy();
+});
 async function select(){
   render(<App/>);const user=userEvent.setup();await user.click(screen.getByRole('button',{name:/다른 곳에서 출발/}));
   await user.click(screen.getByRole('button',{name:'검증용 출발지 확인'}));return user;

@@ -9,7 +9,8 @@ const validLocation = value => Number.isFinite(value?.latitude) && Math.abs(valu
 const validPlace = value => typeof value?.place_id === 'string' && typeof value.label === 'string'
   && validLocation(value.location) && Number.isInteger(value.location_version) && value.location_version >= 1;
 
-export default function OriginSelector({ onSelect, onLogin, onAuthError }) {
+export default function OriginSelector({ onSelect, onLogin, onAuthError, purpose = 'origin' }) {
+  const noun = purpose === 'destination' ? '도착' : '출발';
   const [mode, setMode] = useState('current');
   const [phase, setPhase] = useState('loading');
   const [items, setItems] = useState([]);
@@ -24,7 +25,7 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError }) {
     if (!draft) return;
     const timer = setTimeout(() => {
       pending.current?.abort(); pending.current = null; setPhase('ready');
-      setDraft(null); setMessage('출발지 확인 화면이 만료됐어요. 현재 위치를 다시 측정해주세요.');
+      setDraft(null); setMessage(`${noun}지 확인 화면이 만료됐어요. 현재 위치를 다시 측정해주세요.`);
     }, Math.max(0, draft.deadline - Date.now()));
     return () => clearTimeout(timer);
   }, [draft]);
@@ -105,23 +106,23 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError }) {
     }, 'locating');
   }
   return <div className="origin-selector" aria-busy={busy}>
-    <p className="muted">출발지를 선택해주세요. 실제 경로와 출발 시간 안내는 준비 중이에요.</p>
+    <p className="muted">{noun}지를 선택해주세요. 출발 시간 안내는 준비 중이에요.</p>
     {phase === 'anonymous' ? <><p role="alert">{message}</p><button className="primary wide" onClick={onLogin}>로그인하기</button></> : <>
-      <div className="origin-methods" role="group" aria-label="출발지 선택 방법">{[['current','현재 위치'],['map','지도 선택'],['saved','저장 장소']].map(([key,label]) =>
+      <div className="origin-methods" role="group" aria-label={`${noun}지 선택 방법`}>{[['current','현재 위치'],['map','지도 선택'],['saved','저장 장소']].map(([key,label]) =>
         <button className="secondary" key={key} aria-pressed={mode === key} disabled={phase === 'loading'} onClick={() => changeMode(key)}>{label}</button>)}</div>
       {message && <p className="info-box" role="alert">{message}</p>}
-      {busy && <p role="status">{phase === 'locating' ? '기기 위치 권한을 확인하고 있어요. 최대 15초 기다려요.' : phase === 'validating' ? '출발지를 확인하고 있어요.' : '내 장소를 확인하고 있어요.'}</p>}
+      {busy && <p role="status">{phase === 'locating' ? '기기 위치 권한을 확인하고 있어요. 최대 15초 기다려요.' : phase === 'validating' ? `${noun}지를 확인하고 있어요.` : '내 장소를 확인하고 있어요.'}</p>}
       {mode === 'current' && <><p className="small muted">버튼을 누르면 기기 위치를 한 번 요청해요. 선택 좌표는 서울·경기 확인을 위해 카카오로 전달돼요. 위치 추적이나 자동 저장은 하지 않아요.</p>
-        <p className="small muted">GPS 수치 기준은 보류 중이에요. 측정 후 지도에서 실제 출발 위치를 직접 확인해주세요. 저장 장소는 직접 선택해요.</p>
+        <p className="small muted">GPS 수치 기준은 보류 중이에요. 측정 후 지도에서 실제 {noun} 위치를 직접 확인해주세요. 저장 장소는 직접 선택해요.</p>
         <button className="secondary wide" disabled={busy} onClick={current}>{draft ? '현재 위치 다시 측정' : '현재 위치 확인'}</button>
-        {draft && <OriginReview draft={draft} busy={busy} expired={expired} onAuthError={authError}
+        {draft && <OriginReview purpose={purpose} draft={draft} busy={busy} expired={expired} onAuthError={authError}
           onChange={point => { changeMode('map'); setLocation(point); setTouched(true); }}
           onConfirm={() => { if (Date.now() >= draft.deadline) { setExpired(true); return; }
             run(signal => validate({ ...draft.origin, location_confirmed: true }, signal), 'validating'); }}/>}</>}
-      {mode === 'map' && <><MapPinPicker location={location} mapLabel="출발지 선택 지도"
-        description="시작 핀은 현재 위치가 아니에요. 지도를 누르거나 핀을 옮겨 출발지를 직접 선택해주세요. 선택 위치가 카카오 지도에 표시돼요."
+      {mode === 'map' && <><MapPinPicker location={location} mapLabel={`${noun}지 선택 지도`}
+        description={`시작 핀은 현재 위치가 아니에요. 지도를 누르거나 핀을 옮겨 ${noun}지를 직접 선택해주세요. 선택 위치가 카카오 지도에 표시돼요.`}
         disabled={busy} onAuthError={authError} onChange={point => { setLocation(point); setTouched(true); setMessage(''); }}/>
-        <button className="primary wide" disabled={busy || !touched} onClick={() => run(signal => validate({ type: 'map_pin', ...location }, signal), 'validating')}>이 위치에서 출발</button></>}
+        <button className="primary wide" disabled={busy || !touched} onClick={() => run(signal => validate({ type: 'map_pin', ...location }, signal), 'validating')}>{purpose === 'destination' ? '이 위치로 도착' : '이 위치에서 출발'}</button></>}
       {mode === 'saved' && <><div className="origin-places">{items.map(item => <button className="secondary" key={item.place_id} disabled={busy}
         onClick={() => run(signal => validate({ type: 'saved_place', place_id: item.place_id, location_version: item.location_version }, signal), 'validating')}>
         <strong>{item.label}</strong><span>{item.location_address || item.address}</span></button>)}</div>

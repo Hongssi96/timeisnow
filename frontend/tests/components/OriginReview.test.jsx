@@ -13,3 +13,7 @@ it('only allows manual confirmation after the map loads; map retry blocks it aga
   await user.click(screen.getByRole('button',{name:'합성 지도 성공'}));await user.click(button);expect(confirm).toHaveBeenCalledOnce();
   await user.click(screen.getByRole('button',{name:'합성 지도 실패'}));expect(button.disabled).toBe(true);
 });
+it('destination confirmation labels never claim a departure position',()=>{
+  render(<OriginReview purpose="destination" draft={{location:{latitude:37.5665,longitude:126.978},origin:{captured_at:'2099-01-01T00:00:00Z',accuracy_meters:5},quality:{time_relation:'future'}}}/>);
+  expect(screen.getByRole('button',{name:'이 위치가 실제 도착 위치예요'})).toBeTruthy();expect(screen.queryByRole('button',{name:'이 위치가 실제 출발 위치예요'})).toBeNull();
+});
