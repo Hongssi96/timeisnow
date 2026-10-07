@@ -15,6 +15,7 @@ class CurrentOrigin(places.Location):
     type: Literal['current_location']
     accuracy_meters: float = Field(ge=0, allow_inf_nan=False)
     captured_at: datetime
+    location_confirmed: bool = Field(default=False, strict=True)
 
     @field_validator('captured_at', mode='before')
     @classmethod
@@ -47,6 +48,20 @@ class OriginInput(BaseModel):
     origin: Annotated[CurrentOrigin | MapOrigin | SavedOrigin, Field(discriminator='type')]
 
 
+def manual_assessment(origin, now):
+    """Report user choices and timestamps; numerical GPS policy is deferred."""
+    current = isinstance(origin, CurrentOrigin)
+    return {
+        'quality': {
+            'assessment': 'unassessed' if current else 'user_selected',
+            'confirmation': ('reported' if origin.location_confirmed else 'required') if current else 'not_applicable',
+            'numeric_policy': 'deferred',
+            'time_relation': ('future' if origin.captured_at > now else 'past_or_present') if current else 'not_applicable',
+        },
+        'place_match': {'status': 'selected_by_user' if isinstance(origin, SavedOrigin) else 'unconfirmed'},
+    }
+
+
 @router.post('/origin-validations')
 def validate_origin(request: Request, body: OriginInput):
     with auth.database() as connection:
@@ -67,13 +82,16 @@ def validate_origin(request: Request, body: OriginInput):
                 'location':{'latitude':row['latitude'],'longitude':row['longitude']},
                 'location_address':row['location_address'] or row['address'],
                 'quality_status':'not_applicable',
+                **manual_assessment(body.origin, datetime.now(timezone.utc)),
                 'expires_at':auth.iso(datetime.now(timezone.utc)+timedelta(seconds=600))})
     location = places.Location(latitude=body.origin.latitude, longitude=body.origin.longitude)
     address = places.region_for_location(location)
     with auth.database() as connection:
         places.authenticated(connection, request, True)
+    now = datetime.now(timezone.utc)
     return auth.answer(request, {'origin':body.origin.model_dump(mode='json'),
         'label':'현재 위치' if isinstance(body.origin, CurrentOrigin) else '지도 선택 위치',
         'location':location.model_dump(), 'location_address':address,
-        'quality_status':'pending' if isinstance(body.origin, CurrentOrigin) else 'not_applicable',
-        'expires_at':auth.iso(datetime.now(timezone.utc)+timedelta(seconds=600))})
+        'quality_status':('user_confirmed' if body.origin.location_confirmed else 'pending') if isinstance(body.origin, CurrentOrigin) else 'not_applicable',
+        **manual_assessment(body.origin, now),
+        'expires_at':auth.iso(now+timedelta(seconds=600))})

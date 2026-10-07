@@ -29,10 +29,13 @@ describe('지도 핀',()=>{
     view.unmount();expect(maps.event.removeListener).toHaveBeenCalledTimes(2);expect(marker.setMap).toHaveBeenCalledWith(null);
   });
   it('SDK 실패 시 재시도 후 지도를 표시한다',async()=>{
+    const ready=vi.fn();
     loadKakaoMap.mockRejectedValueOnce(new ApiError('MAP_UNAVAILABLE')).mockResolvedValueOnce(maps);
-    render(<MapPinPicker location={{latitude:37.5,longitude:127}} onChange={vi.fn()}/>);
+    render(<MapPinPicker location={{latitude:37.5,longitude:127}} onChange={vi.fn()} onReady={ready}/>);
+    await screen.findByRole('alert');expect(ready).toHaveBeenLastCalledWith(false);
     await userEvent.click(await screen.findByRole('button',{name:'지도 다시 불러오기'}));
     expect(await screen.findByRole('button',{name:'북쪽 5m'})).toBeTruthy();
+    expect(ready).toHaveBeenLastCalledWith(true);
   });
   it('비활성 중에는 지도 클릭/마커 변경을 반영하지 않는다',async()=>{
     const change=vi.fn();render(<MapPinPicker disabled location={{latitude:37.5,longitude:127}} onChange={change}/>);

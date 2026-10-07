@@ -42,6 +42,11 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[1][b'cache-control'],b'no-store')
         data = result[2]['data']
         self.assertEqual(data['quality_status'],'pending')
+        self.assertFalse(data['origin']['location_confirmed'])
+        self.assertEqual(data['quality']['assessment'],'unassessed')
+        self.assertEqual(data['quality']['confirmation'],'required')
+        self.assertEqual(data['quality']['numeric_policy'],'deferred')
+        self.assertEqual(data['place_match']['status'],'unconfirmed')
         self.assertEqual(data['origin']['type'],'current_location')
         self.assertEqual(data['origin']['captured_at'],'2026-10-07T01:00:00Z')
         self.assertEqual(data['origin']['accuracy_meters'],14.5)
@@ -55,6 +60,19 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
         for private in ['37.51','127.01','14.5','captured_at','합성동',self.cookie,self.csrf]:
             self.assertNotIn(private,line)
 
+    async def test_manual_confirmation_never_claims_gps_quality_or_place_matching(self):
+        await self.signup_login()
+        for captured,relation in [('2000-01-01T00:00:00Z','past_or_present'),('2099-01-01T00:00:00Z','future')]:
+            origin={'type':'current_location','latitude':37.51,'longitude':127.01,
+                    'accuracy_meters':100000,'captured_at':captured,'location_confirmed':True}
+            result,_=await self.validate(origin)
+            self.assertEqual(result[0],200)
+            data=result[2]['data']
+            self.assertEqual(data['quality_status'],'user_confirmed')
+            self.assertEqual(data['quality'],{'assessment':'unassessed','confirmation':'reported','numeric_policy':'deferred','time_relation':relation})
+            self.assertEqual(data['place_match'],{'status':'unconfirmed'})
+        self.assertEqual((await self.call('/places'))[2]['data']['items'],[])
+
     async def test_saved_ownership_location_version_and_current_label(self):
         await self.signup_login()
         _, created = await self.saved()
@@ -66,6 +84,7 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[0],200); provider.assert_not_called()
         self.assertEqual(result[2]['data']['label'],'새 이름')
         self.assertEqual(result[2]['data']['origin']['location_version'],1)
+        self.assertEqual(result[2]['data']['place_match']['status'],'selected_by_user')
         self.assertEqual((await self.validate({**origin,'location_version':2}))[0][0],409)
         self.assertEqual((await self.validate({**origin,'place_id':str(uuid4())}))[0][0],404)
         old_cookie,old_csrf=self.cookie,self.csrf
@@ -91,7 +110,9 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
         for invalid in [{**origin,'latitude':91},{**origin,'extra':True},{**origin,'type':'unknown'},
                         {**current,'accuracy_meters':-1},{**current,'captured_at':'2026-10-07'},
                         {**current,'captured_at':123},{**current,'captured_at':'123'},
-                        {**current,'captured_at':'2026-10-07T01:00:00'}]:
+                        {**current,'captured_at':'2026-10-07T01:00:00'},
+                        {**current,'location_confirmed':'true'},{**current,'location_confirmed':1},
+                        {**origin,'location_confirmed':True}]:
             result, provider=await self.validate(invalid)
             self.assertEqual(result[0],422);provider.assert_not_called()
         for status,code in [(422,'UNSUPPORTED_REGION'),(503,'PROVIDER_UNAVAILABLE'),(502,'PROVIDER_RESPONSE_INVALID')]:

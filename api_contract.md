@@ -1,7 +1,7 @@
 # 지금이니? API 설계 초안
-- 문서 버전: 0.38 · 작성일: 2026-09-30 · 수정일: 2026-10-07 (F03-04 현재 위치·지도 출발지 선택)
+- 문서 버전: 0.39 · 작성일: 2026-09-30 · 수정일: 2026-10-07 (F03-05 수동 확인·GPS 수치 정책 보류)
 - 프론트엔드: React · 백엔드: Python FastAPI
-- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. 위치 품질/일치 판정(F03-05) 및 경로/약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
+- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. F03-05a 수동 확인은 구현/검증 완료이며 GPS 수치/자동 일치 판정은 사용자 결정으로 보류. 경로/약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
 - 기준: 대화에서 확정한 요구사항 및 프로젝트 `C:/projects/timeisnow` 폴더의 `planning.md`, `feature_breakdown.md`, `personalization.md`, `logging.md`, `ai_prompts.md`.
 - 이 페이지는 수동 관리하는 설계 문서다. 코드와 자동 동기화되는 상태가 아니다.
 ## 1. 읽는 방법
@@ -111,9 +111,9 @@ GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1절 출발지 
 <tr>
 <td>`POST /origin-validations`</td>
 <td>필요</td>
-<td>origin: current_location/map_pin/saved_place</td>
-<td>200: origin, label, location, location_address, expires_at, quality_status</td>
-<td>단발 위치/본인 장소·CSRF·10회/분·600초 메모리 선택. GPS 품질 판정·경로 계산은 후속</td>
+<td>origin: current_location/map_pin/saved_place. current_location.location_confirmed 선택boolean(기본false)</td>
+<td>200: origin, label, location, location_address, expires_at, quality_status, quality, place_match</td>
+<td>단발 위치/본인 장소·CSRF·10회/분·600초 메모리 선택. 현재 위치는 location_confirmed로 수동 확인, GPS 수치/자동 일치 판정은 보류</td>
 </tr>
 <tr>
 <td>`GET /places`</td>
@@ -430,6 +430,7 @@ origin/destination은 saved_place 또는 좌표 출발 객체다. 권한 거절 
 목표 도착 검색은 timing.mode=arrive_by와 timing.arrive_by의 절대 시각을 필수로 전달한다. 루틴의 반복 목표는 local time과 timezone으로 별도 저장한다.
 후보는 candidate_id, validity, ordered_legs, transfer_count, total_seconds, estimated_arrival_at, time_sources, missing_segments를 포함한다. 후보 ID는 해당 사용자의 search_id 안에서만 유효하다.
 ### 5.2.1 F03-04 현재 위치·지도 출발지 선택
+- 이 절은 최초 F03-04 기반 계약/검증 이력이다. 현재 위치 수동 확인·200 응답 확장은 아래 v0.39 5.2.2절을 함께 적용한다.
 - 구현/검증(2026-10-07): 백엔드94개·프론트73개·빌드 통과. 실제 PostgreSQL/ASGI 소유권·위치 버전·CSRF·지원지역/공급자 실패·실패 포함 쿼터·메타데이터/로그 비노출 확인. 공개 서울시청 좌표의 로컬 HTTP current_location200/quality_status=pending·UTC 정규화·no-store, 실제 지도 방향 버튼/키보드·데스크톱1440×1000/모바일390×844 선택·준비 카드·새로고침 초기화 확인. GPS 성공/거절/시간초과/미지원/취소는 모의 검증이며 실제 기기 위치 요청/권한 승인·실제 휴대전화 GPS 확인은 미실행. 근거: `development_log.md`.
 ```json
 {"origin":{"type":"current_location","latitude":37.5665,"longitude":126.978,"accuracy_meters":10,"captured_at":"2026-10-07T11:00:00+09:00"}}
@@ -440,11 +441,25 @@ origin/destination은 saved_place 또는 좌표 출발 객체다. 권한 거절 
 - origin 구분: current_location은 type, latitude/longitude, accuracy_meters(유한·0이상), captured_at(시간대 있는ISO8601) 필수. map_pin은 type, latitude/longitude. saved_place는 type, place_id 및 선택 location_version(정수\>=1). 알 수 없는 필드·종류/좌표/시각 형식422 VALIDATION_ERROR.
 - current_location/map_pin은 서버 카카오 지역 확인으로 서울/경기 범위를 검증한다. 지역 밖/바다422 UNSUPPORTED_REGION, 공급자503/잘못된 응답502는 기존 동일. saved_place는 본인/존재404·location_version 불일치409 VERSION_CONFLICT, 이름만 바뀌면 현재 저장 이름으로 반환하며 공급자 재호출 없음. 근처에 있다는 이유로 current_location을saved_place로 변환하지 않는다.
 - 200 data: origin(검사한 종류/필드, saved_place는현재location_version 포함), label(현재 위치/지도 선택 위치/본인 저장 이름), location(latitude/longitude), location_address(법정동 또는 저장 주소), expires_at(서버 확인후600초), quality_status(current_location=pending, map_pin/saved_place=not_applicable). meta는 기존 공통. captured_at은UTC로 정규화, accuracy는측정치이며 위치 보증 아님.
-- F03-04는 측정 시각/정확도의 형식과 전달을 구현한다. 품질 임계값·최신성/정확도 재확인 상태·저장 장소와 실제 출입구 일치 판정은F03-05 후속, quality_status=pending을경로 계산 가능으로 처리하지 않는다. 미래/오래된 측정의 최종 정책은F03-05에서 확정하며 현재 화면에는 실제 출발 안내 없음.
+- F03-04는 측정 시각/정확도의 형식과 전달을 구현한다. v0.39에서 수동 확인만 추가한다. GPS 수치 기준·자동 저장 장소/출입구 일치 판정은 사용자 결정으로 보류하며 pending/user_confirmed 모두 실제 경로 계산 가능 보증으로 처리하지 않는다. 현재 화면에는 실제 출발 안내 없음.
 - 기기 위치 요청은 명시 버튼 클릭 후 getCurrentPosition 1회, enableHighAccuracy=true/maximumAge=0/timeout=10000ms. 앱 전체 대기는15000ms까지(권한 응답 대기 포함) 제한, 거절/시간 초과/위치 불가/HTTPS·API 미지원은 지도 선택과 재시도. watchPosition/백그라운드 추적/자동 권한 요청/역 내부 도착 판정 없음.
 - 지도 시작은 본인 첫 저장 장소 또는 공개 서울시청 근사좌표(37.5665,126.9780). 시작 중심을현재 위치로 간주하지 않고 클릭/방향 버튼으로 명시 선택한 뒤 확인한다. 지도는 기존 SDK/공개 키/서버 REST 키 구분 유지, 선택 좌표를카카오로 지원지역 확인한다. GPS 원문·주소·좌표·쿠키/키는 로그 제외, 위치를AI로 전달하거나고정 장소에자동 저장하지 않는다.
 - 선택은 화면 메모리에서만 유지, 새로고침/계정 모달 진입/인증 만료 인지 시 제거.600초 뒤 만료 안내/재선택, 실제 경로/출발 안내 대신 준비 중 카드, 예시 이동 시작 차단. 화면 이탈/방법 변경 시 요청 취소/늦은GPS 응답 무시. 저장 장소 목록 기본20/최대100 규칙·더보기/빈목록/조회실패 재시도 유지.
 - 호환성: 신규 입력 확인API 및 출발지 선택UI 추가, 기존auth/장소/경로 검색 객체 유지. 현재GPS/지도 좌표를 영구 DB/URL/로그에 저장하지 않는다(요청 제한은기존HMAC 버킷). 경로 API에서는 다시인증/소유권/위치품질을검사해야 하며600초 선택유효기간은GPS 최신성 보장이 아니다.
+### 5.2.2 F03-05 수동 위치 확인 (자동 GPS 수치 판정 보류)
+- 사용자 결정(2026-10-07): GPS 측정 후 경과 시간·정확도·미래 시각 허용폭의 수치 기준은 보류한다. 60초/50m/5초 등 제안값을 구현하거나 확정 정책으로 사용하지 않는다. 자동 저장 장소 근접/출입구 일치 임계값도 미정이며 자동 일치 판정·도보 근거 재사용은 구현하지 않는다. F03-05는 수동 확인 부분만 구현하고 자동 품질/일치 판정 완료로 체크하지 않는다.
+- POST /origin-validations current_location에 location_confirmed(선택 strict boolean, 기본false) 추가. false는200 quality_status=pending이며 확인 전, true는사용자가 지도상의 현재 출발 위치를 확인했다고 신고한200 quality_status=user_confirmed이다. 이 값은 GPS 정확성/최신성/실제 출입구 일치 검증이 아니며 서버가 위치를 보증하지 않는다. 다른 origin 종류에는 해당 필드를 받지 않는다.
+- 모든200 data에 quality와 place_match 추가. quality는 assessment(current_location=unassessed, map_pin/saved_place=user_selected), confirmation(current_location false=required/true=reported, 나머지=not_applicable), numeric_policy=deferred, time_relation(current_location은서버처리시각 기준future/past_or_present, 나머지not_applicable). 측정 시각·정확도는origin의기존필드이며 시간 관계는표시 정보, 자동 유효/무효 판정 아님. quality_status=not_applicable은 지도/저장 장소 기존값 유지.
+- place_match.status=current_location/map_pin은unconfirmed, saved_place는selected_by_user. 저장 장소의 명시 선택은 place_id/location_version 소유권·충돌 재검사 후 해당 저장 위치를 사용하는 행동이며 GPS와 물리적으로 같다는 인증이 아니다. GPS/고도/지하철 내부·출입구를자동확정하지 않는다.
+- 구현/검증(2026-10-07): F03-05a 수동 확인 완료. 백엔드95개·프론트79개·빌드 통과. 실제 로컬 HTTP pending/user_confirmed200·no-store·미래 시각 표시 정보/품질 unassessed/일치 unconfirmed 확인. 실제 지도와 공개 좌표 합성 OriginReview 화면을 데스크톱1440×1000/모바일390×844에서 확인했고 지도 선택은 실제 앱/API로 회귀 검증했다. GPS 측정·확인/만료·실패는 모의 검증이며 실제 기기 GPS 권한 승인/정확도 검증은 수행하지 않았다. 임시 화면·합성 계정/세션 제거. GPS 수치·자동 일치 판정은 보류, 상위F03-05 미완료 유지. 근거 development_[log.md](http://log.md).
+- UI: 명시GPS1회/인증·서울/경기 확인 → 지도 로딩 성공 후 측정 위치·측정 시각·정확도/미래 시각 표시 → '이 위치가 실제 출발 위치예요' 버튼으로같은 origin/location_confirmed=true 재확인 → 준비 카드. 확인 전 onSelect/실제선택 없음, 지도 핀을옮기면map_pin으로직접선택, 저장 장소는별도버튼으로사용자가선택한다. 다시측정/다른방법/이탈/계정/인증만료/600초 확인만료는 미확인자료를제거한다.
+- 기존600초 선택/확인 유효기간은 유지하며GPS 최신성 기준으로 해석하지 않는다. 기한은meta.server_time과expires_at 차이로처리, 확인기간이끝나면현재위치를다시확인하도록한다. 입력이오래되거나미래라는이유로임의수치 차단하지 않고 화면에시각을표시해수동확인한다. 경로/출발 안내는F04\~07 후속이며지도/저장 장소의명시선택에도실제예시안내를적용하지않는다.
+- 인증/Origin·CSRF/no-store/사용자10회·분(최초/확인/실패포함)/지역/오류/로그 비노출·임시App 메모리/DB좌표저장없음/AI전달없음은유지. 수동확인도기존출발지검증을다시호출하며확인 중서버실패/세션만료는선택하지않는다.
+- 호환성: 기존current_location 요청은기본false와pending유지. 추가quality/place_match는추가필드이며user_confirmed는새location_confirmed=true요청에만반환한다. 수동확인UI를적용하려면프론트갱신/새로고침이필요, 이전pending을검증된품질로취급하지않는다. 이후경로API는인증/소유권/수동확인근거·미정GPS정책을재검사해야한다.
+```json
+{"origin":{"type":"current_location","latitude":37.5665,"longitude":126.978,"accuracy_meters":10,"captured_at":"2026-10-07T04:00:00Z","location_confirmed":true}}
+```
+- 위 공개 합성 좌표 요청은quality_status=user_confirmed, quality.assessment=unassessed/confirmation=reported/numeric_policy=deferred, place_match.status=unconfirmed로반환한다. GPS 위치 품질을valid로반환하지 않는다.
 ### 5.3 도보 결과
 `GET /api/v1/walking-estimates/estimate_demo_01`의 data 예시:
 ```json
@@ -1296,8 +1311,9 @@ F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프�
 - 공동 약속/채팅은 completed/cancelled 후30일. draft 마지막 사용자 변경후30일 미사용 삭제. confirmed 목표시각6시간 후 completed 자동 정리하되 실제 참석/도착 판정 아님. 재전송 이력24시간. 본인 약속탈퇴 시 개인 입력/공유 종료·정리, 기존 공동 메시지는 탈퇴한 참여자로 표시. 계정탈퇴는 본인 메시지 본문도 삭제, 주최자 탈퇴는 취소 후 다른 활성 참여자30일 열람. 개인 trip은 연결해제후90일 정책.
 ### 계약 영향·완료 기준
 - 기존 경로/응답 객체 유지, 설정 상한·만료·공유 ETA120초·자동 종료/삭제·출시 알림 범위가 변경/확정됐다. 아직 서비스가 미구현이므로 배포된 클라이언트 마이그레이션 없음. 422/404/409 등 기존 오류 사용, 소유권·동시 수락·기한 경계·삭제 사본 검증은 구현 시 수행한다.
-- 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회/수정/삭제 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. F03-03 main30b62a9 병합 확인, F03-01\~04 구현/검증 완료. 사용자 검토 후 codex/current-origin 브랜치 MR/병합, 다음 F03-05 위치 품질·저장 장소 일치 판정.
+- 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회/수정/삭제 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. F03-04 main0402d67·R01 mainca8cd93 병합 확인, F03-01\~04 구현/검증 완료. F03-05a 수동 확인을 codex/origin-quality에서 구현/검증 완료하며 GPS 수치/자동 일치 판정은 보류한다. 사용자 검토 후 기능 브랜치 MR/병합, 다음 F04-01(보류 정책은 별도 확정).
 ## 변경 이력
+- 2026-10-07 v0.39: 사용자 결정에 따라GPS 경과시간/정확도/미래허용수치 및자동일치판정은보류. F03-05 수동확인부분으로current_location.location_confirmed/quality/place_match·user_confirmed 상태 추가, 기존false/pending·지도/장소/auth 호환 유지. 사용자의 확인과위치품질 보증·실제경로계산을구분한다.
 - 2026-10-07 v0.38: F03-04 POST /origin-validations·단발GPS/거절·지도/본인 저장 장소 선택·600초 메모리 선택 추가. 현재 위치를근처저장장소로추정하지 않으며 실제 예시 안내와 분리. 시각/정확도 형식은전달하고 품질/일치 판정은F03-05 후속, 기존 장소/auth/경로 객체 호환 유지.
 - 2026-10-07 v0.37: F03-03 label 수정/DELETE204·24시간 삭제된 저장 키 재생성 방지·location_version 구체화. 이름 변경은 위치/도보 근거를 유지, 기존 일반version 충돌 검사 유지. 미구현 루틴/산정 삭제 연결은 F04\~06 후속, 현 장소 삭제만 동기 완료.
 - 2026-10-07 v0.36: F03-02 지도 설정/위치 확인·본인 장소 PATCH·사용자 출입구 설명·장소 버전 동시성 계약 구체화. 서울/경기 확인600초·원래 주소와 핀 법정동 구분. 기존 생성 선택 필드/응답 필드 추가로 F03-01 호환 유지. 실제 산정 무효화는 F04/F05 후속.
