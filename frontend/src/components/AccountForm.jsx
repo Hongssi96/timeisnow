@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { apiRequest, ApiError } from './api';
+import { apiRequest, ApiError } from '../lib/api';
 
 function memberData(response) {
   if (typeof response.data?.user_id !== 'string' || typeof response.data?.display_name !== 'string'

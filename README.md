@@ -233,3 +233,4 @@ AI 모델은 GPT-5.6 Luna (`gpt-5.6-luna`)로 확정했으며 사용자 승인�
 
 
 자연어 일정 입력 기획: [natural_language_schedule.md](./natural_language_schedule.md). 사용자 확인 후 저장하며 기능은 미구현입니다.
+프론트엔드는 실행 코드(`frontend/src`: app/components/lib/styles)와 테스트(`frontend/tests`: app/components/lib)로 분리합니다. 진입점은 src/main.jsx이며 실행 명령은 그대로 유지합니다. 상세 [프론트엔드 디렉터리 안내](./frontend/README.md).
