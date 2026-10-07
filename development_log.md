@@ -4,6 +4,19 @@
 
 ## 실제 기록
 
+### 2026-10-07 — F04-01 비동기 카카오 대중교통 경로 후보 API
+- 목표: 사용자 F04 진행 요청에 따라 작은 기능 단위인 F04-01 API부터 구현했다. 최신 main0402d67에서 codex/journey-search 생성, F03-05a/codex/origin-quality/0168464는 아직 main 미병합으로 중복 코드 포함하지 않았다. GPS 수치 보류·수동 확인 요구는 여정 입력에서 location_confirmed:true 필수로 유지한다. 에이전트 MR 생성/병합 없음.
+- 사전 확인: todo.md/F04-01·최신 Notion v0.39 5.2/20절·planning/feature_breakdown/personalization/ai_prompts/logging/policy_decisions·provider_plan/provider_conditions·기존 공급자 진단 및auth/장소 코드를 비교했다. 최신 카카오 공식 REST 대중교통 경로 문서의 요청/상태/route/steps/time/geometry를 확인했다(https://developers.kakao.com/docs/ko/kakaomap/rest-api). 조건 추가 확인 생략 가정은 유지하며 공급자 승낙/정확도 검증 완료로 표현하지 않는다.
+- 명세 변경: 구현 전에 Notion v0.40 5.2.3으로 단계별 입력/응답/작업/오류/멱등/권한/상한/보관/재시작 실패 계약을 구체화하고 구현 상태·예시·공통목록·변경 이력을 맞췄다. depart_now(Asia/Seoul)만 실행, arrive_by는 UNSUPPORTED_TIMING으로 명시하며 목표 도착 설계는 후속 유지. AI/실시간/완전한 비교·방향/역 내부/중간지역 범위는 후속이다. 최신 저장 재조회 후 api_contract.md 전문 동기화. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+- 구현: backend/app/journeys.py — POST202 접수, worker queued/running/succeeded/failed, 본인 GET 검색/GET jobs. 로그인·Origin/CSRF·no-store, 선택 멱등 키/HMAC 본문 해시24시간, 동일202 ID 재현·변경본문409·현재 소유권/위치버전/만료 재검사. 사용자10회/분(실패 포함), 동시2개/사용자·전체8개, admission advisory lock으로 동시 키/진행 수 직렬화. DB는 두 짧은 트랜잭션으로 실패 쿼터도 소비한다.
+- 공급자/모델: journey_provider.py는 기존 서버 키로 고정 HTTPS 호스트/no redirect·10초/2MB 상한을 적용한다. 정상 무결과와 장애/시간초과/잘못된 응답을 구분, 유한 좌표/정수 초·미터/타입·이름 필드를 검증하고 geometry/원문 안내/landingURL을 제거한다. 최대2회 환승/20후보, 선호별 총시간/환승/도보시간 정렬. 최소 ordered_legs는 정류장/차량명·종류/순서·공급자시간이며 완전한 방향·공공ID/출입구/플랫폼 근거는 F04-02~05 후속. 모든 후보 provider_estimate·insufficient_data·estimated_arrival_at:null, AI/실시간 근거를 만들지 않는다.
+- 보관/중단: migration0006_journey_searches의 검색/작업 상태·최소 저장 장소 참조·정규화 후보 및 멱등 테이블. 입력 GPS/지도 좌표·측정치/주소·원본 응답/키/본문은 DB/로그 비저장·AI 전달 없음. 검색300초, 종료 작업24시간, 만료 사용 차단/요청 시 정리. 작업60초 기한을 넘으면 JOB_INTERRUPTED, 늦은 응답은 실패를 성공으로 되돌리지 않는다. worker는 사용자 active/장소 위치를 전후 재검사한다. 재시작 뒤 좌표로 자동 재실행하지 않는다. 매일 청소 스케줄은 후속이다.
+- 실제 검증: PostgreSQL 임시 스키마/ASGI 전체105개 통과. 신규11개는202/200·OpenAPI202·동시 멱등/변경본문/재현·본인/타인/삭제/이름변경/위치버전·수동GPS strict true·provider 처리 중 위치변경·검색/작업 만료·중단/늦은실행 차단·실패쿼터/동시진행·정상무결과/안전한실패·정렬/환승초과·geometry 유효/폐기·리다이렉트/시간초과/2MB 상한·DB/로그 비노출을 확인했다. migrations 왕복/기존 장소 보존/중복 upgrade 포함. 기존main 프론트10파일73개·빌드1895모듈 통과, UI 변경 없으므로 새 시각 검증 없음. F03-05a 브랜치의79개와 다른 기반이며 해당 기능을 제거했다는 의미가 아니다.
+- 실행 검증: 개발 DB0005→0006 upgrade만 적용해 기존 데이터 유지, 검증용 uvicorn 최신 코드 기동. 공개 강남역→서울역 좌표를 한 번 조회해 실제 카카오15후보·HTTP202 queued→GET200 succeeded·no-store/X-Request-ID·같은 키 동일202 ID·GET jobs 성공 확인. 테스트 도구가 logout204 빈 본문을 JSON으로 읽어 마지막 출력에서 오류가 발생했지만 finally에서 합성 자료는 제거됐고 경로 검증은 완료됐다. 도구의204 처리를 고쳐 별도 합성 로그인/로그아웃204·빈본문·정리를 확인했으며 공급자는 재호출하지 않았다. 합성 회원/세션/후보/작업/키 제거. 실제 사용자GPS/목표도착/실시간/AI/전체환승/역내부 정확도는 미검증.
+- 변경 파일: journeys.py·journey_provider.py·main.py·0006 migration·test_journeys.py·test_migrations.py; journey_api.md·api_contract.md·database_schema.md·migrations.md·database.md·backend/README.md·README.md·planning.md·personalization.md·ai_prompts.md·logging.md·todo.md·feature_breakdown.md 및 일지.
+- 배운 개념:202는 공급자 성공이 아닌 작업 접수다. 검색 결과 수명과 작업 상태/재시도 키 수명은 다르고 실제 위치를 저장하지 않아도 최소 참조/HMAC/기한으로 안전하게 중복·만료를 처리할 수 있다. 경로 예상 시간은 실시간 도착/탑승 가능/AI 도보 산정과 구분한다.
+- 남은 일/다음: F04-01 API만 완료, F04-02~05는 유지. 사용자 기능 브랜치 검토/MR/병합 후 공통 구간 모델/방향·누락 근거 보강과 후보 비교 UI로 이어간다. F03-05a 별도MR/main 병합 및 GPS 수치 보류 상태를 유지한다.
+
 ### 2026-10-07 — F03-04 브랜치에 병합된 프론트 폴더 구조 반영
 - 요청: R01이 먼저 main에 병합되어 F03-04를 새 구조에 맞추고 다시 검증/푸시한다. 기존 codex/current-origin을 계속 사용하며 main이나 MR을 에이전트가 병합하지 않는다.
 - 확인: 최신 main ca8cd93에 R01/1ca0991 포함, F03-04/235d617 미포함을 fetch/ancestor로 확인했다. 최신 Notion v0.38 5.2.1 계약·TODO·폴더 README/Vite와 F03-04 import/테스트를 비교했다.

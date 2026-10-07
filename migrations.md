@@ -1,7 +1,7 @@
 # 마이그레이션 사용 안내
 
 2026-10-02 / F00-05b 완료. Alembic 1.20.0, SQLAlchemy 2.1.1.
-현재 개발 DB revision은 `0002_member_auth`다(2026-10-06). 회원·자격정보·프로필·서버 세션·요청 제한 테이블5개가 존재하며 이동/장소/약속 테이블은 아직 없다. 임시 스키마의 upgrade/downgrade 왕복 검증 후 개발 DB에 적용했다. 기존 public 데이터 삭제/초기화는 하지 않았다.
+현재 개발 DB revision은 `0006_journey_searches`다(2026-10-07). 회원·장소 및 경로 검색/작업·멱등 테이블이 적용됐다. 임시 스키마의 upgrade/downgrade 왕복·기존 장소 보존 검증 후 개발 DB에는 upgrade만 적용했다. 기존 public 데이터 삭제/초기화는 하지 않았다.
 
 ## 실행
 

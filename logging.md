@@ -1,5 +1,7 @@
 # 지금이니? — 로깅과 초심자 개발 방식
 
+F04-01(2026-10-07, Notion v0.40): 카카오 대중교통 후보 조회 POST /journey-searches202·본인 GET 결과 및 /jobs 상태를 구현했다. depart_now부터 지원하며 arrive_by는 명시적으로 준비 중 오류다. 후보는 provider_estimate/insufficient_data, 도착 시각 null이고 AI 도보·실시간·역 내부/출입구·중간 지역 검증은 후속이다. 입력 GPS/지도 좌표·원본 geometry는 DB/로그에 저장하지 않는다. 검색300초·작업/멱등24시간·재시작60초 실패 처리, 저장 장소 존재/위치 버전 재검사. 상세 [journey_api.md](./journey_api.md). F03-05a는 별도 codex/origin-quality/0168464에 구현됐고 main 병합 전이며 GPS 수치 정책 보류를 유지한다. 기존 요청 로그에 경로 템플릿/요청ID/상태만 기록하며 개인 위치·정류장/차량명·공급자 원문/예외 상세는 출력하지 않는다.
+
 F03-04(2026-10-07): POST /origin-validations는 기존 요청 완료 메타데이터/ID만 기록한다. GPS 좌표·측정 시각/정확도·법정동/주소·원문 본문/키/쿠키 제외, AI 전달/새 좌표 저장소 없음. 실제 ASGI200·응답ID 일치/비노출 및 로컬 HTTP200 로그 확인. 요청 제한은 기존 HMAC 버킷, 선택은 화면 메모리600초. 상세 origin_api.md.
 
 - 버전: 0.2 / 2026-10-06

@@ -1,5 +1,7 @@
 # 지금이니? — 테이블·연관관계 설계 초안
 
+F04-01(2026-10-07, Notion v0.40): 카카오 대중교통 후보 조회 POST /journey-searches202·본인 GET 결과 및 /jobs 상태를 구현했다. depart_now부터 지원하며 arrive_by는 명시적으로 준비 중 오류다. 후보는 provider_estimate/insufficient_data, 도착 시각 null이고 AI 도보·실시간·역 내부/출입구·중간 지역 검증은 후속이다. 입력 GPS/지도 좌표·원본 geometry는 DB/로그에 저장하지 않는다. 검색300초·작업/멱등24시간·재시작60초 실패 처리, 저장 장소 존재/위치 버전 재검사. 상세 [journey_api.md](./journey_api.md). F03-05a는 별도 codex/origin-quality/0168464에 구현됐고 main 병합 전이며 GPS 수치 정책 보류를 유지한다. 실제 추가 테이블은0006_journey_searches의journey_searches/journey_search_keys이며 users ON DELETE CASCADE, 멱등 search 참조는ON DELETE SET NULL이다.
+
 - 버전: 0.3 / 작성일: 2026-10-02
 - 상태: **회원 인증5개 테이블은0002_member_auth로 적용**, 나머지 이동/장소/약속 DDL은 설계 제안·미적용.
 - 기준: [API 명세](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa), [기획](./planning.md), [개인화](./personalization.md), [약속 확장](./meeting_plan.md).
