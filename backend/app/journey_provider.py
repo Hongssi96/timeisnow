@@ -8,6 +8,7 @@ import urllib.request
 from uuid import uuid4
 from dotenv import dotenv_values
 from app import auth, places
+from app.journey_models import common_candidate
 
 
 def invalid():
@@ -80,7 +81,7 @@ def normalize(data, preference):
         steps = route.get('steps')
         if not isinstance(steps, list) or not 1 <= len(steps) <= 500:
             invalid()
-        legs, walking = [], 0
+        legs, walking, vehicle_options = [], 0, {}
         for index, step in enumerate(steps):
             if not isinstance(step, dict) or not isinstance(step.get('properties'), dict):
                 invalid()
@@ -103,15 +104,19 @@ def normalize(data, preference):
             if kind != 'WALKING' and (len(stops) < 2 or not vehicles):
                 invalid()
             if kind == 'WALKING': walking += leg_seconds
-            legs.append({'leg_id':str(uuid4()),'sequence':index,'type':kind,'seconds':leg_seconds,
+            leg_id = str(uuid4())
+            if kind != 'WALKING':
+                vehicle_options[leg_id] = [{'name':item['name'],'provider_type':item.get('type')} for item in sp['vehicles']]
+            legs.append({'leg_id':leg_id,'sequence':index,'type':kind,'seconds':leg_seconds,
                          'distance_meters':leg_meters,'stops':stops,'vehicles':vehicles,'time_source':'provider_estimate'})
         if not any(leg['type'] != 'WALKING' for leg in legs):
             invalid()
-        if transfers > 2:
+        if transfers > 2 or sum(leg['type'] != 'WALKING' for leg in legs) > 3:
             reasons.append('TRANSFER_LIMIT'); continue
-        candidates.append({'candidate_id':str(uuid4()),'type':props['type'],'validity':'insufficient_data',
+        candidates.append(common_candidate({'candidate_id':str(uuid4()),'type':props['type'],'validity':'insufficient_data',
             'ordered_legs':legs,'transfer_count':transfers,'total_seconds':seconds,'total_distance_meters':meters,
             'walking_seconds':walking,'estimated_arrival_at':None,'time_sources':['provider_estimate'],
-            'missing_segments':missing[:]})
+            'missing_segments':missing[:]},vehicle_options))
     candidates.sort(key=lambda c: ((c['transfer_count'] if preference == 'fewer_transfers' else c['walking_seconds'] if preference == 'less_walking' else c['total_seconds']), c['total_seconds'],c['transfer_count'],c['walking_seconds']))
-    return candidates[:20], list(dict.fromkeys(reasons + (missing if candidates else ['NO_ROUTE'])))
+    candidates = candidates[:20]
+    return candidates, list(dict.fromkeys(reasons + ([reason for candidate in candidates for reason in candidate['missing_segments']] if candidates else ['NO_ROUTE'])))
