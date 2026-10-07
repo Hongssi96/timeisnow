@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Home, MapPin, Plus, RefreshCw, Pencil, Trash2 } from 'lucide-react';
-import { apiRequest, ApiError, isServerTime } from './api';
+import { apiRequest, ApiError, isServerTime } from '../lib/api';
 import LocationConfirmation from './LocationConfirmation';
 
 const validLocation = value => Number.isFinite(value?.latitude) && Math.abs(value.latitude) <= 90

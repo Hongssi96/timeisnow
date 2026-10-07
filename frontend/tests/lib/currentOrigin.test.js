@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getCurrentOrigin } from './currentOrigin';
+import { getCurrentOrigin } from '../../src/lib/currentOrigin';
 let success, failure;
 beforeEach(() => {
   vi.stubGlobal('isSecureContext', true);

@@ -242,3 +242,6 @@ React는 약속 생성·초대·조율·확정·공유 화면, FastAPI는 권한
 - [ ] F17-03: 사용자 확인 후 기존 생성 API 연결. 확인 전 저장·초대 없음 및 권한/중복 검증.
 - [ ] F17-04: 달력 경계·반복·모호성·악성 지시·AI 실패 평가와 비식별 품질 이력 구현.
 - 상세: natural_language_schedule.md, ai_prompts.md. D02-04/D03 및 F02·F06/F12 의존. 기존 착수 전 결정 순서 유지.
+## 개발 구조 정리
+
+- [x] R01: frontend 실행 코드(src/app·components·lib·styles)와 테스트(tests/app·components·lib)를 분리한다. (2026-10-07, development_log.md R01·기존57개/빌드·실행 확인, API/화면 동작 변경 없음)

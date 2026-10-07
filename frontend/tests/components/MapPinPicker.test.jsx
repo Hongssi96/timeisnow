@@ -2,11 +2,11 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import MapPinPicker from './MapPinPicker';
-import { apiRequest, ApiError } from './api';
-import { loadKakaoMap } from './kakaoMap';
-vi.mock('./api',async original=>({...await original(),apiRequest:vi.fn()}));
-vi.mock('./kakaoMap',()=>({loadKakaoMap:vi.fn()}));
+import MapPinPicker from '../../src/components/MapPinPicker';
+import { apiRequest, ApiError } from '../../src/lib/api';
+import { loadKakaoMap } from '../../src/lib/kakaoMap';
+vi.mock('../../src/lib/api',async original=>({...await original(),apiRequest:vi.fn()}));
+vi.mock('../../src/lib/kakaoMap',()=>({loadKakaoMap:vi.fn()}));
 const listeners=new Map();
 class Point {constructor(lat,lon){this.lat=lat;this.lon=lon;}getLat(){return this.lat;}getLng(){return this.lon;}}
 const map={relayout:vi.fn(),setDraggable:vi.fn(),setZoomable:vi.fn(),panTo:vi.fn()};

@@ -2,10 +2,10 @@ import React from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import App from './App';
-vi.mock('./PlacesCard',()=>({default:()=>null}));
-vi.mock('./AccountForm',()=>({default:()=> <p>검증용 계정</p>}));
-vi.mock('./OriginSelector',()=>({default:({onSelect})=><button onClick={()=>onSelect({label:'지도 선택 위치',location_address:'서울 합성동',origin:{type:'map_pin'},deadline:Date.now()+600000})}>검증용 출발지 확인</button>}));
+import App from '../../src/app/App';
+vi.mock('../../src/components/PlacesCard',()=>({default:()=>null}));
+vi.mock('../../src/components/AccountForm',()=>({default:()=> <p>검증용 계정</p>}));
+vi.mock('../../src/components/OriginSelector',()=>({default:({onSelect})=><button onClick={()=>onSelect({label:'지도 선택 위치',location_address:'서울 합성동',origin:{type:'map_pin'},deadline:Date.now()+600000})}>검증용 출발지 확인</button>}));
 afterEach(()=>vi.useRealTimers());
 async function select(){
   render(<App/>);const user=userEvent.setup();await user.click(screen.getByRole('button',{name:/다른 곳에서 출발/}));

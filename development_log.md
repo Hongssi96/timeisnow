@@ -4,6 +4,16 @@
 
 ## 실제 기록
 
+### 2026-10-07 — F03-04 브랜치에 병합된 프론트 폴더 구조 반영
+- 요청: R01이 먼저 main에 병합되어 F03-04를 새 구조에 맞추고 다시 검증/푸시한다. 기존 codex/current-origin을 계속 사용하며 main이나 MR을 에이전트가 병합하지 않는다.
+- 확인: 최신 main ca8cd93에 R01/1ca0991 포함, F03-04/235d617 미포함을 fetch/ancestor로 확인했다. 최신 Notion v0.38 5.2.1 계약·TODO·폴더 README/Vite와 F03-04 import/테스트를 비교했다.
+- 통합: 로컬 기능 브랜치에 origin/main을 병합하며 README.md·development_log.md·todo.md·src/app/App.jsx 충돌을 해결했다. 두 기능/일지 모두 보존, App은 새 styles/lib/components 경로와 OriginSelector를 사용한다. 자동 이동된 MapPinPicker에도 F03-04 설명/접근성 props와 새lib 경로를 모두 유지했다.
+- 이동: OriginSelector.jsx→src/components, currentOrigin.js→src/lib, App.origin.test.jsx→tests/app, OriginSelector.test.jsx→tests/components, currentOrigin.test.js→tests/lib. 실제 import/vi.mock 경로를 함께 바꿔 Vitest tests/** 패턴에서 새16개를 누락하지 않는다. frontend/README.md·screen_plan.md·todo.md의 미통합 안내도 현재 상태로 갱신했다.
+- 실제 검증: Vitest10개 파일/73개 테스트 모두 통과, Vite build1895모듈 통과. 실행 중 Vite5173 홈 렌더링과 브라우저 콘솔 error0건 확인. conflict marker 검색0건·git diff --check 확인. API/백엔드 코드를 추가 수정하지 않아 백엔드94개 검증은 최초F03-04 기록을 유지하며 이번에 재실행하지 않았다. 실제 기기 GPS나 지도 시각 재검증은 이번 경로 정리에서 수행하지 않았다.
+- 명세 영향: 없음. F03-04 기능/권한/입출력·GPS/저장/로그 계약을 유지하고 내부 경로/충돌만 정리했다. 최신 Notion v0.38을 재확인하며 수정하지 않는다. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+- 배운 개념: 파일 rename과 기능 수정은 Git이 일부 자동 결합해도 새 파일/import·테스트 검색 경로는 직접 맞춰야 한다. 기존 feature에 main을 merge하면 공개 커밋을 재작성하거나 force-push하지 않고 최신 기반을 포함할 수 있다.
+- 남은 일/다음: codex/current-origin 통합 커밋/푸시 후 사용자가 main 대상MR을 생성·병합한다. R01은 이미 main에 있어 다시 MR 만들 필요 없음. 병합 후 F03-05 위치 품질/저장 장소 일치 판정.
+
 ### 2026-10-07 — F03-04 현재 위치·지도·본인 장소 출발지 선택
 - 목표: 홈 ‘다른 곳에서 출발’의 미연동 예시를 로그인 기반 출발지 선택으로 연결했다. 실제 경로/출발 시간은 F04~07 후속이며 실제 선택에 가상 집의 출발 안내·이동 체험을 적용하지 않는다.
 - Git/명세 확인: F03-03 49a0a2f의 최신 main30b62a9 병합을 fetch/ancestor로 확인하고 깨끗한 상태에서 codex/current-origin 생성. 최신 Notion v0.37·TODO·기능 목록·기획/개인화/프롬프트/로그·디자인/화면/기존 JSX/CSS/장소/auth 코드를 비교했다. 사용자 검토 후 MR 생성/병합은 사용자 수행.
@@ -20,6 +30,16 @@
 - 배운 개념: 기기 위치 측정·지원지역 확인·GPS 품질 판단·경로 계산은 다른 단계다. native timeout은 권한 대기를 온전히 제한하지 않아 앱 전체 타이머가 필요하다. 메모리 선택600초는 GPS 최신성을 보증하지 않으며 후속 계산 때 재검증해야 한다. 근거: https://www.w3.org/TR/geolocation/.
 - 남은 일/다음: F03-05 최신성/정확도 임계값·미래/오래된 측정 재확인·저장 장소/실제 출입구 일치 판정. F04~07 경로/출발 안내는 미구현. 실제 기기 위치/모바일 GPS 검증은 별도. F03-04 기능 브랜치를 커밋/푸시하고 사용자 검토/병합을 기다린다.
 - Notion: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+### 2026-10-07 — R01 프론트엔드 실행 코드·테스트 디렉터리 분리
+- 요청/목표: frontend/src에 섞인 실행·테스트 파일을 역할별 폴더로 구분한다. 화면·API·계산·로그 정책은 그대로 유지한다.
+- Git/선행 확인: 최신 main30b62a9를 fetch하고 깨끗한 상태에서 codex/frontend-structure 생성. F03-04 235d617은 아직 main 미병합이며 codex/current-origin에 보존되어 있어 이번 작업에 합치지 않았다. TODO·기능 목록/기획/화면/디자인·기존 import/mocks/Vite 설정과 Notion 최신v0.38의 기존 인증/장소 계약을 확인했다.
+- 구조: src/main.jsx는 진입점, src/app/App.jsx는 앱 화면, src/components는 계정/장소/지도 UI, src/lib는 API/지도 SDK, src/styles는 기존 CSS. tests/app·components·lib로 기존7개 테스트 파일을 옮기고 tests/setup.js로 공통 환경을 분리했다. index.html·vite.config.js·package.json과 잠금 파일은 도구 진입점으로 frontend 루트에 유지, node_modules/dist 생성 폴더는 이동하지 않았다.
+- 변경: 위 파일16개 이동·main/import/vi.mock/동적import 경로 수정, vite.config.js test.include=tests/**/*.test.{js,jsx}·setupFiles=tests/setup.js. frontend/README.md에 트리·파일 추가 규칙·기존 실행 명령·미병합 F03-04 경로 대응 안내. README.md·screen_plan.md·design_guide.md 경로/안내 및 TODO/기능 목록 R01 갱신. 과거 일지의 당시 파일 경로는 역사 기록으로 보존한다.
+- 실제 검증: npm --prefix frontend test에서 기존7개 파일/57개 모두 통과, npm --prefix frontend run build 통과(1893모듈). 실행 중 Vite5173에서 새 src/app 및 import 경로로 홈 렌더링 확인, 브라우저 콘솔 error0건. 화면/CSS 내용 변경 없이 파일 위치만 이동하여 별도 시각 재설계·새 테스트·백엔드 테스트는 수행하지 않았다.
+- 명세 영향: 없음. 경로·인증·입출력·권한·시간/계산·보관/로그·화면 동작 계약을 바꾸지 않은 내부 파일 정리이므로 Notion 수정 불필요. 최신 Notion v0.38 확인, main의 로컬v0.37과 차이는 미병합 F03-04 명세이며 기존 계약은 유지한다. https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+- 배운 개념: 브라우저 실행 모듈과 테스트 러너 코드를 폴더로 분리할 수 있다. Vitest include/setupFiles와 실제 import·mock 경로를 함께 옮겨야 기존 검증을 유지한다. HTML/설정/package 파일은 Vite/npm이 찾는 프로젝트 루트에 두는 것이 적절하다.
+- 남은 일/다음: 기능 브랜치 커밋/푸시 후 사용자 MR/병합. 미병합 F03-04의 App/지도 변경과 OriginSelector/currentOrigin/테스트도 새 src/components·lib/tests 경로로 맞춰 병합해야 한다. 그 후 F03-05 위치 품질/저장 장소 일치 판정 진행. MR 생성/병합은 수행하지 않는다.
 
 ### 2026-10-07 — F03-03 내 장소 이름 수정·삭제
 - 목표: 기존 목록/상세·위치/출입구 수정에 저장 이름(label) 수정과 삭제 확인/취소·DELETE204를 추가했다. 실제 루틴·도보·경로 저장소는 아직 없으므로 해당 연결 처리는 F04~06 후속이다.

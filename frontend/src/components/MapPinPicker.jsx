@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { apiRequest, ApiError } from './api';
-import { loadKakaoMap } from './kakaoMap';
+import { apiRequest, ApiError } from '../lib/api';
+import { loadKakaoMap } from '../lib/kakaoMap';
 
 export default function MapPinPicker({ location, onChange, disabled = false, onAuthError, description = '지도에서 출입구를 누르거나 핀을 옮겨주세요. 카카오 지도에 선택 위치가 표시돼요.', mapLabel = '출입구 위치 지도' }) {
   const host = useRef(null);

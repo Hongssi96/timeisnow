@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { apiRequest, ApiError, isServerTime } from './api';
-import { getCurrentOrigin } from './currentOrigin';
+import { apiRequest, ApiError, isServerTime } from '../lib/api';
+import { getCurrentOrigin } from '../lib/currentOrigin';
 import MapPinPicker from './MapPinPicker';
 
 const validLocation = value => Number.isFinite(value?.latitude) && Math.abs(value.latitude) <= 90

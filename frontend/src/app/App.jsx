@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 import { ArrowUpRight, ArrowRight, ArrowLeft, Home, Repeat2, History, SlidersHorizontal, MapPin, BusFront, Footprints, TrainFront, Plus, X, Check, Clock3, ChevronRight, CircleHelp, Navigation, Leaf, Coffee, Sun, RefreshCw, LogIn, ShieldCheck } from 'lucide-react';
-import './styles.css';
-import { apiRequest, ApiError, isServerTime } from './api';
-import AccountForm from './AccountForm';
-import PlacesCard from './PlacesCard';
-import OriginSelector from './OriginSelector';
+import '../styles/styles.css';
+import { apiRequest, ApiError, isServerTime } from '../lib/api';
+import AccountForm from '../components/AccountForm';
+import PlacesCard from '../components/PlacesCard';
+import OriginSelector from '../components/OriginSelector';
 
 // 이동 화면은 합성 데이터. 계정과 서버 연결은 실제 API를 사용합니다.
 const initialRoutines = [

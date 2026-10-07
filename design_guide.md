@@ -2,7 +2,7 @@
 
 - 버전: 1.1 / 2026-10-06
 - 사용자가 현재 프론트 디자인을 유지하도록 요청했다. 이 문서는 개발자·AI가 새 화면에도 같은 시각적 톤을 적용하기 위한 기준이다.
-- 기준 구현: [styles.css](./frontend/src/styles.css), [App.jsx](./frontend/src/App.jsx), [화면 구성](./screen_plan.md).
+- 기준 구현: [styles.css](./frontend/src/styles/styles.css), [App.jsx](./frontend/src/app/App.jsx), [화면 구성](./screen_plan.md).
 - 계정 폼: 기존 .modal/.primary/.secondary/입력/안내 카드 재사용. .auth-tabs는 얇은 선·10px 둥근 모서리·선택 배경#eff4e8/var(--green). 오류는 해결에 필요한 설명만 표시하고 문의용 요청 ID는 숨긴다(2026-10-07 사용자 요청). 요청 중 입력/버튼 비활성 유지.
 - 현재 코드를 읽어 정리한 기준이며 이번 작업에서 UI를 수정하거나 새 화면을 렌더링하지 않았다.
 - 기존 구현 수치와 앞으로 지킬 규칙을 구분한다. 기존 작은 글자·명도 대비까지 무조건 복제하라는 뜻은 아니다.
