@@ -6,7 +6,7 @@ F00-01~04 및 기본 회원 인증 구현 완료. 상태 API·요청 ID·공통 
 
 F03-01(2026-10-07): POST /place-searches, POST /places, GET /places 및 GET /places/{place_id} 구현. 실행 전 `backend/.venv/Scripts/python.exe backend/migrate.py upgrade head`로0003_saved_places 적용. KAKAO_REST_API_KEY는 서버 .env에만 저장한다. [place_api.md](../place_api.md)의 후보/만료/멱등·오류 계약을 따른다. 장소 수정/삭제·지도 핀·현재 위치·경로/약속 API는 후속이다.
 
-2026-10-06 기본 회원 인증 구현: GET /auth/csrf, POST /auth/register·login·logout, GET /me. 이메일 중복만 확인하며 메일 인증/복구는 후순위다. 실행 전에 DB와0004_place_map_pin 마이그레이션을 준비한다. `.env.example`의 AUTH_ENV/AUTH_PUBLIC_ORIGIN 및32자 이상 독립 난수 AUTH_RATE_LIMIT_SECRET을 로컬 `.env`에 설정한다(기존 .env 덮어쓰기 금지). 운영은 HTTPS origin·Secure 쿠키를 사용한다. health는 DB/인증 설정 없이 계속 동작한다. 장소 API는 아래 F03-01 범위를 따른다.
+2026-10-06 기본 회원 인증 구현: GET /auth/csrf, POST /auth/register·login·logout, GET /me. 이메일 중복만 확인하며 메일 인증/복구는 후순위다. 실행 전에 DB와0005_place_management 마이그레이션을 준비한다. `.env.example`의 AUTH_ENV/AUTH_PUBLIC_ORIGIN 및32자 이상 독립 난수 AUTH_RATE_LIMIT_SECRET을 로컬 `.env`에 설정한다(기존 .env 덮어쓰기 금지). 운영은 HTTPS origin·Secure 쿠키를 사용한다. health는 DB/인증 설정 없이 계속 동작한다. 장소 API는 아래 F03-01 범위를 따른다.
 Python 3.13.1에서 FastAPI 0.142.2 / Uvicorn 0.54.0을 설치했고 전체 의존성 버전을 requirements.txt에 고정했다.
 
 프로젝트 루트에서 PowerShell로 실행한다. 가상환경 활성화 없이 전용 Python 경로를 직접 사용한다.
@@ -28,9 +28,11 @@ python -m venv backend/.venv
 
 프론트는 별도 터미널에서 `cd C:\projects\timeisnow\frontend` 후 `npm run dev`로 실행한다. 기존 npm 잠금 파일을 유지한다. 앱 진입점 실행에는 DB 접속이 필수가 아니며 DB 검증은 check_db.py로 별도 실행한다.
 
-DB 변경은 [마이그레이션 안내](../migrations.md)의 migrate.py로 실행한다. 현재는0004_place_map_pin까지 적용했다.
+DB 변경은 [마이그레이션 안내](../migrations.md)의 migrate.py로 실행한다. 현재는0005_place_management까지 적용했다.
 
 ## 환경 변수와 로그 확인
+
+F03-03: PATCH /places/{place_id} label 수정·DELETE204 추가. 최신 head0005_place_management, 기존 장소 보존/location_version 초기화. 삭제된 생성 키는place_id=NULL로24시간 최소 표시를 유지하며 같은 저장 키/본문 재시도404. 일반version 수정 충돌 및location_version 위치 근거를 구분한다. 실제 루틴/산정 연결은 후속. [place_api.md](../place_api.md)와 Notion v0.37 기준.
 
 F03-02: GET /map-config, POST /place-location-confirmations 및 PATCH /places/{place_id} 추가. 최신 head는0004_place_map_pin, 기존 장소 보존. KAKAO_JAVASCRIPT_KEY는 등록 도메인 제한용 공개 SDK 키이며 로그인된 /map-config로 전달한다. KAKAO_REST_API_KEY는 서버에서만 사용한다. 카카오 앱에서 지도 API 활성화/localhost:5173 및127.0.0.1:5173 SDK 도메인 등록 필요. 지도 핀·소유권/600초/버전409 계약은 [place_api.md](../place_api.md). 서버 코드를 바꾼 후 개발 백엔드를 재시작해야 새 API가 적용된다.
 

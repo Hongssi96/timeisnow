@@ -26,6 +26,10 @@
 .pin-actions button { flex: 1; min-width: 110px; }
 .saved-place { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
 .saved-place > .text-button { min-height: 44px; margin-left: 52px; }
+.place-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-left: 52px; }
+.place-actions .text-button { min-height: 44px; }
+.place-delete-confirm { background: #f2f5ec; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 16px 0; overflow-wrap: anywhere; }
+.places-card .place-delete-confirm p { font-size: 14px; color: var(--ink); }
 .location-confirmation { margin: 16px 0; }
 .location-confirmation .info-box, .location-confirmation p[role] { font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
 @media(max-width:680px) { .place-map { height: 260px; } .pin-controls { grid-template-columns:repeat(2,minmax(0,1fr)); } }

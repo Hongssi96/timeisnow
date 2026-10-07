@@ -1,7 +1,7 @@
-# 지금이니? — 고정 장소 검색·저장·지도 핀 (F03-01~02)
+# 지금이니? — 고정 장소 관리 (F03-01~03)
 
-- 기준: [Notion API v0.36](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa) 02절·5.1.1~2절, 2026-10-07 저장 재조회 확인.
-- 범위: 주소/키워드 검색 → 후보 선택 → 지도 핀 확인·출입구 설명 → 집·회사 등 이름 저장 → 본인 목록/상세 및 위치·출입구 수정. 라벨 수정/삭제·현재 위치는 F03-03~05 후속이다.
+- 기준: [Notion API v0.37](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa) 02절·5.1.1~3절, 2026-10-07 저장 재조회 확인.
+- 범위: 주소/키워드 검색 → 후보 선택 → 지도 핀 확인·출입구 설명 → 집·회사 등 이름 저장 → 본인 목록/상세 및 이름/위치·출입구 수정·삭제. 현재 위치는 F03-04~05 후속이다.
 
 React ‘내 설정 → 내 장소’에서 로그인 후 등록한다. 실제 저장 장소는 PostgreSQL 원본이며 화면 체험 루틴의 가상 집/회사에는 자동 적용하지 않는다. 계정 모달을 열면 장소 카드와 요청을 제거하고 닫을 때 다시 조회하여 이전 계정의 화면 자료를 재사용하지 않는다.
 
@@ -13,8 +13,10 @@ React ‘내 설정 → 내 장소’에서 로그인 후 등록한다. 실제 �
 | POST /api/v1/places | label(1~30자), location, search_id, candidate_id, entrance_ref(null), location_confirmation_id?, entrance_note? →201 장소 | 본인 후보/600초 만료/좌표 일치 또는 본인 핀 확인. 선택 Idempotency-Key로24시간 중복 생성 방지 |
 | GET /api/v1/places | limit(기본20/최대100), cursor? → items/next_cursor | 본인 UUID 내림차순 목록, 타인/없는 cursor404 |
 | GET /api/v1/places/{place_id} | →200 장소 | 본인만, 타인/없는/잘못된 ID404 |
+| PATCH /api/v1/places/{place_id} | expected_version, label?, location?, location_confirmation_id?, entrance_note? →200 장소 | 본인 수정·버전409. location은 본인 확인 ID 필수 |
+| DELETE /api/v1/places/{place_id} | 본문 없음 →204 | 본인·CSRF·즉시 물리 삭제 및 생성 키 삭제 표시 |
 
-장소 객체: place_id, label, name, address, location(latitude/longitude), entrance_ref(null), version(1). 후보 객체: candidate_id, name, address, location. 서버가 후보/검색 ID를 발급하며 프론트는 후보 좌표를 바꾸지 않는다.
+장소 객체: place_id, label, name, address, location(latitude/longitude), entrance_ref(null), version, location_version. 최초 생성의 두 버전은1이다. 후보 객체: candidate_id, name, address, location. 서버가 후보/검색 ID를 발급하며 프론트는 후보 좌표를 바꾸지 않는다.
 
 F03-02부터 장소 응답에 entrance_note(null/string), location_source(search/map_pin), location_address(null/법정동 명칭)를 추가한다. version은 수정 시 증가한다. 검색 후보 원래 좌표는 그대로 두고 다른 핀 좌표는 본인 위치 확인 ID와 함께 전달한다. 원래 검색 name/address와 선택한 핀의 법정동 명칭을 구분한다.
 
@@ -37,6 +39,8 @@ F03-02부터 장소 응답에 entrance_note(null/string), location_source(search
 
 ## F03-02 지도 핀·출입구 확인/수정 (2026-10-07)
 
+아래는 F03-02 최초 구현 범위이며 현재 이름 수정/삭제 및 계산용location_version은 F03-03 확장을 따른다.
+
 검색한 후보에서 ‘지도에서 위치 확인’, 저장 장소에서 ‘위치·출입구 확인’을 누른다. 카카오 지도 클릭/마커 드래그·방향 버튼5m 이동·처음 위치로를 지원한다. 현재 GPS 권한은 요청하지 않는다. 출입구 설명은 사용자가 입력한1~100자 또는 null이며 공식 출입구 ID/실내 이동 인증이 아니다. 기존 entrance_ref는 null이다.
 
 | API | 입력/응답 | 규칙 |
@@ -54,3 +58,15 @@ F03-02부터 장소 응답에 entrance_note(null/string), location_source(search
 0004_place_map_pin: 기존 장소에 설명/출처/법정동 컬럼을 추가하고 place_location_confirmations를 생성한다. 확인은10분 후 접근 차단 및 다음 확인에서 만료행 청소. 매일 청소는 F11 후속. 실제 도보/경로 저장소는 미구현이며 place_id/version 불일치에 따른 산정 재사용 제외는 F04/F05에서 구현/검증한다. 이번 기능은 버전 증가·이전 버전409·동시 충돌·동일 값 유지까지 검증했다.
 
 검증: 백엔드80개(새 핀12개 포함)·프론트49개·빌드 통과.0003의 기존 장소 보존/0004↔0003 왕복, 실제 Kakao SDK 렌더링·클릭/드래그/방향 버튼·서울 법정동 확인·생성/수정/새로고침 유지, 데스크톱1440×1000·모바일390×844 확인. SDK 오류/10초 타임아웃·재시도·만료·충돌은 자동 테스트로 검증. 공급자 전체 조건/지도 위치 정확도/실제 휴대전화·실내 출입구·GPS·이전 도보 산정값 재사용은 미검증이다.
+
+## F03-03 이름 수정·삭제 (2026-10-07)
+
+PATCH에label(공백 제거 후1~30자, null/빈 값 거절)을 추가했다. 검색 name/address와 사용자 저장 label을 구분하며 이름만 바꾸면 지도 호출·좌표/출입구 변경이 없다. 일반version은 모든 수정 충돌에 사용하며 수정된 경우+1, 같은 값은 유지한다. location_version은 위치/출입구/출처 변경에만+1이다. 기존 장소는0005에서location_version=version으로 초기화한다. 이후F04/F05는 장소 존재·place_id/location_version으로 산정 재사용을 확인한다.
+
+DELETE는로그인/Origin·CSRF·본인 행 잠금/동일 트랜잭션으로 즉시 물리 삭제,204 본문 없음/X-Request-ID. 타인/없는/잘못된ID 및 반복 삭제404. place_creation_keys는place_id=NULL로 지워 사용자/키/해시/만료만24시간 기한까지 유지하며, 같은 키/본문 재시도404·다른 본문409로 삭제 장소 재생성 방지. 새로운 키를 쓰는 명시적 신규 저장은 허용한다. 독립10분 검색/확인 자료는 다른 작업을 위해 남기고 기존 만료 정책을 적용한다.
+
+UI는 이름 수정/취소와 대상 이름을 표시하는 삭제 확인/취소 카드를 제공한다. 처리 중 비활성·실패/재시도·이탈 취소·세션 만료 자료 제거·409 최신 재조회. 삭제204 또는 이미 없는404는 목록 제거/첫 페이지 재조회, 재조회만 실패하면 삭제 결과를 유지하며 목록 다시 확인을 제공한다. 현재 실제 루틴/산정 테이블은 미구현이라 삭제 장소 참조NULL/needs_attention·산정 재사용 제외는F04~06에서 구현한다. 화면 체험용 가상 루틴은 실제 저장 장소를 참조하지 않는다.
+
+검증: 백엔드90개(관리10개 포함)·프론트57개·빌드. 실제 PostgreSQL 소유권/라벨/충돌/동시 수정·삭제/삭제 후 조회·수정·키 재시도404/다른 장소 보존/로그 비노출 확인. 임시 스키마의 기존version4를location_version4로 보존 및왕복 검증. 실제HTTP/UI 합성 계정 이름 수정200·version2/location_version1·새로고침 유지, 삭제204/빈 본문·조회404·기존 키 재시도404·새 키 신규 저장201, 데스크톱1440×1000/모바일390×844 이름 수정/삭제 확인·취소/빈 상태/키보드 취소 확인. 실제 휴대전화/운영 백업·전체 사본 정리·루틴 연결 미검증.
+
+호환성: 기존PATCH에 선택label, 응답location_version 추가. 기존version 충돌 검사는 유지. DELETE는 기존204 설계를 구현하며 현재 저장소 단건 삭제를 동기 완료한다. 일반 개인 이동/탈퇴의202 사본 정리는 기존 계약을 유지한다.
