@@ -40,6 +40,8 @@ current는 DB 적용 위치, history는 파일의 변경 순서다. upgrade head
 
 ## 파일과 로그
 
+- 2026-10-07 최신 head:0004_place_map_pin. 장소 핀 출처·법정동 명칭·출입구 설명 컬럼과10분 위치 확인 테이블/만료 인덱스 추가. 기존 장소가 있는0003에서 upgrade·downgrade0003·재upgrade 시 좌표/버전 보존, 기본값 search/null/null 확인. 개발 DB는 upgrade만 적용, public downgrade 없음.
+
 - 2026-10-07 현재 head:0003_saved_places. saved_places/place_searches/place_creation_keys 추가, 기존 회원 데이터 유지. 개발 DB upgrade 적용, 임시 스키마에서 head 적용/중복 적용/전체 downgrade/re-upgrade 두 차례 검증. 개발 public에서 downgrade하지 않는다.
 
 - alembic.ini: 변경 파일 위치. 접속 문자열·비밀 없음.

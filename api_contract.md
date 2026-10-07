@@ -1,7 +1,7 @@
 # 지금이니? API 설계 초안
-- 문서 버전: 0.35 · 작성일: 2026-09-30 · 수정일: 2026-10-07 (F03-01 장소 검색·저장 계약 구체화)
+- 문서 버전: 0.36 · 작성일: 2026-09-30 · 수정일: 2026-10-07 (F03-02 지도 핀·출입구 확인/수정)
 - 프론트엔드: React · 백엔드: Python FastAPI
-- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01 장소 검색·저장·본인 조회는 구현, 경로/현재 위치/약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
+- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01 장소 검색·저장·본인 조회와 F03-02 지도 핀/출입구 설명 수정은 구현, 경로/현재 위치/약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
 - 기준: 대화에서 확정한 요구사항 및 프로젝트 `C:/projects/timeisnow` 폴더의 `planning.md`, `feature_breakdown.md`, `personalization.md`, `logging.md`, `ai_prompts.md`.
 - 이 페이지는 수동 관리하는 설계 문서다. 코드와 자동 동기화되는 상태가 아니다.
 ## 1. 읽는 방법
@@ -95,6 +95,20 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <td>주소가 URL·접근 로그에 남지 않도록 본문 전달. 검색 본문도 로깅 제외</td>
 </tr>
 <tr>
+<td>`GET /map-config`</td>
+<td>필요</td>
+<td>없음</td>
+<td>200: javascript_key</td>
+<td>등록 도메인 제한용 공개 SDK 키만, REST 키 비노출</td>
+</tr>
+<tr>
+<td>`POST /place-location-confirmations`</td>
+<td>필요</td>
+<td>location</td>
+<td>200: confirmation_id, location, location_address, expires_at</td>
+<td>서울/경기 확인·600초·본인 소유권 및 CSRF</td>
+</tr>
+<tr>
 <td>`GET /places`</td>
 <td>필요</td>
 <td>cursor?, limit?</td>
@@ -104,7 +118,7 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <tr>
 <td>`POST /places`</td>
 <td>필요</td>
-<td>label, location, search_id, candidate_id, entrance_ref(null)</td>
+<td>label, location, search_id, candidate_id, entrance_ref(null), location_confirmation_id?, entrance_note?</td>
 <td>201: place</td>
 <td>집·회사 등록. 본인 검색 후보·10분 만료·좌표 확인, 선택 Idempotency-Key</td>
 </tr>
@@ -118,9 +132,9 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <tr>
 <td>`PATCH /places/{place_id}`</td>
 <td>필요</td>
-<td>label?, location?, entrance_ref?, expected_version</td>
+<td>expected_version, location?, location_confirmation_id?, entrance_note? (label 수정 후속)</td>
 <td>200: place</td>
-<td>위치·출입구 변경 시 관련 산정값 무효화</td>
+<td>본인 위치/설명 수정, 버전409 검사 및 버전 증가. 실제 산정 재사용 무효화는 F04/F05 후속</td>
 </tr>
 <tr>
 <td>`DELETE /places/{place_id}`</td>
@@ -348,7 +362,7 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 ```
 장소 좌표는 필요한 인증 응답에는 포함되지만 일반 실행 로그에는 남기지 않는다. 출입구 변경은 F03-02 후속이다.
 ### 5.1.1 F03-01 장소 검색·저장 상세 계약
-- 구현 상태(2026-10-07): POST /place-searches, POST /places, GET /places 및 GET /places/\{place_id\} 구현. 실제 검증 근거: development_[log.md](http://log.md)(백엔드68개(장소12개 포함)·프론트35개·빌드·카카오 검색/저장·데스크톱/모바일 확인). 수정·삭제·지도 핀·출입구 확인·현재 위치는 F03-02\~05 후속이며 이번 기능에 포함하지 않는다.
+- F03-01 최초 구현(2026-10-07): POST /place-searches, POST /places, GET /places 및 GET /places/\{place_id\}. 당시 검증 백엔드68개·프론트35개·빌드·카카오 검색/저장. 현재 지도 핀/출입구 설명/수정 및 응답 추가 필드는5.1.2절 F03-02 확장을 따른다. 삭제/현재 위치/전체 산정 재사용은 후속이다.
 - 모든 API는 로그인 사용자 소유권과 no-store 적용. POST는 Origin/CSRF 검증. 검색어·주소·좌표·후보 원본·키는 일반 실행 로그 제외, 외부 카카오 HTTPS 호출은 서버에서만 수행하며 리다이렉트 금지.
 - 검색 입력 query는 앞뒤 공백 제거 후1\~100자. 카카오 주소 검색과 키워드 검색을 각각 최대10건 호출하여 서울특별시·경기도 주소만 남기고 좌표/주소 중복 제거, 주소 결과 우선 최대20건. 공급자 응답이 잘못되면502 PROVIDER_RESPONSE_INVALID, 접속/인증/쿼터 실패503 PROVIDER_UNAVAILABLE. 검색 요청 사용자별 분당10회, 초과429와 Retry-After.
 - 검색200 data: search_id, expires_at(생성후600초), candidates 배열. 후보는 candidate_id, name, address, location(latitude/longitude). 후보/검색 ID는 서버 발급 UUID이며 사용자와 검색에 묶인다. 주소/키워드 매칭이 없어도200 빈 배열. 첫 페이지 범위이며 모든 결과 조회를 보장하지 않는다.
@@ -358,6 +372,19 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 - GET /places는 limit 기본20/최대100, 선택 cursor(이전 응답 next_cursor UUID). 생성 ID 내림차순으로 본인 목록만 반환. 타인/없는 cursor404. GET /places/\{place_id\}는 타인/없는/잘못된 ID404.
 - 검색 후보는10분 후 접근 불가 및 다음 검색에서 만료행 청소. 멱등 결과는24시간 후 접근 불가 및 다음 저장에서 청소. 매일 청소 운영 스케줄은 F11 후속. 장소는 삭제/탈퇴까지 보관하며 F03-03 삭제 및 F11-02 탈퇴 API는 미구현.
 - 호환성: 기존 장소 생성 예시는 미구현 설계였다. search_id/candidate_id 필수 필드와 name/address 응답 필드를 구체화하므로 첫 클라이언트는 검색 후 선택 흐름을 사용한다. 기존 인증·health·루틴 계약에는 영향 없다.
+### 5.1.2 F03-02 지도 핀·출입구 확인/수정 계약
+- 구현 상태(2026-10-07): 지도 SDK·위치 확인·생성 핀 저장·PATCH 구현. 실제 지도 클릭/드래그/방향 버튼·저장/수정·새로고침 유지 및 데스크톱1440×1000/모바일390×844 확인. 검증 근거는 `development_log.md`. 백엔드80개(새 핀12개 포함)·프론트49개·빌드 및 기존 장소 보존/0003↔0004 왕복 검증 완료. 도보/경로 산정 저장소는 미구현.
+- 구현 범위: 검색 후보 또는 본인 저장 장소를 카카오 지도에서 확인, 클릭/마커 드래그/방향 버튼으로 핀 수정, 선택 위치 확인 후 저장. 출입구 설명은 사용자가 입력한1\~100자 또는 null이며 공식 출입구 ID/실내 위치 인증이 아니다. 기존 entrance_ref는 null 유지, entrance_note를 별도 추가한다.
+- GET /map-config: 로그인 필요·no-store.200 data.javascript_key는 지도 SDK용 공개 JavaScript 키(등록 도메인 제한용)만 반환한다. 서버 REST 키는 반환하지 않는다. 키 미설정503 MAP_UNAVAILABLE. 지도 SDK는 공식 HTTPS SDK에서만 로딩하며10초 후 실패/재시도 안내. SDK 활성화/등록 도메인 설정은 카카오 앱 설정에 필요하다.
+- POST /place-location-confirmations: 로그인·Origin/CSRF·no-store. 입력 location(latitude/longitude). 사용자당10회/분(429/Retry-After), 서버 카카오 coord2regioncode HTTPS로 서울/경기 법정동 범위 확인.200 data.confirmation_id(UUID), location, location_address(법정동 명칭, 정밀 주소가 아님), expires_at(생성후600초). 공급자503/잘못된 응답502는 검색과 동일. 바다/지원지역 밖422 UNSUPPORTED_REGION. 실패를 다른 지역으로 추측하거나 임의 좌표로 성공 처리하지 않는다.
+- POST /places 기존 필드는 유지, 선택 location_confirmation_id와 entrance_note 추가. 기존 후보와 동일 좌표는 기존 저장 가능. 다른 좌표는 본인/미만료 확인 ID와 정확히 일치해야 하며 확인 ID가 없으면422. 타인/만료/없는 확인404. 검색/후보 소유권과 만료 검사도 유지. 선택 확인 ID가 있으면 같은 좌표라도 source=map_pin. 기존 클라이언트 입력과 멱등 재시도 해시 호환 유지.
+- PATCH /places/\{place_id\}: 로그인·Origin/CSRF·no-store. expected_version(정수\>=1) 필수, 선택 location, location_confirmation_id, entrance_note. 최소 하나의 location/entrance_note 필요. location이 있으면 일치하는 본인/미만료 확인 ID 필수. 설명 null은 제거.200 장소 객체. 타인/없는/잘못된 장소 ID404, 오래된 expected_version409 VERSION_CONFLICT. 서버가 행 잠금 후 소유권→버전→확인 ID/좌표를 검사하고 한 트랜잭션으로 갱신한다.
+- 좌표 또는 출입구 설명/위치 출처가 바뀌면 version+1 및 updated_at 갱신. 같은 좌표/설명/출처는 버전을 유지한다. label/name/검색 원래 address는 이번 PATCH에서 수정하지 않는다. 사용자 핀의 법정동 명칭은 location_address로 별도 저장하고 원래 검색 주소와 구분한다.
+- 장소 응답 추가 필드: entrance_note(null/string), location_source(search/map_pin), location_address(null/법정동 명칭). 기존 location은 실제 계산 출발점이며 지도 핀 또는 검색 좌표다. 기존 장소는 source=search/추가 필드null로 마이그레이션한다.
+- 버전은 도보/경로 근거의 유효성 기준이다. 변경 이전 place_id/version 조합은 최신 장소와 불일치하여 이후 F04/F05의 산정 재사용에서 제외해야 한다. 현재 경로/도보 저장소는 미구현이라 실제 산정 삭제/무효화 검증은 F04/F05에서 진행하며, 이번에는 버전 증가/동시 수정 충돌/동일 값 유지 및 이전 버전 거부를 검증한다.
+- 확인 결과10분 후 접근 차단/다음 확인에서 만료행 청소, 매일 청소 스케줄은 F11 후속. 일반 로그에 키/좌표/주소/출입구 설명/공급자 원문을 출력하지 않는다. 지도는 해당 위치를 카카오에 표시하며 AI에 전달하지 않는다. 보관·공급자 조건은 기존 사용자 추가 확인 생략 지시와 미검증 상태 유지.
+- UI: 지도 로딩/실패/재시도, 위치 확인 중/실패/지원지역 밖/만료, 핀 변경 시 이전 확인 제거, 저장 중 비활성,409 시 최신 장소 재조회 후 재확인, 세션 만료/화면 이탈 자료 제거와 요청 취소. 키보드 방향 버튼5m 이동 및 검색 위치로 되돌리기를 제공한다. 현재 위치 권한 요청은 F03-04 후속.
+- 호환성: 기존 API에 선택 입력과 응답 필드 추가, 신규 config/확인 API와 기존 설계 PATCH 구현. F03-01 저장 흐름과 인증/health 유지. 장소 삭제/라벨 수정은 F03-03 후속이다.
 ### 5.2 현재 위치에서 경로 검색
 `POST /api/v1/journey-searches`
 ```json
@@ -556,7 +583,7 @@ type은 departed/approach_arrived/boarded/alighted. 각 이벤트가 가리키�
 4. 루틴 저장, 여유 5분과 환승 연결 계산.
 5. 이동 이벤트, 중복 방지, 관측 품질 판정, 개인화와 과거 버전 추적.
 6. 기록 삭제·탈퇴·내보내기·모바일 화면 및 지인 테스트.
-- GET /health·공통 HTTP 오류/request_id·React 서버 연결, 17절 기본 회원 인증 및5.1.1절 F03-01 장소 검색/저장/본인 목록·상세는 구현됨. 장소 수정/삭제·현재 위치·경로/AI/약속 API는 미구현이다.
+- GET /health·공통 HTTP 오류/request_id·React 서버 연결, 17절 기본 회원 인증 및5.1.1절 F03-01 장소 검색/저장/본인 목록·상세는 구현됨. 장소 위치/출입구 수정과 map-config/위치 확인은5.1.2절 구현. 장소 라벨 수정/삭제·현재 위치·경로/AI/약속 API는 미구현이다.
 - [ ] 실제 OpenAPI 스키마와 요청·응답 계약 비교는 구현 후 수행한다.
 - [ ] 자동화 검증은 계산 경계값·소유권·이벤트 중복·개인화·공급자 실패를 우선한다.
 ## 10. 결정해야 할 사항
@@ -608,7 +635,7 @@ type은 departed/approach_arrived/boarded/alighted. 각 이벤트가 가리키�
 장소 삭제 시 루틴을 needs_attention으로 바꾸고 과거 안내 맥락은 기존 정책대로 유지한다. 개인 이동/회원 삭제는 관측·계수·근거·캐시·내보내기 등 파생 사본 정리를 포함한다. 약속 공동 기록의 탈퇴·삭제/보관은 16절/20절의 30일 및 개인 삭제 규칙을 따른다. 무조건 CASCADE하거나 영구 보관하지 않는다.
 ### 적용 범위
 기존 API 경로·입출력·오류 계약은 변경하지 않는다. 기존 leg_id는 경로 구간 ID로 유지하고 서버가 이동에 연결된 안내 구간을 검증한다. 현재 guidance 요청의 routine_id 필수 조건도 유지한다. 약속은 16절의 별도 안내 API 및 meeting_journey 연결 초안을 따른다. DB 설계에는 재전송 이벤트·일회용 티켓 테이블과 약속 안내 FK를 추가할 예정이며 DDL은 미적용이다.
-테이블 설계와 Alembic 기반(F00-05b)을 완료했다. 개발 DB 현재 head는0003_saved_places(2026-10-07)이며0002_member_auth의 회원 인증5개 테이블 및 saved_places/place_searches/place_creation_keys가 적용됐다. 임시 스키마에서 head 적용·중복 적용·되돌리기·재적용, 회원/장소 소유권·만료·멱등 검증을 수행했다. 나머지 경로/루틴/관측/약속 테이블은 미생성이며 관련 FK/삭제/보관 검증은 해당 기능에서 진행한다.
+테이블 설계와 Alembic 기반(F00-05b)을 완료했다. 개발 DB 현재 head는0004_place_map_pin(2026-10-07)이며0002_member_auth의 회원 인증5개 테이블 및 saved_places/place_searches/place_creation_keys가 적용됐고 saved_places 핀/설명 컬럼 및 place_location_confirmations를 추가했다. 기존 장소 보존·0003↔0004 왕복을 추가 검증했다. 임시 스키마에서 head 적용·중복 적용·되돌리기·재적용, 회원/장소 소유권·만료·멱등 검증을 수행했다. 나머지 경로/루틴/관측/약속 테이블은 미생성이며 관련 FK/삭제/보관 검증은 해당 기능에서 진행한다.
 ## 15. 마이그레이션 실행 기반
 2026-10-02: Alembic 1.20.0과 SQLAlchemy 2.1.1 설치 및 버전 고정. 루트 alembic.ini와 backend/migrations에서 명시적 변경 파일을 관리하고 backend/[migrate.py](http://migrate.py)로 실행한다. DB 접속 설정은 기존 비공개 .env/프로세스 설정을 재사용하며 앱 시작 시 자동 변경하지 않는다. 초기 0001_baseline은 업무 DDL이 없는 기준점이다. 상세 명령·한계는 로컬 [migrations.md](http://migrations.md)에 기록했다. 업무 테이블과 인증 방식은 별도 단계에서 확정한다.
 ## 16. 친구 약속·채팅 상세 API
@@ -1234,8 +1261,9 @@ F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프�
 - 공동 약속/채팅은 completed/cancelled 후30일. draft 마지막 사용자 변경후30일 미사용 삭제. confirmed 목표시각6시간 후 completed 자동 정리하되 실제 참석/도착 판정 아님. 재전송 이력24시간. 본인 약속탈퇴 시 개인 입력/공유 종료·정리, 기존 공동 메시지는 탈퇴한 참여자로 표시. 계정탈퇴는 본인 메시지 본문도 삭제, 주최자 탈퇴는 취소 후 다른 활성 참여자30일 열람. 개인 trip은 연결해제후90일 정책.
 ### 계약 영향·완료 기준
 - 기존 경로/응답 객체 유지, 설정 상한·만료·공유 ETA120초·자동 종료/삭제·출시 알림 범위가 변경/확정됐다. 아직 서비스가 미구현이므로 배포된 클라이언트 마이그레이션 없음. 422/404/409 등 기존 오류 사용, 소유권·동시 수락·기한 경계·삭제 사본 검증은 구현 시 수행한다.
-- 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. 사용자 검토 후 codex/fixed-place-search 브랜치 MR/병합, F03-01 완료, 다음 F03-02 출입구/지도 핀 확인·수정.
+- 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회/위치 수정 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. 사용자 검토 후 codex/place-map-pin 브랜치 MR/병합, F03-01\~02 완료, 다음 F03-03 라벨 수정/삭제 및 연결 데이터 처리.
 ## 변경 이력
+- 2026-10-07 v0.36: F03-02 지도 설정/위치 확인·본인 장소 PATCH·사용자 출입구 설명·장소 버전 동시성 계약 구체화. 서울/경기 확인600초·원래 주소와 핀 법정동 구분. 기존 생성 선택 필드/응답 필드 추가로 F03-01 호환 유지. 실제 산정 무효화는 F04/F05 후속.
 - 2026-10-07 v0.35: F03-01 검색 후보/소유권/10분 만료·생성 멱등/24시간·주소/키워드 및 지원지역·오류·목록 계약 구체화. 미구현 장소 생성에 검색/후보 ID 필수, 이름/주소 응답 추가. 기존 인증/health 호환성 영향 없음. 구현/검증 상태는 [todo.md](http://todo.md) 및5.1.1절을 따른다.
 - 2026-10-07 v0.34: 사용자 요청으로 계정 오류 화면의 문의용 요청 ID를 숨긴다. 가입 입력 안내와 재시도 유지. API 경로·응답·서버 로그 및 기존 클라이언트 호환성 영향 없음.
 - 2026-10-06 v0.28: F00-04 최소 JSON 요청 완료/예상 밖 오류 로그·필드 허용 목록·템플릿/미매칭 경로·LOG_LEVEL/실행 안내 추가. 기존 API 입력/성공/오류/ID 유지, 수집/보관 작업은 배포 단계. 민감정보/원문 스택 출력 없음.

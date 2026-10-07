@@ -51,7 +51,8 @@ async def request_identity(request: Request, call_next):
         response = error_response(request, 500, "INTERNAL_ERROR", "처리를 완료할 수 없습니다.")
     response.headers["X-Request-ID"] = request.state.request_id
     if (request.url.path.startswith('/api/v1/auth/') or request.url.path == '/api/v1/me'
-            or request.url.path == '/api/v1/place-searches' or request.url.path.startswith('/api/v1/places')):
+            or request.url.path in ('/api/v1/place-searches', '/api/v1/map-config', '/api/v1/place-location-confirmations')
+            or request.url.path.startswith('/api/v1/places')):
         response.headers['Cache-Control'] = 'no-store'
     record_request(request, response.status_code, started_at, unexpected)
     return response

@@ -5,10 +5,11 @@ import userEvent from '@testing-library/user-event';
 import PlacesCard from './PlacesCard';
 import { apiRequest, ApiError } from './api';
 vi.mock('./api', async original => ({ ...await original(), apiRequest: vi.fn() }));
+vi.mock('./LocationConfirmation', () => ({default: ({onDraft,onConfirmed,initialLocation}) => <div><button type="button" onClick={() => {onDraft();onConfirmed(null);}}>검증용 핀 이동</button><button type="button" onClick={() => onConfirmed({confirmation_id:'confirm_test',location:{...initialLocation,latitude:37.5002},deadline:Date.now()+600000})}>검증용 핀 확인</button></div>}));
 afterEach(() => vi.resetAllMocks());
 const reply = data => ({ data, meta: { request_id:'req_test', server_time: new Date().toISOString() } });
 const item = { candidate_id:'c_test', name:'합성 역', address:'서울 합성 주소', location:{latitude:37.5, longitude:127} };
-const place = { ...item, place_id:'p_test', label:'집' };
+const place = { ...item, place_id:'p_test', label:'집', version:1 };
 async function open() {
   apiRequest.mockResolvedValueOnce(reply({items:[], next_cursor:null}));
   render(<PlacesCard onLogin={vi.fn()}/>);
@@ -89,5 +90,41 @@ describe('장소 검색과 저장', () => {
     const pendingView = render(<PlacesCard onLogin={vi.fn()}/>);
     pendingView.unmount();
     expect(apiRequest.mock.calls.at(-1)[1].signal.aborted).toBe(true);
+  });
+  it('지도 핀이 바뀌면 확인 전 저장을 막고 확인 ID를 전송한다', async () => {
+    const user=await open(); await search(user);
+    await user.click(await screen.findByRole('button',{name:/합성 역.*서울 합성 주소/}));
+    await user.click(screen.getByRole('button',{name:'지도에서 위치 확인'}));
+    await user.click(screen.getByRole('button',{name:'검증용 핀 이동'}));
+    expect(screen.getByRole('button',{name:'선택한 장소 저장'}).disabled).toBe(true);
+    await user.click(screen.getByRole('button',{name:'검증용 핀 확인'}));
+    await user.type(screen.getByLabelText('출입구 설명'),'정문');
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockResolvedValueOnce(reply({...place,entrance_note:'정문'}));
+    await user.click(screen.getByRole('button',{name:'선택한 장소 저장'}));
+    await screen.findByText('장소를 저장했어요.');
+    const saved=apiRequest.mock.calls.find(([path, options])=>path==='/api/v1/places'&&options?.method==='POST');
+    expect(saved[1].body.location_confirmation_id).toBe('confirm_test');
+    expect(saved[1].body.location.latitude).toBe(37.5002);
+    expect(saved[1].body.entrance_note).toBe('정문');
+  });
+  it('저장된 장소의 출입구를 현재 버전으로 수정한다', async () => {
+    apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));render(<PlacesCard onLogin={vi.fn()}/>);
+    const user=userEvent.setup(); await user.click(await screen.findByRole('button',{name:'집 위치·출입구 확인'}));
+    await user.type(screen.getByLabelText('출입구 설명'),'동문');
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockResolvedValueOnce(reply({...place,version:2,entrance_note:'동문'}));
+    await user.click(screen.getByRole('button',{name:'위치·출입구 저장'}));
+    await screen.findByText('위치·출입구를 저장했어요.');
+    const updated=apiRequest.mock.calls.find(([,options])=>options?.method==='PATCH');
+    expect(updated[1].body).toEqual({expected_version:1,entrance_note:'동문'});
+    expect(screen.getByText('출입구: 동문 · 직접 입력')).toBeTruthy();
+  });
+  it('버전 충돌이면 최신 장소를 재조회하고 다시 확인하게 한다', async () => {
+    apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));render(<PlacesCard onLogin={vi.fn()}/>);
+    const user=userEvent.setup(); await user.click(await screen.findByRole('button',{name:'집 위치·출입구 확인'}));
+    apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockRejectedValueOnce(new ApiError('VERSION_CONFLICT')).mockResolvedValueOnce(reply({...place,version:2,entrance_note:'다른 화면의 수정'}));
+    await user.click(screen.getByRole('button',{name:'위치·출입구 저장'}));
+    expect(await screen.findByText('장소가 변경됐어요. 최신 위치를 다시 확인해주세요.')).toBeTruthy();
+    expect(screen.queryByRole('button',{name:'위치·출입구 저장'})).toBeNull();
+    expect(screen.getByText('출입구: 다른 화면의 수정 · 직접 입력')).toBeTruthy();
   });
 });
