@@ -4,6 +4,70 @@
 
 ## 실제 기록
 
+### 2026-10-07 — F03-02 지도 핀·출입구 확인/수정
+- 목표/범위: 다음 TODO F03-02. 검색 후보/저장 장소를 지도에서 확인 → 핀 클릭/드래그/방향 버튼으로 수정 → 서버 지역 확인 → 생성/수정 저장. 출입구 설명은 사용자 직접 입력이며 공식 출입구 ID/실내 이동 인증과 구분한다. GPS·라벨 수정/삭제·실제 경로 계산은 다음 단계다.
+- Git: 깨끗한 codex/fixed-place-search에서 main fetch, F03-01 병합 main0204e7e 확인 후 codex/place-map-pin 생성. 기능별 커밋/푸시, MR 생성/병합은 사용자 수행.
+- 선행 명세/문서: Notion 최신 v0.35·todo/feature_breakdown/place_api/planning/database_schema/관련 JSX·CSS/design_guide/screen_plan 및 이전 일지/프롬프트/개인화/로그 근거를 확인. 공식 Kakao 지도 가이드·클릭/SDK 문서·coord2regioncode API를 확인했다. https://apis.map.kakao.com/web/guide/ 및 https://developers.kakao.com/docs/ko/local/dev-guide 기준. 공급자 저장/전달 조건 추가 확인 생략 지시 유지, 전체 조건 확인 완료로 표시하지 않음.
+- 계약: Notion v0.36에5.1.2 상세·지도 설정/확인 API 표·PATCH/생성 필드·DB/구현 상태·변경 이력 갱신 후 저장 재조회. GET /map-config는 공개 JavaScript SDK 키만(로그인/no-store), REST 키 반환 없음. POST /place-location-confirmations는 서울/경기 법정동 확인·600초 본인 결과·10회/분. PATCH는 본인 행 잠금/expected_version, 확인 ID 소유권·만료·좌표 일치. 지원 범위 밖422 UNSUPPORTED_REGION·버전409·타인/만료404. 생성의 신규 선택 필드 null/생략은 기존 멱등 해시 유지.
+- 구현 변경: backend/app/places.py·main.py, 0004_place_map_pin.py, test_place_map_pin.py·test_migrations.py; frontend/src/MapPinPicker.jsx·LocationConfirmation.jsx·kakaoMap.js와 테스트3개, PlacesCard.jsx/기존 테스트·api.js·styles.css; .env.example 및 api_contract/place_api/README/backend README/planning/database_schema/migrations/screen_plan/design_guide/logging/TODO/기능 목록/본 일지 동기화.
+- 저장: 기존 장소에 entrance_note/location_source/location_address 추가 및 place_location_confirmations 테이블/만료 인덱스. 원래 검색 name/address 보존, 실제 핀 좌표와 법정동 명칭 별도 기록. 좌표/출처/설명 변경이면version+1, 동일값은 유지, 설명null은 제거. 장소 version이 이전 경로/도보 근거의 유효성 기준이며 실제 경로/도보 저장소·무효화 처리는 F04/F05 후속.
+- DB/백엔드 검증: 전체80개 통과(새 핀12개). 기존 장소가 있는0003에서0004 upgrade/중복 적용/downgrade0003/re-upgrade·base 왕복 두 차례, 좌표/버전/기본값search/null/null 유지 확인. 개발 public0004 upgrade/head 확인, 기존 회원/장소 보존. 본인 핀 생성·설명/좌표 수정·같은 값 유지·설명 제거·오래된 버전409·동시 수정200/409, 타인 확인/장소404·만료/불명확인404·좌표 변조422·CSRF403·지원지역/바다422·429/Retry-After·청소·기존 멱등 해시 호환 확인.
+- 로그/키: 지도 설정/좌표 확인/PATCH200/200/200의 요청ID/로그 일치, 공개 SDK 키·확인ID·좌표/주소/출입구 설명 비노출 확인. REST/AI 키는 서버 전용, JavaScript 키만 도메인 제한용 공개키로 지도 SDK에 전달. 일반 원문/예외/공급자 응답 로그 추가 없음, AI 전달 없음.
+- 프론트 검증: 전체49개 통과/빌드 성공. 지도 클릭/드래그/방향 버튼 및 요청 중 조작 차단·정리, SDK 동시 로딩1개/오류 재시도/10초 무응답, 핀 변경·확인 재요청·만료 시 저장 차단, 지원지역 밖/세션 만료/다른 좌표 응답/이탈 취소, PATCH expected_version·409 최신 장소 재조회/재확인 검증. 마지막 지도 초기 비활성 보완 후 관련3개 재검증 및 최종 빌드 통과.
+- 실제 실행: 이전 작업에서 시작한8000 백엔드를 최신 코드로 재시작(PID15072)하여 현재 서버를 유지한다. 사용자 계정에 접근하지 않고 본 작업의 정확한 합성 이메일/표시명 계정에서 공개 강남역 검색·Kakao 지도 렌더링·클릭/마커 드래그/5m 방향 버튼·법정동 확인200·핀 생성201·수정200 및 새로고침 유지 확인. 실제 저장 version1→2→3·source=map_pin 확인. 카카오 JS 키와 현재127.0.0.1:5173 도메인 SDK 동작 확인, 운영/다른 도메인 전체 설정 검증은 아님.
+- 시각/정리: 데스크톱1440×1000·모바일390×844 지도/수정 폼·방향 버튼 배치·저작권 표시 확인. 모바일 documentWidth375<=viewport390으로 가로 넘침 없음. 지도 핀 이동 후 저장 비활성 및 재확인 후 저장 가능 확인. 기존 홈/루틴과 계정 모달 흐름 회귀 확인, 지도 조작과 현재 위치 권한 요청은 분리. 정확한 QA 회원1명 및 연결 장소/확인/세션을 정리, 사용자 데이터 유지. 모바일 검증 이미지는 Codex visualizations 폴더에 보관, Git 제외. 실제 휴대전화/지도 위치 정확도/실내 출입구·GPS는 미검증.
+- 배운 개념: 지도에서 보이는 좌표와 서버가 허용한 저장 좌표는 다르므로 본인·기한이 있는 확인 결과를 연결한다. 공식 지도 SDK 공개키와 서버 REST 비밀키는 용도가 다르다. optimistic version은 오래된 화면이 새 장소 위치를 덮어쓰지 않게 하며, 이후 산정 재사용은 place_id/version을 함께 검사해야 한다.
+- 완료/다음: F03-02 체크 완료, F03-03은 목록/상세/위치 수정 부분 완료지만 라벨 수정·삭제/연결 데이터 처리 전까지 미완료 유지. 다음 F03-03. 현재 위치/정확도·매일 확인 결과 청소/F11·F04/F05 산정 재사용 무효화는 남음. 명세 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+### 2026-10-07 — F03-01 고정 장소 검색·저장
+- 목표: TODO 순서의 F03-01을 작은 기능 단위로 진행. ‘내 설정 → 내 장소’에서 주소/장소 검색 → 후보 선택 → 집·회사 등 이름 저장 → 본인 목록을 제공한다. F03-02~05는 후속이며 F03 전체 완료와 구분한다.
+- Git: 깨끗한 작업 폴더에서 origin/main fetch(ac28d5f) 후 codex/fixed-place-search 생성. 기존 회원 오류 안내 main 병합 내용 보존. 이 브랜치에 커밋/푸시하며 MR 생성·병합은 사용자 수행.
+- 선행 확인: Notion v0.34 최신 조회, todo/feature_breakdown/planning/personalization/ai_prompts/logging/development_log 및 기존 JSX/CSS/design_guide/screen_plan 확인. 최신 카카오 공식 Local 주소/키워드 API 문서 https://developers.kakao.com/docs/ko/local/dev-guide 확인. 사용자 D02 조건 추가 확인 생략 지시 유지, 공급자 저장/전체 서비스 조건 검증 완료로 표시하지 않는다.
+- 계약: Notion v0.35에5.1.1 상세 계약·목록/생성 표·예시·구현 상태·DB 상태·변경 이력 추가/정정 후 저장 재조회. 검색/후보 UUID·사용자 소유권·600초 만료·좌표 대조, 라벨1~30자·검색어1~100자·서울/경기 주소·각 첫10건/최대20건, 429/502/503, 선택 멱등 키24시간 및 목록 limit/cursor 구체화. 미구현 생성 초안에 search_id/candidate_id 필수 및 name/address 응답 추가. entrance_ref는 null만 지원하며 지도 핀/출입구는 후속. 기존 인증/health/루틴 계약 영향 없음.
+- 구현 파일: backend/app/places.py·main.py, migrations/versions/0003_saved_places.py, tests/test_places.py·test_migrations.py; frontend/src/PlacesCard.jsx·PlacesCard.test.jsx·App.jsx·App.test.jsx·api.js·styles.css. 관련 api_contract/place_api/planning/database_schema/migrations/screen_plan/design_guide/logging/README/backend README/TODO/기능 목록 동기화.
+- DB: saved_places·place_searches·place_creation_keys와 FK/라벨·좌표 CHECK/인덱스 추가. 개발 public에0003 upgrade 및 head 확인. 임시 migration_test 스키마에서 head 적용/중복 적용/전체 downgrade/re-upgrade 두 차례 검증. 기존 회원 데이터 유지. 검색어·공급자 원본 저장 없음; 선택 후보의 이름/주소/좌표를 본인 장소에 저장한다.
+- 백엔드 검증: 전체68개 통과(장소12개 포함). 실제 PostgreSQL/ASGI에서 저장201·상세/목록200·재로그인 유지, 타인 검색/장소/cursor404, 변조좌표422·만료404·불명후보404, 인증401·CSRF403·입력422, 분당10회 제한429/Retry-After·공급자실패503, 만료 청소, 페이지 경계, 동시 로그인 세션의 같은 키 재시도에서 장소1개 생성 확인. 동일 키/본문201·다른본문409·후보 만료 후 기존201·멱등 만료 후404 확인.
+- 로그 검증: 장소 검색200/생성201/상세200 실행 로그의 request_id와 응답 일치, 실제 ID 대신 /places/{place_id} 템플릿 및 검색어/주소/좌표/라벨/쿠키/키 제외 확인. 입력/공급자 예외 원문 미노출.
+- 프론트 검증:35개 통과 및 Vite 빌드 성공. 신규8개로 로그인/빈 결과/실패/만료/검색어 변경 시 선택 해제/멱등 재시도/세션 만료 자료 제거/StrictMode 및 이탈 취소 확인. 기존 health 테스트는 장소 카드와 분리하여 API별 요청 횟수와 결과를 검증한다. 최초 테스트의 쿼리 전달/후보 accessible name 및 완료 요청 취소 기대 오류를 수정하고 다시 통과했다.
+- 실제 브라우저: 기존8000 서버가 이전 코드를 실행 중이라 별도8001/5175 검증 서버 사용. 샌드박스 외부 통신 차단에서 장소 검색503/재시도 확인, 통신 허용 후 카카오 공개 강남역 키워드/공개 주소 검색200·후보10/11건, 합성 계정에서 집/회사 이름 저장201·목록200·새로고침 유지 확인. 데스크톱1440×1000 후보 선택·저장, 모바일390×844 주소 검색·선택·저장 및 가로 넘침 없음(documentWidth=390) 확인. 로그아웃/계정 모달 복귀 시 이전 장소 제거 확인. 실제 휴대전화·지도 SDK·GPS·경로 연결은 검증하지 않았다.
+- 정리: 본 작업에서 생성한 정확한 합성 이메일/표시명 조건의 QA 회원1명과 연결된 장소/후보/세션만 삭제. 사용자 회원/장소는 변경하지 않았다. 임시 QA Vite 설정/자체 검증 프로세스 정리. 모바일 검증 이미지는 Codex visualizations 폴더에 보관(Git 제외).
+- 배운 개념: 검색 후보는 사용자/검색/기한을 가진 임시 자원이고 저장 장소는 지속 자원이다. 요청 타임아웃이 저장 실패를 뜻하지 않으므로 멱등 키와 DB 잠금으로 재시도/동시 세션 중복을 막는다. 브라우저 위치/지도 선택은 주소 후보 선택과 구분해야 한다.
+- 완료/남은 일: F03-01 완료, F03-03은 목록/상세만 부분 완료라 체크 유지. 다음 F03-02 출입구/지도 핀 확인·수정 및 변경 버전/산정 무효화. 수정/삭제·현재 위치/시각/정확도/저장 장소 일치, 매일 청소 운영 스케줄(F11), 탈퇴 정리 및 실제 루틴 연결은 미구현. Notion https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+### 2026-10-07 — F02-01 계정 오류 요청 ID 비노출
+- 사용자 요청: 회원가입 실패 시 request 식별자를 사용자에게 표시하지 않는다.
+- 최신 main(928af7c, 회원 인증 병합)에서 codex/auth-error-message 생성. AccountForm.jsx의 문의용 ID 행 제거, 입력 조건·중복 오류·재시도·접근성 유지. 계정 폼 전체에 동일 표현 적용.
+- 변경 파일: AccountForm.jsx/기존 테스트, api_contract.md/auth_api.md, screen_plan.md/design_guide.md/logging.md, todo.md/feature_breakdown.md, 본 일지.
+- 명세: 최신 Notion v0.33 확인 → v0.34 계정 화면 비노출 정책과 변경 이력 저장 → 재조회 확인, 전체 본문 api_contract.md 동기화. API 응답·ApiError 내부 ID·서버 로그는 유지하며 백엔드 계약/코드 변경 없음.
+- 검증: 프론트 테스트27개 및 빌드 통과. 기존 입력 오류/중복 오류 검증을 요청 ID 비노출 요구로 갱신. 실제 localhost 가입 폼에서 합성 입력과 차단된 비밀번호로 실패 안내 확인(회원 생성 없음), 데스크톱1440×900·모바일390×844 오류 문구/입력/재시도와 ID 비노출 확인. 임시 뷰포트 원복. 백엔드 변경이 없어 백엔드 테스트 재실행 없음.
+- 배운 개념: 개발용 요청 추적 식별자를 API/로그에 보존하는 것과 사용자 화면에 표시하는 것은 별개다. 오류 화면은 해결 가능한 안내를 중심으로 구성한다.
+- 완료: F02-01의 오류 표현 수정. 다음: 사용자 브랜치 검토·MR/병합 후 F03-01 고정 장소 검색·저장. 메일 인증/복구 후순위 유지.
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+### 2026-10-06 — localhost 회원가입 CSRF 차단 수정
+- 증상/근거: 사용자 화면의 req_7634d878dc6b49c888608d9ab60a82a7은 POST register403 CSRF_INVALID. 사용자가 앱 주소 http://localhost:5173을 확인했다. 개발 설정은 http://127.0.0.1:5173이며 정확한 Origin 비교가 localhost를 거절했다. 수정 전 같은 쿠키/CSRF 절차의 실제 프록시 POST는127.0.0.1에서204, localhost에서403으로 재현했다.
+- 선행 계약/구현: 최신 Notion v0.32 읽고 v0.33에 개발 AUTH_PUBLIC_ORIGIN 동일 HTTP 포트의 localhost/127.0.0.1만 허용하도록 기록. backend/app/auth.py에 설정값에서만 계산한 두 origin 집합 적용, 기본80 정규화. 운영은 기존 HTTPS origin 정확한 일치 유지, CSRF 토큰·쿠키·외부/다른 포트/null 거절 유지. 요청 Host/X-Forwarded-For를 신뢰하거나 wildcard CORS를 추가하지 않았다.
+- 검증: 개발 alias 가입/로그인·다른 포트/외부/null 거절, 운영 origin 정확한 검사 테스트2개 추가. 백엔드56개 통과. 확인된 개발 서버 PID5072만 종료/재시작 후 실제 Vite 프록시/쿠키/CSRF POST가 두 주소 모두204 확인. 기존 사용자 계정/가입 제한 버킷을 수정하거나 검증용 신규 가입으로 사용자 호출 제한을 소모하지 않았다. 프론트/UI 코드 변경 없음으로 시각 검증·프론트 테스트 반복 대상 없음.
+- 문서/배운 개념: .env.example·backend README·auth_api.md·api_contract.md 동기화, Notion v0.33 저장 재조회. localhost와127.0.0.1은 같은 로컬 서버를 가리켜도 브라우저 origin 문자열이 다르다. 개발 주소의 제한된 호환과 운영 origin 검증을 구분한다. API 경로/응답 변경 없음, 개발 허용 origin 정책만 구체화.
+- 완료/다음: codex/member-auth의 회원 기능 후속 수정 완료, 사용자 검토 후 MR/병합 및 기존 다음 F03-01 유지. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+### 2026-10-06 — 회원가입 입력 검증 오류 안내 개선
+- 사용자 증상: 회원가입 실패. 서버/프론트 프록시는 정상이며 실제 요청 기록에서 register/login422 VALIDATION_ERROR 확인. 요청 제한은 초과하지 않았다. 사용자 입력 원문이나 비밀번호는 읽거나 기록하지 않았으므로 사용자의 어느 항목이 틀렸는지는 미확인이다. 기존15~128자 비밀번호·이메일 형식·이름 조건은 변경하지 않는다.
+- 변경: frontend/src/api.js에서 error.details의 허용 필드3개만 안전한 고정 설명으로 변환, 원문 message/reason/임의 필드/객체는 제외. AccountForm.jsx에 설명 연결과 해당 입력 aria-invalid/aria-describedby. 기존 "입력값을 확인해주세요"만 보여주는 문제 개선, screen_plan.md 갱신. codex/member-auth의 동일 회원 기능 후속 수정이며 새 기능/MR/병합 없음.
+- 검증: API 비노출·필드 안내와 계정 폼 오류/접근성 테스트2개 추가, 프론트27개 및 빌드 통과. 실제 브라우저 합성 가입으로 흔한 비밀번호422의 구체적 안내·요청ID를 데스크톱1440×900/모바일390×844에서 확인, 유효 비밀번호로 수정해201 가입/로그인 화면 전환 확인. 합성 회원은 검증 후 정리, 사용자의 계정/입력은 변경하지 않음. 백엔드 코드는 변경하지 않아 전체 백엔드 테스트를 반복하지 않음.
+- 명세 영향: 최신 Notion v0.32 확인, 기존422 details.field와 입력 계약 유지, API/계산/로깅 정책 변경 없음으로 Notion 수정 불필요. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+- 배운 개념/잔여: 서버의 입력 거절과 서버 연결 실패는 다르며 안전한 필드별 안내가 있어야 사용자가 바로 고칠 수 있다. 특정 사용자 입력 실패 원인은 새 안내 문구/문의용 ID로 추가 확인한다. 다음 기능 순서는 기존 TODO대로 사용자 MR/병합 후 F03-01 유지.
+### 2026-10-06 — 메일 인증 후순위·이메일 중복 기반 회원 인증 구현
+- 사용자 변경: 메일 인증은 후순위, 기존 회원 중복만 확인하는 가입/로그인으로 단순화. main(78fcaf7)에서 만든 기능 브랜치를 codex/member-auth로 변경. 이전 Mailpit/Resend 준비용 .env.example·compose·기획/DB/실행 안내 변경을 먼저 HEAD로 복구, auth_preparation.md 제거 및 이번에 만든 Mailpit 컨테이너 정지/제거. 운영 메일 선정·pending7일 정책을 현재 계약에서 철회했으며 외부 메일 발송 없음.
+- 명세 선행: 최신 Notion v0.31 확인 후 v0.32로17절 기본 인증 재정의. 가입 즉시active, 이메일 정규화/중복409·201 user_id만·자동 로그인 없음, login/GET me의 이메일 확인 필드 제거. 메일 소유 확인/복구/outbox/token/pending을 후순위로 이동. 이메일 중복 확인은 소유권 인증이 아님. CSRF/서버 세션·프로필 기본값·공통 오류/요청 제한 유지. 저장 재조회 후 api_contract.md·auth_api.md 및 관련 문서 동기화.
+- 구현 파일: backend/app/auth.py·main.py, 0002_member_auth 마이그레이션, requirements 및 인증/응답/마이그레이션 테스트. users/auth_credentials/user_profiles/auth_sessions/auth_rate_limit_buckets5개 적용. UNIQUE 정규 이메일로 동시 가입 중복 방지·트랜잭션 정리, Argon2id19MiB/time2/p1, 서버 난수 세션/CSRF 해시 저장·HttpOnly/SameSite 쿠키, Origin+CSRF 검사, 로그인ID 교체·절대7일/미사용24시간, PostgreSQL HMAC 버킷/429. 기존 계정 비밀번호 덮어쓰기 없음.
+- 화면: AccountForm.jsx·테스트, App.jsx 계정 모달/API 실제 연결 및 api.js 오류 문구·기존 CSS 토큰의 auth-tabs만 추가. 회원 가입 후 로그인 전환·중복/입력/연결 실패/요청ID·로그인 회원/첫 여유·로그아웃·요청 중 비활성/이탈 취소. 이동 데모는 그대로이며 회원별 장소/루틴 저장과 연결하지 않음. design_guide.md·screen_plan.md 갱신.
+- 실제 검증: 백엔드 전체54개 통과(인증13개: 동시/대소문자 중복·로그인/없는 계정 동일401·CSRF/Origin·정상/만료/이전 세션·CSRF 재발급·다른 회원 me·공백 비밀번호·프로필·가입/로그인 제한·운영 쿠키/설정·DB 오류; 마이그레이션 upgrade 재실행/downgrade 왕복 포함). 프론트25개·build·pip check·git diff --check 통과. 임시 스키마 및 브라우저 테스트용 합성 회원 정리, 개발 DB0002_member_auth 적용. DB 연결은 이번 실제 실행에서 정상 확인.
+- 실제 UI: Vite 프록시/uvicorn을 확인된 프로젝트 PID만 재시작. 데스크톱1440×900·모바일390×844 로그인 폼/성공·중복409/요청ID·모바일 로그아웃 확인, 기존 초록/미색/카드·줄바꿈/입력·닫기/반응형 유지. 실제 화면에서 StrictMode 첫 요청 취소로 로딩 고착, DB datetime의 쿠키 GMT 변환 실패를 발견해 수정·각 회귀 테스트 추가. 기존 Vite 실행의 잘못된 root 인자를 직접 Node 실행으로 수정. 개인 주소/메일/운영 자격증명은 테스트에 쓰지 않음.
+- 환경/보안: 기존 .env 값은 보존하고 없던 독립 AUTH_RATE_LIMIT_SECRET만 로컬 난수로 추가(값 출력 없음), .env.example에는 빈 자리·origin만 기록. Git 파일과 실제 KEY/PASSWORD/BASE_URL/SECRET 대조 일치0건, .env 추적 제외. 메일 캡처/SMTP 설정은 최종 변경에 없음. AGENTS.md에 사용자 브랜치/MR 작업 흐름 기록.
+- 배운 개념: 가입 중복은 DB UNIQUE가 최종 보장하며 UI 검사만으로 동시 요청을 막지 못한다. 메일 주소 중복 검사와 이메일 소유 확인은 다르다. 개발 StrictMode의 정리/재실행과 쿠키 GMT 시각 변환은 실제 브라우저 경로로도 확인해야 한다.
+- 완료/잔여: F02-01/02/05만 완료. 메일 인증/복구·재인증·탈퇴·업무 API 전체 소유권/WS·전체 유출 비밀번호 목록은 후속. 개발 스키마 회원 기능 검증이며 운영 배포/실제 메일 소유 검증 완료 아님. 사용자가 브랜치 검토 후 MR/병합, 이후 F03-01. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
 ### 2026-10-06 — F01 단계 삭제 문서 커밋 준비
 - 사용자 요청: 사례 선정 및 데이터 공급자 검증 단계 삭제에 따른 문서6개 변경을 커밋하고 origin/init에 푸시.
 - 검증: 최신 Notion v0.30과 api_contract.md 전체 본문 일치, TODO/기능 목록의 F01 활성 항목 제거 및 다음 F02-00 확인, git diff --check 통과. 실제 환경 키/비밀번호/AI URL의 변경 파일 일치0건, .env 제외.

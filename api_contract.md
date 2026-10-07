@@ -1,10 +1,9 @@
 # 지금이니? API 설계 초안
-- 문서 버전: 0.30 · 작성일: 2026-09-30 · 수정일: 2026-10-06 (사용자 요청으로 F01 별도 공급자 검증 단계 삭제)
+- 문서 버전: 0.36 · 작성일: 2026-09-30 · 수정일: 2026-10-07 (F03-02 지도 핀·출입구 확인/수정)
 - 프론트엔드: React · 백엔드: Python FastAPI
-- 상태: **설계 검토용 / 핵심 서비스 기능 미구현**. GET /health와 React 서버 연결 확인은 구현되어 있으며 나머지 구현 상태는 `todo.md`를 따른다. 아래 미구현 경로·필드·정책은 구현 전에 조정할 수 있다.
+- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01 장소 검색·저장·본인 조회와 F03-02 지도 핀/출입구 설명 수정은 구현, 경로/현재 위치/약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
 - 기준: 대화에서 확정한 요구사항 및 프로젝트 `C:/projects/timeisnow` 폴더의 `planning.md`, `feature_breakdown.md`, `personalization.md`, `logging.md`, `ai_prompts.md`.
 - 이 페이지는 수동 관리하는 설계 문서다. 코드와 자동 동기화되는 상태가 아니다.
-<table_of_contents/>
 ## 1. 읽는 방법
 API는 React가 FastAPI에 요청하는 약속이다. GET은 조회, POST는 생성·처리 요청, PATCH는 일부 수정, DELETE는 삭제에 사용한다. 경로의 중괄호는 실제 ID로 바꾸는 자리다.
 **필수 기능:** 회원가입·개인 저장, 현재 위치와 집·회사, 환승, AI 도보 산정, 저장값 재사용, 초기 5분 여유, 실제 관측과 개인화, 품질 이력과 로깅.
@@ -31,7 +30,7 @@ API는 React가 FastAPI에 요청하는 약속이다. GET은 조회, POST는 생
 - 화면은 기존 서버 연결 카드의 로딩·성공·실패/재확인 상태와 지원 문의용 요청 ID를 표시한다. ID가 없는 네트워크/시간초과 오류에는 서버 ID를 만들지 않는다. 응답 JSON/공통 형식/health 데이터가 잘못되면 정상 연결로 표시하지 않는다. 화면 이탈 시 요청을 취소하고 오래된 결과를 반영하지 않는다.
 - F00-03 구현/검증 완료: 프론트 테스트20개·빌드, 백엔드 응답 계약6개·기존 진단27개 통과. 실제 로컬 health200/404/405 및 데스크톱·390×844 모바일 로딩/성공/500 실패/재시도 요청 ID 확인. 프론트 원문 URL/요청·응답/키·예외 로그 없음. 업무 API 미구현, 요청 완료/예상 밖 오류 구조화 로그는 F00-04로 구현했다.
 ## 3. 인증 방식 결정
-첫 버전은 사용자 요청에 따라 이메일·비밀번호 로그인으로 한다. 소셜 로그인은 테스트 이후 배포 확대 시 재검토한다. 서버 저장 세션·HttpOnly 쿠키, CSRF, 이메일 확인·복구·재인증 계약은 17절의 상세 초안을 따른다. 인증 구현과 메일 공급자 선택은 아직 미완료다.
+첫 버전은 이메일 중복 확인과 비밀번호 기반 가입/로그인이다. 메일 소유 확인·복구는 후순위, 가입 즉시 active다. 서버 세션·HttpOnly 쿠키·CSRF 상세 계약은17절을 따른다.
 ## 4. 기능별 API 목록
 GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이다. 성공 응답 열은 공통 data 내부 필드를 요약한다.
 ### 01. 시스템·계정
@@ -54,7 +53,7 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <td>`GET /me`</td>
 <td>필요</td>
 <td>없음</td>
-<td>200: user_id, display_name, profile, email_verified</td>
+<td>200: user_id, display_name, profile</td>
 <td>로그인 사용자 확인</td>
 </tr>
 <tr>
@@ -91,9 +90,23 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <tr>
 <td>`POST /place-searches`</td>
 <td>필요</td>
-<td>query: 검색어</td>
-<td>200: candidates\[\]</td>
+<td>query: 검색어1\~100자</td>
+<td>200: search_id, expires_at, candidates\[\]</td>
 <td>주소가 URL·접근 로그에 남지 않도록 본문 전달. 검색 본문도 로깅 제외</td>
+</tr>
+<tr>
+<td>`GET /map-config`</td>
+<td>필요</td>
+<td>없음</td>
+<td>200: javascript_key</td>
+<td>등록 도메인 제한용 공개 SDK 키만, REST 키 비노출</td>
+</tr>
+<tr>
+<td>`POST /place-location-confirmations`</td>
+<td>필요</td>
+<td>location</td>
+<td>200: confirmation_id, location, location_address, expires_at</td>
+<td>서울/경기 확인·600초·본인 소유권 및 CSRF</td>
 </tr>
 <tr>
 <td>`GET /places`</td>
@@ -105,9 +118,9 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <tr>
 <td>`POST /places`</td>
 <td>필요</td>
-<td>label, location, entrance_ref?</td>
+<td>label, location, search_id, candidate_id, entrance_ref(null), location_confirmation_id?, entrance_note?</td>
 <td>201: place</td>
-<td>집·회사 등록. 좌표·검색 결과 확인</td>
+<td>집·회사 등록. 본인 검색 후보·10분 만료·좌표 확인, 선택 Idempotency-Key</td>
 </tr>
 <tr>
 <td>`GET /places/{place_id}`</td>
@@ -119,9 +132,9 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <tr>
 <td>`PATCH /places/{place_id}`</td>
 <td>필요</td>
-<td>label?, location?, entrance_ref?, expected_version</td>
+<td>expected_version, location?, location_confirmation_id?, entrance_note? (label 수정 후속)</td>
 <td>200: place</td>
-<td>위치·출입구 변경 시 관련 산정값 무효화</td>
+<td>본인 위치/설명 수정, 버전409 검사 및 버전 증가. 실제 산정 재사용 무효화는 F04/F05 후속</td>
 </tr>
 <tr>
 <td>`DELETE /places/{place_id}`</td>
@@ -339,27 +352,39 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 ## 5. 핵심 요청·응답 예시
 아래 값은 합성 예시다. 실제 API를 호출한 결과가 아니다.
 ### 5.1 집·회사 등록
+아래 값은 합성 예시이며 검색 응답에서 받은 본인 후보 ID와 좌표로 저장한다.
 `POST /api/v1/places`
 ```json
-{
-  "label": "집",
-  "location": {"latitude": 37.5001, "longitude": 127.0001},
-  "entrance_ref": "entrance_demo_01"
-}
+{"label":"집","location":{"latitude":37.5001,"longitude":127.0001},"search_id":"00000000-0000-4000-8000-000000000001","candidate_id":"00000000-0000-4000-8000-000000000002","entrance_ref":null}
 ```
 ```json
-{
-  "data": {
-    "place_id": "place_demo_01",
-    "label": "집",
-    "location": {"latitude": 37.5001, "longitude": 127.0001},
-    "entrance_ref": "entrance_demo_01",
-    "version": 1
-  },
-  "meta": {"request_id": "req_demo_01", "server_time": "2026-09-30T00:00:00Z"}
-}
+{"data":{"place_id":"00000000-0000-4000-8000-000000000003","label":"집","name":"합성 건물","address":"서울 합성 주소","location":{"latitude":37.5001,"longitude":127.0001},"entrance_ref":null,"version":1},"meta":{"request_id":"req_demo_01","server_time":"2026-10-07T00:00:00Z"}}
 ```
-장소 좌표는 필요한 인증 응답에는 포함되지만 일반 실행 로그에는 남기지 않는다.
+장소 좌표는 필요한 인증 응답에는 포함되지만 일반 실행 로그에는 남기지 않는다. 출입구 변경은 F03-02 후속이다.
+### 5.1.1 F03-01 장소 검색·저장 상세 계약
+- F03-01 최초 구현(2026-10-07): POST /place-searches, POST /places, GET /places 및 GET /places/\{place_id\}. 당시 검증 백엔드68개·프론트35개·빌드·카카오 검색/저장. 현재 지도 핀/출입구 설명/수정 및 응답 추가 필드는5.1.2절 F03-02 확장을 따른다. 삭제/현재 위치/전체 산정 재사용은 후속이다.
+- 모든 API는 로그인 사용자 소유권과 no-store 적용. POST는 Origin/CSRF 검증. 검색어·주소·좌표·후보 원본·키는 일반 실행 로그 제외, 외부 카카오 HTTPS 호출은 서버에서만 수행하며 리다이렉트 금지.
+- 검색 입력 query는 앞뒤 공백 제거 후1\~100자. 카카오 주소 검색과 키워드 검색을 각각 최대10건 호출하여 서울특별시·경기도 주소만 남기고 좌표/주소 중복 제거, 주소 결과 우선 최대20건. 공급자 응답이 잘못되면502 PROVIDER_RESPONSE_INVALID, 접속/인증/쿼터 실패503 PROVIDER_UNAVAILABLE. 검색 요청 사용자별 분당10회, 초과429와 Retry-After.
+- 검색200 data: search_id, expires_at(생성후600초), candidates 배열. 후보는 candidate_id, name, address, location(latitude/longitude). 후보/검색 ID는 서버 발급 UUID이며 사용자와 검색에 묶인다. 주소/키워드 매칭이 없어도200 빈 배열. 첫 페이지 범위이며 모든 결과 조회를 보장하지 않는다.
+- 저장 입력: label(공백 제거 후1\~30자), location, search_id, candidate_id 필수. entrance_ref는 이번 단계 null만 허용. 서버는 본인 검색/후보·만료 및 후보 좌표 일치를 검증한다. 임의 좌표/다른 후보 좌표422 VALIDATION_ERROR, 타인/만료/없는 후보404 RESOURCE_NOT_FOUND. 지도 핀 저장 계약은 F03-02 구현 시 확장한다.
+- 저장201 data: place_id, label, location, entrance_ref(null), version(1), name, address. 선택 후보의 최소 이름/주소/좌표만 장소에 저장, 검색어와 공급자 원본은 영구 저장하지 않는다. 집/회사 외 라벨도 지원하며 이름 중복은 허용한다.
+- POST /places는 선택 Idempotency-Key(1\~128자 영문/숫자/밑줄/하이픈) 지원. 사용자+경로+키로24시간 중복 결과 유지, 같은 본문은201 기존 장소 반환, 다른 본문은409 IDEMPOTENCY_CONFLICT. 권한 재검사 후 재응답하며 만료 후보라도 유효한 저장 재시도는 기존 결과 반환. 헤더 없이 생성하면 별도 장소가 된다.
+- GET /places는 limit 기본20/최대100, 선택 cursor(이전 응답 next_cursor UUID). 생성 ID 내림차순으로 본인 목록만 반환. 타인/없는 cursor404. GET /places/\{place_id\}는 타인/없는/잘못된 ID404.
+- 검색 후보는10분 후 접근 불가 및 다음 검색에서 만료행 청소. 멱등 결과는24시간 후 접근 불가 및 다음 저장에서 청소. 매일 청소 운영 스케줄은 F11 후속. 장소는 삭제/탈퇴까지 보관하며 F03-03 삭제 및 F11-02 탈퇴 API는 미구현.
+- 호환성: 기존 장소 생성 예시는 미구현 설계였다. search_id/candidate_id 필수 필드와 name/address 응답 필드를 구체화하므로 첫 클라이언트는 검색 후 선택 흐름을 사용한다. 기존 인증·health·루틴 계약에는 영향 없다.
+### 5.1.2 F03-02 지도 핀·출입구 확인/수정 계약
+- 구현 상태(2026-10-07): 지도 SDK·위치 확인·생성 핀 저장·PATCH 구현. 실제 지도 클릭/드래그/방향 버튼·저장/수정·새로고침 유지 및 데스크톱1440×1000/모바일390×844 확인. 검증 근거는 `development_log.md`. 백엔드80개(새 핀12개 포함)·프론트49개·빌드 및 기존 장소 보존/0003↔0004 왕복 검증 완료. 도보/경로 산정 저장소는 미구현.
+- 구현 범위: 검색 후보 또는 본인 저장 장소를 카카오 지도에서 확인, 클릭/마커 드래그/방향 버튼으로 핀 수정, 선택 위치 확인 후 저장. 출입구 설명은 사용자가 입력한1\~100자 또는 null이며 공식 출입구 ID/실내 위치 인증이 아니다. 기존 entrance_ref는 null 유지, entrance_note를 별도 추가한다.
+- GET /map-config: 로그인 필요·no-store.200 data.javascript_key는 지도 SDK용 공개 JavaScript 키(등록 도메인 제한용)만 반환한다. 서버 REST 키는 반환하지 않는다. 키 미설정503 MAP_UNAVAILABLE. 지도 SDK는 공식 HTTPS SDK에서만 로딩하며10초 후 실패/재시도 안내. SDK 활성화/등록 도메인 설정은 카카오 앱 설정에 필요하다.
+- POST /place-location-confirmations: 로그인·Origin/CSRF·no-store. 입력 location(latitude/longitude). 사용자당10회/분(429/Retry-After), 서버 카카오 coord2regioncode HTTPS로 서울/경기 법정동 범위 확인.200 data.confirmation_id(UUID), location, location_address(법정동 명칭, 정밀 주소가 아님), expires_at(생성후600초). 공급자503/잘못된 응답502는 검색과 동일. 바다/지원지역 밖422 UNSUPPORTED_REGION. 실패를 다른 지역으로 추측하거나 임의 좌표로 성공 처리하지 않는다.
+- POST /places 기존 필드는 유지, 선택 location_confirmation_id와 entrance_note 추가. 기존 후보와 동일 좌표는 기존 저장 가능. 다른 좌표는 본인/미만료 확인 ID와 정확히 일치해야 하며 확인 ID가 없으면422. 타인/만료/없는 확인404. 검색/후보 소유권과 만료 검사도 유지. 선택 확인 ID가 있으면 같은 좌표라도 source=map_pin. 기존 클라이언트 입력과 멱등 재시도 해시 호환 유지.
+- PATCH /places/\{place_id\}: 로그인·Origin/CSRF·no-store. expected_version(정수\>=1) 필수, 선택 location, location_confirmation_id, entrance_note. 최소 하나의 location/entrance_note 필요. location이 있으면 일치하는 본인/미만료 확인 ID 필수. 설명 null은 제거.200 장소 객체. 타인/없는/잘못된 장소 ID404, 오래된 expected_version409 VERSION_CONFLICT. 서버가 행 잠금 후 소유권→버전→확인 ID/좌표를 검사하고 한 트랜잭션으로 갱신한다.
+- 좌표 또는 출입구 설명/위치 출처가 바뀌면 version+1 및 updated_at 갱신. 같은 좌표/설명/출처는 버전을 유지한다. label/name/검색 원래 address는 이번 PATCH에서 수정하지 않는다. 사용자 핀의 법정동 명칭은 location_address로 별도 저장하고 원래 검색 주소와 구분한다.
+- 장소 응답 추가 필드: entrance_note(null/string), location_source(search/map_pin), location_address(null/법정동 명칭). 기존 location은 실제 계산 출발점이며 지도 핀 또는 검색 좌표다. 기존 장소는 source=search/추가 필드null로 마이그레이션한다.
+- 버전은 도보/경로 근거의 유효성 기준이다. 변경 이전 place_id/version 조합은 최신 장소와 불일치하여 이후 F04/F05의 산정 재사용에서 제외해야 한다. 현재 경로/도보 저장소는 미구현이라 실제 산정 삭제/무효화 검증은 F04/F05에서 진행하며, 이번에는 버전 증가/동시 수정 충돌/동일 값 유지 및 이전 버전 거부를 검증한다.
+- 확인 결과10분 후 접근 차단/다음 확인에서 만료행 청소, 매일 청소 스케줄은 F11 후속. 일반 로그에 키/좌표/주소/출입구 설명/공급자 원문을 출력하지 않는다. 지도는 해당 위치를 카카오에 표시하며 AI에 전달하지 않는다. 보관·공급자 조건은 기존 사용자 추가 확인 생략 지시와 미검증 상태 유지.
+- UI: 지도 로딩/실패/재시도, 위치 확인 중/실패/지원지역 밖/만료, 핀 변경 시 이전 확인 제거, 저장 중 비활성,409 시 최신 장소 재조회 후 재확인, 세션 만료/화면 이탈 자료 제거와 요청 취소. 키보드 방향 버튼5m 이동 및 검색 위치로 되돌리기를 제공한다. 현재 위치 권한 요청은 F03-04 후속.
+- 호환성: 기존 API에 선택 입력과 응답 필드 추가, 신규 config/확인 API와 기존 설계 PATCH 구현. F03-01 저장 흐름과 인증/health 유지. 장소 삭제/라벨 수정은 F03-03 후속이다.
 ### 5.2 현재 위치에서 경로 검색
 `POST /api/v1/journey-searches`
 ```json
@@ -558,11 +583,11 @@ type은 departed/approach_arrived/boarded/alighted. 각 이벤트가 가리키�
 4. 루틴 저장, 여유 5분과 환승 연결 계산.
 5. 이동 이벤트, 중복 방지, 관측 품질 판정, 개인화와 과거 버전 추적.
 6. 기록 삭제·탈퇴·내보내기·모바일 화면 및 지인 테스트.
-- GET /health·공통 HTTP 오류/request_id·React 서버 연결은 구현됨. 그 외 업무 API는 미구현이다.
+- GET /health·공통 HTTP 오류/request_id·React 서버 연결, 17절 기본 회원 인증 및5.1.1절 F03-01 장소 검색/저장/본인 목록·상세는 구현됨. 장소 위치/출입구 수정과 map-config/위치 확인은5.1.2절 구현. 장소 라벨 수정/삭제·현재 위치·경로/AI/약속 API는 미구현이다.
 - [ ] 실제 OpenAPI 스키마와 요청·응답 계약 비교는 구현 후 수행한다.
 - [ ] 자동화 검증은 계산 경계값·소유권·이벤트 중복·개인화·공급자 실패를 우선한다.
 ## 10. 결정해야 할 사항
-- 메일 공급자·발송 환경과 인증 운영 제한 값 검증. 이메일 인증 API 및 삭제 영수증 조회 초안은 17절.
+- 메일 소유 확인·메일 복구와 공급자/발송 준비는 후순위. 첫 회원 인증은17절의 중복 확인·가입/로그인·세션을 따른다.
 - 운영 DB 호스팅·백업 정책, 지도·환승·실시간 도착·AI 공급자 및 지원 범위. 로컬 개발 DB는 PostgreSQL Docker로 확정.
 - 설정값 허용 상한, 검색 결과 및 작업·내보내기 결과 유효기간은 20절에 확정했다. 구현 및 경계 검증은 미완료.
 - 첫 출시 화면 내 출발 안내 포함, 백그라운드 푸시/예약 알림·자동 출발 감지는 제외(20절). 새 푸시 API 없음.
@@ -610,7 +635,7 @@ type은 departed/approach_arrived/boarded/alighted. 각 이벤트가 가리키�
 장소 삭제 시 루틴을 needs_attention으로 바꾸고 과거 안내 맥락은 기존 정책대로 유지한다. 개인 이동/회원 삭제는 관측·계수·근거·캐시·내보내기 등 파생 사본 정리를 포함한다. 약속 공동 기록의 탈퇴·삭제/보관은 16절/20절의 30일 및 개인 삭제 규칙을 따른다. 무조건 CASCADE하거나 영구 보관하지 않는다.
 ### 적용 범위
 기존 API 경로·입출력·오류 계약은 변경하지 않는다. 기존 leg_id는 경로 구간 ID로 유지하고 서버가 이동에 연결된 안내 구간을 검증한다. 현재 guidance 요청의 routine_id 필수 조건도 유지한다. 약속은 16절의 별도 안내 API 및 meeting_journey 연결 초안을 따른다. DB 설계에는 재전송 이벤트·일회용 티켓 테이블과 약속 안내 FK를 추가할 예정이며 DDL은 미적용이다.
-테이블 설계 문서와 Alembic 마이그레이션 기반(F00-05b)을 완료했다. 개발 DB에는 업무 테이블 없이 alembic_version의 0001_baseline 이력만 적용했다. 격리된 임시 스키마에서 적용·중복 적용·되돌리기·재적용을 검증했다. 실제 업무 테이블 생성과 FK/동시성/권한/삭제 테스트는 미완료다. 인증·장소부터 기능별로 생성하고 약속 테이블을 먼저 모두 만들지 않는다.
+테이블 설계와 Alembic 기반(F00-05b)을 완료했다. 개발 DB 현재 head는0004_place_map_pin(2026-10-07)이며0002_member_auth의 회원 인증5개 테이블 및 saved_places/place_searches/place_creation_keys가 적용됐고 saved_places 핀/설명 컬럼 및 place_location_confirmations를 추가했다. 기존 장소 보존·0003↔0004 왕복을 추가 검증했다. 임시 스키마에서 head 적용·중복 적용·되돌리기·재적용, 회원/장소 소유권·만료·멱등 검증을 수행했다. 나머지 경로/루틴/관측/약속 테이블은 미생성이며 관련 FK/삭제/보관 검증은 해당 기능에서 진행한다.
 ## 15. 마이그레이션 실행 기반
 2026-10-02: Alembic 1.20.0과 SQLAlchemy 2.1.1 설치 및 버전 고정. 루트 alembic.ini와 backend/migrations에서 명시적 변경 파일을 관리하고 backend/[migrate.py](http://migrate.py)로 실행한다. DB 접속 설정은 기존 비공개 .env/프로세스 설정을 재사용하며 앱 시작 시 자동 변경하지 않는다. 초기 0001_baseline은 업무 DDL이 없는 기준점이다. 상세 명령·한계는 로컬 [migrations.md](http://migrations.md)에 기록했다. 업무 테이블과 인증 방식은 별도 단계에서 확정한다.
 ## 16. 친구 약속·채팅 상세 API
@@ -1082,174 +1107,60 @@ GET /meetings/\{meeting_id\}/sync
 - [ ] 수동 출발과 자동 감지 구분, ETA 만료·공유 철회·정정 반영.
 - [ ] 삭제·탈퇴·기간 청소가 메시지 본문·개인 입력·티켓·캐시에 함께 반영.
 - [ ] 기존 루틴 안내 요청·응답의 회귀 검증과 약속 여유/탑승 여유 분리.
-## 17. 이메일·비밀번호 인증 상세 계약
-- 버전 0.1 / 2026-10-02 / 전체 미구현
-- 사용자 확정: 첫 버전은 이메일·비밀번호 로그인. 소셜 로그인은 테스트 이후 배포 확대 시 재검토하며 현재 구현 범위에서 제외한다.
-- 아래 세션·검증·제한 수치는 구현 기준으로 제안하는 설계값이다. 인증 방식 결정과 실제 인증 구현 완료를 구분한다.
-- PostgreSQL에 회원·자격정보·서버 세션을 저장한다. 로그인 상태는 HttpOnly 쿠키로 전달하며 JWT/localStorage 기반 인증은 첫 버전에 추가하지 않는다.
-- 인증 API는 기존 /api/v1 접두사와 data/meta 및 error/meta 공통 응답을 따른다.
-### 1. 입력·비밀번호·메일 정책
-- email: 문자열 최대254자. 앞뒤 공백 제거, 도메인 소문자화, 서비스 로그인 식별자는 전체 소문자로 통일하는 정책을 채택한다. 최초 입력도 표시용으로 보관하며 점/플러스 주소를 임의 병합하지 않는다. 이메일 형식 검증과 실제 소유 확인을 구분한다.
-- password: 15\~128 Unicode 코드 포인트. 공백·붙여넣기 허용, trim/조용한 절단/대소문자 변환 금지. 문자 종류 조합을 강제하지 않고 흔한/유출 비밀번호 차단 목록을 구현 시 적용한다.
-- display_name: trim 후 1\~30자.
-- Argon2id 해시와 라이브러리 생성 salt를 저장한다. 초기 최소 설정 memory=19456KiB, time_cost=2, parallelism=1을 기준으로 실제 서버에서 비용을 측정한다. 비밀번호 원문/복호화 가능한 암호문은 보관하지 않는다.
-- 이메일 확인 전 계정 상태는 pending_verification. 비밀번호가 맞으면 제한 세션을 발급하지만 장소·루틴·약속 등 업무 API는 403 EMAIL_VERIFICATION_REQUIRED. /me, 확인 메일 재요청, 확인 완료, 로그아웃, 재인증·탈퇴는 허용한다.
-- 이메일 확인 토큰은 24시간, 비밀번호 재설정 토큰은 30분 제안. 256비트 이상 난수, DB에는 해시·목적·만료·소비 시각만 저장. 서로 다른 목적의 토큰을 교차 사용하지 않는다.
-- 메일 링크는 프론트의 고정 허용 URL로만 만든다. 요청 Host 헤더를 그대로 신뢰하지 않는다. URL fragment에서 토큰을 읽어 POST 본문으로 전달하고 브라우저 주소에서 즉시 제거한다. GET 링크 접근만으로 토큰을 소비하지 않는다.
-- 확인 성공 시 기존 제한 세션을 폐기하고 로그인 화면으로 안내한다. 재설정 성공도 전체 세션·WS 티켓을 폐기하고 다시 로그인한다.
-- 메일 공급자는 아직 미정이다. 로컬 개발은 외부 발송 없는 메일 캡처 도구를 사용할 수 있으나 토큰을 일반 로그/응답에 노출하지 않는다. 전달 큐에 안전하게 접수되기 전 메일 요청을 성공처럼 표시하지 않는다.
-### 2. 세션·CSRF 계약
-- 운영 쿠키: __Host-timeisnow_session, HttpOnly, Secure, SameSite=Lax, Path=/, Domain 없음. 로컬 HTTP에서는 별도 timeisnow_dev_session 및 Secure=false를 개발 환경에만 허용한다.
-- 세션 원본은 256비트 이상 난수이며 DB에는 해시만 저장. 최대 수명7일, 미사용24시간 제안. 요청마다 서버가 만료·폐기·회원 상태를 검사한다. 무한 연장하지 않는다.
-- 로그인 시 세션 ID·CSRF 토큰 교체, 로그아웃/탈퇴/비밀번호 변경 시 폐기. /me 응답에는 세션 원문을 포함하지 않는다. 같은 계정 다중 기기는 허용하되 각각 별도 세션이다.
-- GET /auth/csrf는 세션에 묶인 csrf_token을 반환한다. 로그인 전에는 수명15분의 임시 세션을 만들며 동일 쿠키 보안 속성을 적용한다.
-- 모든 POST/PUT/PATCH/DELETE(로그인·가입·토큰 소비 포함)에 X-CSRF-Token과 허용 Origin 검증을 적용한다. CSRF 불일치는 403 CSRF_INVALID. 토큰은 프론트 메모리에만 두고 새로고침 시 재조회한다.
-- 로그인 성공 응답은 새 세션의 csrf_token을 포함한다. 이전 토큰은 재사용하지 않는다. logout 이후에도 다시 /auth/csrf부터 시작한다.
-- 프론트와 API는 운영에서 같은 origin reverse proxy, 개발은 Vite 프록시를 기본 설계로 한다. credentials 포함 요청, wildcard+credential CORS 금지.
-- 별도 refresh-token API는 만들지 않는다. 만료 시 로그인, 서버 미사용 만료 갱신은 절대 만료를 넘지 않는다.
-- 기존 WS 티켓은 auth_[sessions.id](http://sessions.id)에 연결한다. 로그아웃·세션 만료 시 연결을 4401로 닫고 티켓도 무효화한다.
-### 3. API 목록
-아래 \{\} 필드는 모두 필수이며 ?만 선택이다. 성공 열은 공통 data 내부다.
+## 17. 이메일·비밀번호 회원 인증 — 첫 버전
+사용자 변경(2026-10-06): 메일 소유 확인은 후순위다. 정규 이메일 중복만 확인해 가입시키며 이메일을 실제 소유한다고 표현하지 않는다. 가입 즉시 active, 자동 로그인 없음. 확인메일/복구메일/메일 토큰/outbox/pending 계정 및 메일 공급자 준비는 현재 구현 범위에서 제외한다.
+### 입력·저장
+- email: trim 후 최대254자, ASCII 이메일 형식, 전체 소문자 정규화. 점/플러스 주소는 합치지 않는다. DB UNIQUE로 동시 가입도 중복 방지, 중복409 EMAIL_UNAVAILABLE. 기존 회원 비밀번호를 덮어쓰지 않는다.
+- password:15\~128 Unicode 코드 포인트, 공백/붙여넣기 허용, trim/절단/대소문자 변환 금지. Argon2id(memory19456KiB/time2/parallelism1) 해시 저장. 최소 일반 비밀번호 차단 목록을 적용하며 전체 유출 목록 연동은 후순위다.
+- display_name:trim 후1\~30자. 첫 프로필:walking_preference=normal,first_boarding_buffer_seconds=300,transfer_buffer_seconds=120,route_preference=balanced,timezone=Asia/Seoul,version=1.
+- users/auth_credentials/user_profiles/auth_sessions/auth_rate_limit_buckets를 사용한다. 메일 확인 상태/토큰/메일 큐 테이블은 만들지 않는다. 회원/자격정보/프로필을 동일 트랜잭션으로 생성한다.
+### 세션과 CSRF
+- 서버 저장 세션:256비트 이상 난수, DB에는 SHA256 해시만 저장. 로그인7일 절대 만료·미사용24시간, 로그인 전 임시 세션15분. 인증 세션은 회원 active 상태를 검사한다.
+- 운영 쿠키 __Host-timeisnow_session,Secure,HttpOnly,SameSite=Lax,Path=/,Domain 없음. 개발 HTTP 쿠키 timeisnow_dev_session,Secure=false. AUTH_ENV=development/production 및 고정 AUTH_PUBLIC_ORIGIN 설정; 운영 HTTPS 필수, 개발 origin은 [localhost/127.0.0.1만](http://localhost/127.0.0.1만) 허용. 잘못된 설정/DB 장애는503 SERVICE_UNAVAILABLE.
+- GET /auth/csrf는 임시/기존 세션의 CSRF 토큰을 교체해 반환한다. CSRF 원문은 프론트 메모리에만 유지하며 서버에는 해시를 저장한다. 새로고침 시 재조회.
+- 가입/로그인/로그아웃 POST는 Origin 및 X-CSRF-Token을 검사, 실패403 CSRF_INVALID. 운영은 설정된 HTTPS Origin과 정확히 일치해야 한다. 개발은 AUTH_PUBLIC_ORIGIN에 설정된 동일 HTTP 포트의 `localhost`와 `127.0.0.1` 두 origin만 허용하며 기본80 포트 표기는 정규화한다. 다른 포트·외부 도메인·Origin 누락/null은 거절한다. CSRF 토큰·세션 쿠키 검사는 유지하며 요청 Host/전달 헤더로 허용 origin을 만들지 않는다. 로그인 시 기존 세션 삭제/새 세션·CSRF 교체, 로그아웃 시 세션 삭제/쿠키 제거.
+- 모든 인증 응답 Cache-Control:no-store, 공통 data/meta 또는 error/meta 및 요청 ID. 비밀번호/쿠키/CSRF/이메일 원문을 로그에 남기지 않는다.
+- 계정 화면의 가입·로그인·회원 조회·로그아웃 실패 안내에는 해결에 필요한 메시지만 표시하고 요청 ID는 표시하지 않는다. 요청 ID의 API 응답·클라이언트 내부 보존·서버 로그 연결은 유지한다.
+### API
 <table header-row="true">
 <tr>
 <td>방식·경로</td>
-<td>인증 / 입력</td>
-<td>결과</td>
+<td>입력</td>
+<td>성공</td>
 </tr>
 <tr>
 <td>GET /auth/csrf</td>
-<td>비로그인 가능 / 없음</td>
-<td>200 \{csrf_token:string,expires_at:datetime\}; Cache-Control:no-store</td>
+<td>없음, 비로그인 가능</td>
+<td>200 \{csrf_token,expires_at\} + 쿠키</td>
 </tr>
 <tr>
 <td>POST /auth/register</td>
-<td>임시 세션+CSRF / \{email,password,display_name\}</td>
-<td>201 \{user_id,email_verification_required:true\}. pending 회원·해시·프로필(첫 여유300초)·확인메일 큐 생성. 자동 로그인 안 함</td>
+<td>임시/기존 세션+CSRF; \{email,password,display_name\}</td>
+<td>201 \{user_id\}; active 회원, 자동 로그인 없음</td>
 </tr>
 <tr>
 <td>POST /auth/login</td>
-<td>임시/기존 세션+CSRF / \{email,password\}</td>
-<td>200 \{user_id,email_verified:bool,session_expires_at:datetime,csrf_token:string\} + Set-Cookie</td>
+<td>임시/기존 세션+CSRF; \{email,password\}</td>
+<td>200 \{user_id,session_expires_at,csrf_token\} + 새 쿠키</td>
 </tr>
 <tr>
 <td>GET /me</td>
-<td>로그인 / 없음</td>
-<td>기존 user_id,display_name,profile + email_verified:bool 추가. pending도 조회 가능</td>
+<td>로그인 쿠키</td>
+<td>200 \{user_id,display_name,profile\}; email_verified 없음</td>
 </tr>
 <tr>
 <td>POST /auth/logout</td>
-<td>CSRF / \{\}</td>
-<td>204. 세션 폐기·쿠키 제거. 유효한 CSRF 컨텍스트에서 이미 로그아웃이면 204</td>
-</tr>
-<tr>
-<td>POST /auth/email-verification-requests</td>
-<td>CSRF / \{email\}</td>
-<td>202 \{message:"해당하는 계정이 있으면 안내 메일을 보냈어요."\}. 존재/확인 여부에 동일 응답</td>
-</tr>
-<tr>
-<td>POST /auth/email-verifications</td>
-<td>임시/기존 세션+CSRF / \{token\}</td>
-<td>200 \{verified:true,login_required:true\}. 토큰 원자적 소비, 이미 확인된 사용자의 미소비 유효 토큰은 성공 처리</td>
-</tr>
-<tr>
-<td>POST /auth/password-reset-requests</td>
-<td>CSRF / \{email\}</td>
-<td>202 \{message:"해당하는 계정이 있으면 안내 메일을 보냈어요."\}. 계정 존재와 무관한 상태/문구</td>
-</tr>
-<tr>
-<td>POST /auth/password-resets</td>
-<td>임시/기존 세션+CSRF / \{token,new_password\}</td>
-<td>200 \{password_reset:true,login_required:true\}. 원자적 비밀번호 갱신·토큰 소비·전체 세션 및 나머지 복구 토큰 폐기</td>
-</tr>
-<tr>
-<td>POST /auth/reauthentications</td>
-<td>로그인+CSRF / \{password\}</td>
-<td>200 \{reauthenticated_until:datetime\}; 해당 세션에 5분 유효한 재인증 표시</td>
+<td>유효 세션+CSRF; \{\}</td>
+<td>204, 쿠키 제거. 임시 세션에서도204</td>
 </tr>
 </table>
-등록 이메일 중복은 409 EMAIL_UNAVAILABLE. 회원 존재 노출 가능성이 있는 UX 선택임을 기록하며, 비밀번호 오류/없는 계정의 로그인은 모두 401 INVALID_CREDENTIALS로 통일한다. 등록 재전송으로 기존 비밀번호를 덮어쓰지 않는다. pending 계정은 동일 정규 이메일로 중복 생성하지 않는다.
-이메일 확인은 비밀번호 재설정이 아니다. 메일을 받은 사람이 자신이 가입하지 않은 계정의 확인 링크를 승인하지 않도록 안내한다. pending 가입 보관/재가입 정리는 운영 전 별도 확정하고 기존 계정을 자동 활성화하지 않는다.
-인증 POST는 사용자 기준 Idempotency-Key 일반 규칙의 예외이며 원문 비밀번호/메일 토큰을 응답 캐시에 넣지 않는다. 계정 email unique, 토큰 1회 소비, 세션 폐기로 중복을 통제한다. 토큰 재사용/만료/존재하지 않음은 모두 400 AUTH_TOKEN_INVALID. 서버 상태 확인 후 재요청 또는 새 메일 요청으로 복구한다.
-### 4. 계정 삭제와 오류
-기존 DELETE /me는 로그인+CSRF 및 5분 이내 재인증을 요구한다. 실패는 403 REAUTHENTICATION_REQUIRED. 성공 202 \{job_id,deletion_receipt,receipt_expires_at\}. 삭제 접수와 함께 모든 로그인 세션/WS를 무효화하고 쿠키를 제거한다.
-삭제 작업에 한해 GET /jobs/\{job_id\}에 X-Deletion-Receipt 헤더를 허용한다. 수명24시간의 난수 receipt는 해당 job 조회만 허용하고 DB에는 해시로 저장한다. 이 헤더를 다른 API 인증에 사용할 수 없다. 접근 로그·반환 메타데이터에 복제하지 않는다. 만료/잘못된 영수증은 404. 원문은 삭제 응답에서 한 번만 제공하며 클라이언트 메모리에서만 관리한다. 새로고침 후 복구가 필요하면 별도 사용자 지원 흐름을 검토한다.
-<table header-row="true">
-<tr>
-<td>HTTP</td>
-<td>code</td>
-<td>처리</td>
-</tr>
-<tr>
-<td>401</td>
-<td>INVALID_CREDENTIALS</td>
-<td>이메일 또는 비밀번호를 확인해주세요</td>
-</tr>
-<tr>
-<td>401</td>
-<td>AUTH_REQUIRED / SESSION_EXPIRED</td>
-<td>로그인 필요/재로그인</td>
-</tr>
-<tr>
-<td>403</td>
-<td>CSRF_INVALID / EMAIL_VERIFICATION_REQUIRED / REAUTHENTICATION_REQUIRED</td>
-<td>CSRF 재조회/메일 확인/비밀번호 재확인</td>
-</tr>
-<tr>
-<td>409</td>
-<td>EMAIL_UNAVAILABLE</td>
-<td>해당 이메일로 가입할 수 없음, 로그인·복구 안내</td>
-</tr>
-<tr>
-<td>400</td>
-<td>AUTH_TOKEN_INVALID</td>
-<td>토큰 만료/사용됨/잘못됨 통일</td>
-</tr>
-<tr>
-<td>422</td>
-<td>VALIDATION_ERROR</td>
-<td>형식·길이 오류, 비밀번호 입력값을 details에 반사하지 않음</td>
-</tr>
-<tr>
-<td>429</td>
-<td>RATE_LIMITED</td>
-<td>Retry-After 후 재시도</td>
-</tr>
-<tr>
-<td>503</td>
-<td>AUTH_DELIVERY_UNAVAILABLE</td>
-<td>메일 큐/발송 서비스 접수 불가. 계정 존재와 무관하게 같은 서비스 상태 적용</td>
-</tr>
-</table>
-로그인 속도 제한 초기값: 정규 이메일의 키 해시당 5회 실패/15분 + IP당30회/15분. 영구 계정 잠금은 하지 않는다. 가입은 IP당5회/시간, 메일 요청은 이메일 키당3회/시간 및 IP당20회/시간 제안. 분산 서버에서도 공통 제한 저장소가 필요하며 구현 전 선택한다. 메일 요청은 균일한 응답 경로를 사용하고 외부 발송을 동기 대기하지 않는다.
-### 5. 저장 테이블
-<table header-row="true">
-<tr>
-<td>테이블</td>
-<td>주요 필드·관계</td>
-</tr>
-<tr>
-<td>auth_credentials</td>
-<td>user_id PK/FK(users), email_normalized UNIQUE, email_display, password_hash, email_verified_at?, password_changed_at, version</td>
-</tr>
-<tr>
-<td>auth_sessions</td>
-<td>id, user_id? FK(users), token_hash UNIQUE, csrf_token_hash, created_at,last_seen_at,absolute_expires_at,idle_expires_at,revoked_at?,reauthenticated_until?. user_id NULL은 임시 로그인 전 세션</td>
-</tr>
-<tr>
-<td>auth_action_tokens</td>
-<td>id,user_id FK, purpose:verify_email/reset_password, token_hash UNIQUE, expires_at,consumed_at?</td>
-</tr>
-<tr>
-<td>auth_mail_outbox</td>
-<td>id,user_id?,kind,encrypted_payload,status,created_at,expires_at,sent_at?,attempt_count. 원문 토큰은 발송에 필요한 짧은 기간만 암호화 보관 후 제거</td>
-</tr>
-</table>
-회원 users의 상태 pending_verification/active/deleting 등을 인증 처리에서 검증한다. 일반 로그에 이메일 원문·비밀번호·쿠키·토큰·메일 본문·암호화 키를 기록하지 않는다. 임시/만료 세션과 소비/만료 토큰은 정기 청소한다. 가입/메일 요청 실패 시 트랜잭션 처리와 재전송으로 유령 계정·중복 발송을 통제한다. 회원 삭제 시 위 개인 인증 데이터도 정리하고 삭제 영수증은 jobs의 별도 만료 수명으로 관리한다.
-소셜 auth_identities, OAuth 콜백·공급자 버튼은 이번 테이블/API 범위에서 제외한다. 추후 도입 시 이메일 일치만으로 계정을 자동 병합하지 않고 별도 계정 연결 계약을 만든다.
-### 6. 진행 상태와 다음 결정
-D01은 이메일·비밀번호 방식 및 관련 API 설계 문서 작성으로 완료 처리한다. 세션 수명·제한 값은 구현 시 검증 가능한 설계 기본값이며 성능·운영 요구에 따라 명세와 함께 조정한다. 인증 기능 F02, 인증 테이블 DDL, 메일 공급자/발송 설정과 운영 보관 정책은 미완료다.
-다음 착수 전 결정은 D02(지원 지역·지도/교통/AI 공급자)다. 구현 단계로 건너뛰지 않는다. 메일 공급자 선택은 F02 구현 전 의존 작업으로 별도 TODO에 남긴다.
-설계 참고: [OWASP 비밀번호 저장](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html), [인증](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html), [비밀번호 재설정](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html).
+이메일 중복409 EMAIL_UNAVAILABLE, 없는 회원/잘못된 비밀번호401 INVALID_CREDENTIALS, 로그인 없음401 AUTH_REQUIRED, 만료401 SESSION_EXPIRED, 잘못된 입력422 VALIDATION_ERROR, 요청 제한429 RATE_LIMITED/Retry-After. 인증 POST는 일반 Idempotency-Key 응답 캐시에서 제외한다.
+### 요청 제한·후순위
+PostgreSQL 공통 버킷에 목적별 HMAC-SHA256(email/IP)만 저장하고 고정 UTC 창·행 잠금으로 동시 요청을 처리한다. AUTH_RATE_LIMIT_SECRET은32자 이상 별도 서버 비밀값. 가입IP5회/시간, 로그인IP30회 시도/15분·이메일5회 실패/15분. 창 만료 버킷은 인증 요청 시 정리, 영구 잠금 없음. 일반 로그에 버킷 키도 남기지 않는다.
+메일 소유 확인·메일 복구·재인증·DELETE /me의 실제 인증/삭제 구현은 후속이다. 기존 삭제 영수증24시간·삭제 접수202 계약은 유지한다. 현재 메일 확인을 요구하는 업무 접근 차단은 적용하지 않는다. first release는 회원 중복 확인/가입·로그인·/me·로그아웃까지다.
+### 구현 상태
+F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 저장 구현 완료. PostgreSQL 마이그레이션과 임시 스키마 통합 검증·React 계정 폼·데스크톱1440×900/모바일390×844 실제 화면 확인. 로그인/로그아웃·중복409/요청 ID 확인. 메일 관련 준비 파일·Compose 서비스는 복구/제거, F02-00 메일 인증 준비는 후순위다. 첫 가입의 이메일 소유 확인·복구·업무 데이터 API는 미구현. 사용자가 검토 후 MR 생성/병합한다.
+- 실제 최종 검증: 백엔드56개(인증15개·마이그레이션 왕복 포함)·프론트25개 및 빌드/pip check 통과. 임시 auth_test/migration_test 스키마 정리, 브라우저용 합성 계정 삭제 확인. 실제 `.env` 키 비노출/Git 제외. 개발 DB head=0002_member_auth. StrictMode 재마운트와 DB에서 읽은 쿠키 만료시각 UTC 변환 오류를 실제 화면에서 발견해 수정/회귀 검증.
 ## 18. 지원 지역 및 공급자 검토 (2026-10-06)
 - 사용자 확정: 첫 지원 지역은 서울특별시·경기도. 인천은 자동 포함하지 않는다. AI 공급자는 OpenAI, 모델은 GPT-5.6 Luna (`gpt-5.6-luna`)로 사용자 확정(2026-10-06).
 - 사용자 확정(2026-10-06): 카카오맵을 사용한다. 지도·장소 검색·대중교통·도보 경로 연동은 카카오맵 기준으로 검증한다. 선정 결정과 실제 응답·지원 범위·ID 매핑·저장/AI 전달 조건 검증 완료는 구분한다.
@@ -1320,7 +1231,7 @@ D01은 이메일·비밀번호 방식 및 관련 API 설계 문서 작성으로 
 - 오전/오후 없는 시각, 이번/다음 요일의 모호함, 출발/도착 불명확, 과거 시각, 존재하지 않는 날짜, 지원하지 않는 반복은 clarification_required. 숫자를 임의 보완하지 않는다.
 - 목적지 검색어는 장소 ID가 아니다. 검색 후보 선택 및 본인 저장 장소 소유권 검증 후 기존 저장 API로 전달한다. 기존 루틴은 목표 도착 시각 중심이므로 depart_at 입력은 그대로 저장하지 않고 미지원 안내 또는 목표 도착 입력 보완으로 처리한다.
 ### API 설계 초안
-- 신규 POST /api/v1/schedule-interpretations. 로그인·이메일 확인·CSRF 및 공통 응답/요청 추적 규칙 적용. 일정 저장 API와 분리한다.
+- 신규 POST /api/v1/schedule-interpretations. 로그인·CSRF 및 공통 응답/요청 추적 규칙 적용. 일정 저장 API와 분리한다.
 - 입력: text(1\~1000자 확정), timezone(IANA), target_type(routine/meeting), 선택 clarification_context. 후속 문장은 전체 문맥으로 다시 제출한다. clarification_context는 서버 서명된 최초 reference_at·사용자·만료값으로 제한하며 임의 클라이언트 시각을 신뢰하지 않는다. 유효기간10분 확정.
 - 200 data: status(ready_for_review/clarification_required/unsupported), reference_at, timezone, clarification_context, draft, missing_fields, questions, warnings. ready_for_review는 저장 완료를 뜻하지 않는다.
 - draft: date(YYYY-MM-DD 또는 null), local_time(HH:mm 또는 null), time_basis(arrive_by/depart_at/unknown), recurrence(null 또는 frequency=weekly, weekdays=ISO 1\~7, start_date, end_date 선택), destination_query(string 또는 null). 불확실한 필드는 null/unknown과 질문으로 반환한다.
@@ -1338,7 +1249,7 @@ D01은 이메일·비밀번호 방식 및 관련 API 설계 문서 작성으로 
 - 활성 화면 도착정보 정기 조회60초, 비활성 정기 조회 중지·첫 진입/탭 복귀 조회. 출발 권고의 교통 근거는 수신후120초 및 검증된 생성시각후120초 중 이른 기한까지 유효. 경계120초 유효, 초과 중지. 미래/잘못된 생성시각 또는 원천 unknown을 최신으로 확정하지 않는다. 120초는 앱 만료 정책이며 공급자 정확도 보장이 아니다.
 - 첫 탑승 여유 기본300초·환승 여유 기본120초, 각각 정수0\~1800초. 첫 출시 최대환승2회. 개인화 계수 초기1.0·지원 범위0.5\~2.0과 기존5개/최근20개 점진 학습 유지.
 - 장소검색 결과10분·여정검색 결과5분. 여정의 차량 근거는 별도120초 유효 및 선택 시 재검사. 작업 성공/실패 결과는 종료후24시간, 내보내기 파일24시간·본인 인증 다운로드 링크10분. 만료 결과 조회404 RESOURCE_NOT_FOUND. 계정 삭제 영수증24시간 유지.
-- 목록 기본20/최대100·멱등 결과24시간·자연어 입력1\~1000자/서명 컨텍스트 최초발급10분 확정. 기존 소유권/참여 권한·버전·날짜 검증 유지. 세션/메일 제한 계약은17절 유지, 메일 공급자는F02-00에서 선정.
+- 목록 기본20/최대100·멱등 결과24시간·자연어 입력1\~1000자/서명 컨텍스트 최초발급10분 확정. 기존 소유권/참여 권한·버전·날짜 검증 유지. 첫 회원 인증/세션/요청 제한은17절, 메일 인증/발송 준비는 후순위다.
 - 실행 로그14일, 개인 이동/품질 이력90일, 장소/루틴/현재 프로필은 삭제/탈퇴까지 유지. 원문/키/상세 위치 일반 로그 제외. 표본/관측/산정 연결 이력은 함께 청소하고 과거 예측을 덮어쓰지 않는다.
 - 만료 사용/노출 즉시 차단·기간 청소 매일. 명시 삭제/탈퇴는 즉시 접근 차단 및 기존202 작업으로 사본 정리, 완료 목표24시간·실패 재시도/failed 표시. 향후 백업 최대7일 순환·복원 시 삭제 기록 재적용. 실제 청소/백업 실행은 미구현이다.
 ### D04 첫 출시 알림
@@ -1350,11 +1261,17 @@ D01은 이메일·비밀번호 방식 및 관련 API 설계 문서 작성으로 
 - 공동 약속/채팅은 completed/cancelled 후30일. draft 마지막 사용자 변경후30일 미사용 삭제. confirmed 목표시각6시간 후 completed 자동 정리하되 실제 참석/도착 판정 아님. 재전송 이력24시간. 본인 약속탈퇴 시 개인 입력/공유 종료·정리, 기존 공동 메시지는 탈퇴한 참여자로 표시. 계정탈퇴는 본인 메시지 본문도 삭제, 주최자 탈퇴는 취소 후 다른 활성 참여자30일 열람. 개인 trip은 연결해제후90일 정책.
 ### 계약 영향·완료 기준
 - 기존 경로/응답 객체 유지, 설정 상한·만료·공유 ETA120초·자동 종료/삭제·출시 알림 범위가 변경/확정됐다. 아직 서비스가 미구현이므로 배포된 클라이언트 마이그레이션 없음. 422/404/409 등 기존 오류 사용, 소유권·동시 수락·기한 경계·삭제 사본 검증은 구현 시 수행한다.
-- D03·D04·D05 결정/문서와 F00-03 공통 호출/ID·F00-04 최소 요청 로그 완료, 핵심 서비스 기능은 미완료. 사용자 요청(2026-10-06)으로 F01 데이터 공급자 검증 단계를 작업 목록에서 삭제했다. 다음은 F02-00 회원가입·로그인 구현을 위한 메일 공급자·발송 설정·제한 저장소·미확인 가입 보관 정책 확정이다. 기존 공급자 연결 결과와 미확인 범위는 이력으로 유지한다. 공급자 응답 변환/오류 처리는 필요한 서비스 기능 연동에 포함하며 별도 선행 검증 단계로 진행하지 않는다.
+- 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회/위치 수정 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. 사용자 검토 후 codex/place-map-pin 브랜치 MR/병합, F03-01\~02 완료, 다음 F03-03 라벨 수정/삭제 및 연결 데이터 처리.
 ## 변경 이력
+- 2026-10-07 v0.36: F03-02 지도 설정/위치 확인·본인 장소 PATCH·사용자 출입구 설명·장소 버전 동시성 계약 구체화. 서울/경기 확인600초·원래 주소와 핀 법정동 구분. 기존 생성 선택 필드/응답 필드 추가로 F03-01 호환 유지. 실제 산정 무효화는 F04/F05 후속.
+- 2026-10-07 v0.35: F03-01 검색 후보/소유권/10분 만료·생성 멱등/24시간·주소/키워드 및 지원지역·오류·목록 계약 구체화. 미구현 장소 생성에 검색/후보 ID 필수, 이름/주소 응답 추가. 기존 인증/health 호환성 영향 없음. 구현/검증 상태는 [todo.md](http://todo.md) 및5.1.1절을 따른다.
+- 2026-10-07 v0.34: 사용자 요청으로 계정 오류 화면의 문의용 요청 ID를 숨긴다. 가입 입력 안내와 재시도 유지. API 경로·응답·서버 로그 및 기존 클라이언트 호환성 영향 없음.
 - 2026-10-06 v0.28: F00-04 최소 JSON 요청 완료/예상 밖 오류 로그·필드 허용 목록·템플릿/미매칭 경로·LOG_LEVEL/실행 안내 추가. 기존 API 입력/성공/오류/ID 유지, 수집/보관 작업은 배포 단계. 민감정보/원문 스택 출력 없음.
 - 2026-10-06 v0.29: 사용자 요청으로 F01-01 대표 사례 선정/검증 목록 정리를 작업 목록에서 삭제하고 다음 작업을 F01-02로 갱신. 기존 API 계약·계산 정책·클라이언트 호환성 변경 없음.
 - 2026-10-06 v0.30: 사용자 요청으로 F01 데이터 공급자 검증 단계를 TODO·기능 목록에서 삭제하고 다음 작업을 F02-00으로 갱신. 기존 연결 이력은 보존, 응답 변환/오류 처리는 기능 연동에 포함. API 경로·필드·계산 정책·클라이언트 호환성 변경 없음.
+- 2026-10-06 v0.31: F02-00 로컬 Mailpit/운영 Resend SMTP·고정 링크 origin·PostgreSQL HMAC 제한 버킷·pending 계정7일 정리 정책 선정. 인증 기능/운영 발송 미구현과 구분. 기존 API 경로/성공 응답 유지, 제한/보관 구현 기준 구체화.
+- 2026-10-06 v0.32: 사용자 요청으로 v0.31 메일 준비 결정을 철회하고 메일 소유 확인/복구를 후순위로 이동. 가입 즉시active·중복409·확인 관련 응답/상태/테이블 제외, 세션/CSRF/기본 프로필/요청 제한 유지. 미구현 인증 계약의 필드 제거이므로 클라이언트는 새17절을 따른다.
+- 2026-10-06 v0.33: 사용자가 [localhost:5173](http://localhost:5173)으로 앱을 열어 개발 설정127.0.0.1:5173과 Origin이 달라403 CSRF_INVALID가 발생한 문제 수정. 개발 동일 포트 loopback 두 주소만 호환, 운영 정확한 origin·CSRF/쿠키 유지. API 경로/필드/응답 변경 없음.
 - 2026-10-06 v0.27: F00-03 공통 클라이언트/서버 request_id 및404/405/422/500 오류 형식 구현 계약 기록. health 경로/성공 객체 유지, 기존 기본 오류 응답을 공통 error/meta로 맞춤. 405 METHOD_NOT_ALLOWED 명시, 초기 클라이언트만 영향·업무 기능 미구현.
 - 2026-10-06 v0.26: 사용자 위임으로 D03 시간/설정/보관·D04 첫 출시 화면 안내·D05 2인 약속/공유/삭제 정책 확정. 60초 조회 유지·120초 만료/ETA, 기존 제안 수치 채택 및 미사용/종결 청소 정의. API 경로/객체 유지, 향후 검증/계산/보관 동작 영향·미구현·배포 클라이언트 영향 없음.
 - 2026-10-06 v0.25: 출발 안내 시각 이후 접근 시간의 절반 초과·출발 확인 없음이면 다음 이용 가능한 차량 기준으로 안내 재계산하는 사용자 요구 반영. 기존 departed 이벤트/60초 정기 조회/환승 검증 유지, 데이터 만료와 구분. API 필드 변경 없으며 향후 후보 선택 동작 변경, 미구현.

@@ -27,7 +27,7 @@ async def request(path, method="GET", query=b"", headers=None, body=b""):
     await asyncio.wait_for(app(scope, receive, send), timeout=3)
     start = next(item for item in messages if item["type"] == "http.response.start")
     raw = b"".join(item.get("body", b"") for item in messages if item["type"] == "http.response.body")
-    return start["status"], dict(start["headers"]), json.loads(raw)
+    return start["status"], dict(start["headers"]), json.loads(raw) if raw else None
 
 
 class ApiContractTests(unittest.IsolatedAsyncioTestCase):

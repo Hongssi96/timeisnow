@@ -1,6 +1,12 @@
 # 백엔드 실행 환경
 
-F00-01~04 기반 구현 완료: 상태 API·요청 ID·공통 HTTP 오류 및 React 연결, JSON 요청 완료/예상 밖 오류 로그. 인증/업무 API는 미구현이다. PostgreSQL은 health 요청과 분리하며 [DB 안내](../database.md)를 참고한다.
+개발 앱은 http://localhost:5173 또는 http://127.0.0.1:5173으로 열 수 있다. AUTH_PUBLIC_ORIGIN의 같은 포트에서만 두 loopback 주소를 허용하며 운영은 설정한 HTTPS origin과 정확히 일치해야 한다. CSRF 토큰/세션 쿠키 검증은 양쪽 모두 적용한다.
+
+F00-01~04 및 기본 회원 인증 구현 완료. 상태 API·요청 ID·공통 HTTP 오류·JSON 요청 로그와 React 연결을 제공한다. 경로/현재 위치/약속 API는 미구현이다. PostgreSQL은 health 요청과 분리하며 [DB 안내](../database.md)를 참고한다.
+
+F03-01(2026-10-07): POST /place-searches, POST /places, GET /places 및 GET /places/{place_id} 구현. 실행 전 `backend/.venv/Scripts/python.exe backend/migrate.py upgrade head`로0003_saved_places 적용. KAKAO_REST_API_KEY는 서버 .env에만 저장한다. [place_api.md](../place_api.md)의 후보/만료/멱등·오류 계약을 따른다. 장소 수정/삭제·지도 핀·현재 위치·경로/약속 API는 후속이다.
+
+2026-10-06 기본 회원 인증 구현: GET /auth/csrf, POST /auth/register·login·logout, GET /me. 이메일 중복만 확인하며 메일 인증/복구는 후순위다. 실행 전에 DB와0004_place_map_pin 마이그레이션을 준비한다. `.env.example`의 AUTH_ENV/AUTH_PUBLIC_ORIGIN 및32자 이상 독립 난수 AUTH_RATE_LIMIT_SECRET을 로컬 `.env`에 설정한다(기존 .env 덮어쓰기 금지). 운영은 HTTPS origin·Secure 쿠키를 사용한다. health는 DB/인증 설정 없이 계속 동작한다. 장소 API는 아래 F03-01 범위를 따른다.
 Python 3.13.1에서 FastAPI 0.142.2 / Uvicorn 0.54.0을 설치했고 전체 의존성 버전을 requirements.txt에 고정했다.
 
 프로젝트 루트에서 PowerShell로 실행한다. 가상환경 활성화 없이 전용 Python 경로를 직접 사용한다.
@@ -22,9 +28,11 @@ python -m venv backend/.venv
 
 프론트는 별도 터미널에서 `cd C:\projects\timeisnow\frontend` 후 `npm run dev`로 실행한다. 기존 npm 잠금 파일을 유지한다. 앱 진입점 실행에는 DB 접속이 필수가 아니며 DB 검증은 check_db.py로 별도 실행한다.
 
-DB 변경은 [마이그레이션 안내](../migrations.md)의 migrate.py로 실행한다. 현재는 빈 0001_baseline만 적용했다.
+DB 변경은 [마이그레이션 안내](../migrations.md)의 migrate.py로 실행한다. 현재는0004_place_map_pin까지 적용했다.
 
 ## 환경 변수와 로그 확인
+
+F03-02: GET /map-config, POST /place-location-confirmations 및 PATCH /places/{place_id} 추가. 최신 head는0004_place_map_pin, 기존 장소 보존. KAKAO_JAVASCRIPT_KEY는 등록 도메인 제한용 공개 SDK 키이며 로그인된 /map-config로 전달한다. KAKAO_REST_API_KEY는 서버에서만 사용한다. 카카오 앱에서 지도 API 활성화/localhost:5173 및127.0.0.1:5173 SDK 도메인 등록 필요. 지도 핀·소유권/600초/버전409 계약은 [place_api.md](../place_api.md). 서버 코드를 바꾼 후 개발 백엔드를 재시작해야 새 API가 적용된다.
 
 루트 `.env.example`은 빈 공급자 키와 예시 DB/AI URL을 담는다. 기존 `.env`를 덮어쓰지 않는다. 새 체크아웃에서 `.env`가 없을 때만 다음을 실행하고 발급받은 값을 로컬 파일에 입력한다.
 

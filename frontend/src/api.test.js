@@ -9,6 +9,18 @@ const response = (status = 200, body = { data: { status: 'ok' }, meta }, id = 'r
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('공통 API 응답과 실패 처리', () => {
+  it('가입 입력 오류는 허용된 필드만 고정 문구로 안내한다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => response(422, { error: { code: 'VALIDATION_ERROR', message: 'private-input', details: [
+      { field: 'body.password', reason: 'private-password' },
+      { field: 'body.private-input', reason: 'private-input' },
+      { field: { raw: 'private-input' } },
+      { field: 'body.password', reason: 'another-private-input' },
+    ] }, meta })));
+    const error = await apiRequest('/api/v1/auth/register').catch(error => error);
+    expect(error.fields).toEqual(['body.password']);
+    expect(error.message).toContain('15~128자');
+    expect(error.message).not.toContain('private');
+  });
   it('JSON 본문과 전달받은 요청 헤더를 유지한다', async () => {
     const fetchMock = vi.fn(async () => response()); vi.stubGlobal('fetch', fetchMock);
     await apiRequest('/api/v1/place-searches', { method: 'POST', body: { query: 'public example' }, headers: new Headers({ 'X-CSRF-Token': 'test-csrf' }) });

@@ -16,7 +16,7 @@
 - 오전/오후 없는 시각, 이번/다음 요일의 모호함, 출발/도착 불명확, 과거 시각, 존재하지 않는 날짜, 지원하지 않는 반복은 clarification_required. 숫자를 임의 보완하지 않는다.
 - 목적지 검색어는 장소 ID가 아니다. 검색 후보 선택 및 본인 저장 장소 소유권 검증 후 기존 저장 API로 전달한다. 기존 루틴은 목표 도착 시각 중심이므로 depart_at 입력은 그대로 저장하지 않고 미지원 안내 또는 목표 도착 입력 보완으로 처리한다.
 ### API 설계 초안
-- 신규 POST /api/v1/schedule-interpretations. 로그인·이메일 확인·CSRF 및 공통 응답/요청 추적 규칙 적용. 일정 저장 API와 분리한다.
+- 신규 POST /api/v1/schedule-interpretations. 로그인·CSRF 및 공통 응답/요청 추적 규칙 적용. 메일 소유 확인은 후순위다. 일정 저장 API와 분리한다.
 - 입력: text(1~1000자 확정), timezone(IANA), target_type(routine/meeting), 선택 clarification_context. 후속 문장은 전체 문맥으로 다시 제출한다. clarification_context는 서버 서명된 최초 reference_at·사용자·만료값으로 제한하며 임의 클라이언트 시각을 신뢰하지 않는다. 유효기간10분 확정.
 - 200 data: status(ready_for_review/clarification_required/unsupported), reference_at, timezone, clarification_context, draft, missing_fields, questions, warnings. ready_for_review는 저장 완료를 뜻하지 않는다.
 - draft: date(YYYY-MM-DD 또는 null), local_time(HH:mm 또는 null), time_basis(arrive_by/depart_at/unknown), recurrence(null 또는 frequency=weekly, weekdays=ISO 1~7, start_date, end_date 선택), destination_query(string 또는 null). 불확실한 필드는 null/unknown과 질문으로 반환한다.

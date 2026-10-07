@@ -4,8 +4,18 @@ const messages = {
   TIMEOUT: '응답이 늦어 확인을 중지했어요. 잠시 후 다시 시도해주세요.',
   INVALID_RESPONSE: '서버 응답을 확인할 수 없어요. 다시 시도해주세요.',
   AUTH_REQUIRED: '로그인이 필요해요.',
+  INVALID_CREDENTIALS: '이메일 또는 비밀번호를 확인해주세요.',
+  EMAIL_UNAVAILABLE: '이미 가입된 이메일이에요. 로그인해주세요.',
+  CSRF_INVALID: '화면을 새로고침하고 다시 시도해주세요.',
+  SERVICE_UNAVAILABLE: '인증 서버에 연결할 수 없어요. 잠시 후 다시 시도해주세요.',
   SESSION_EXPIRED: '로그인이 만료됐어요. 다시 로그인해주세요.',
   RESOURCE_NOT_FOUND: '요청한 정보를 찾을 수 없어요.',
+  PROVIDER_UNAVAILABLE: '장소 검색에 연결할 수 없어요. 잠시 후 다시 검색해주세요.',
+  PROVIDER_RESPONSE_INVALID: '검색 결과를 확인할 수 없어요. 다시 검색해주세요.',
+  IDEMPOTENCY_CONFLICT: '저장 요청이 변경됐어요. 선택한 장소를 다시 확인해주세요.',
+  VERSION_CONFLICT: '장소가 변경됐어요. 최신 위치를 다시 확인해주세요.',
+  UNSUPPORTED_REGION: '서울·경기 안에서 위치를 선택해주세요.',
+  MAP_UNAVAILABLE: '지도를 불러올 수 없어요. 잠시 후 다시 시도해주세요.',
   METHOD_NOT_ALLOWED: '이 요청을 처리할 수 없어요.',
   VALIDATION_ERROR: '입력값을 확인해주세요.',
   RATE_LIMITED: '요청이 많아요. 잠시 후 다시 시도해주세요.',
@@ -14,12 +24,21 @@ const messages = {
 };
 
 export class ApiError extends Error {
-  constructor(code, { status = 0, requestId = null } = {}) {
-    super(messages[code] || messages.HTTP_ERROR);
+  constructor(code, { status = 0, requestId = null, fields = [] } = {}) {
+    const fieldMessages = {
+      'body.email': '이메일 형식을 확인해주세요. 예: name@example.com',
+      'body.password': '비밀번호는 15~128자여야 하며, 흔한 비밀번호는 사용할 수 없어요.',
+      'body.display_name': '이름은 앞뒤 공백을 제외하고 1~30자로 입력해주세요.',
+    };
+    const safeFields = [...new Set(Array.isArray(fields) ? fields.filter(field => typeof field === 'string' && Object.hasOwn(fieldMessages, field)) : [])];
+    super(code === 'VALIDATION_ERROR' && safeFields.length
+      ? safeFields.map(field => fieldMessages[field]).join(' ')
+      : messages[code] || messages.HTTP_ERROR);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
     this.requestId = requestId;
+    this.fields = code === 'VALIDATION_ERROR' ? safeFields : [];
   }
 }
 
@@ -69,7 +88,8 @@ export async function apiRequest(path, { signal, timeoutMs = 10000, body: input,
     if (!response.ok) {
       const code = typeof body?.error?.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(body.error.code)
         ? body.error.code : 'HTTP_ERROR';
-      throw new ApiError(code, { status, requestId });
+      const fields = Array.isArray(body?.error?.details) ? body.error.details.map(detail => detail?.field) : [];
+      throw new ApiError(code, { status, requestId, fields });
     }
     if (!body || !Object.hasOwn(body, 'data') || !bodyId || !isServerTime(body.meta.server_time)) {
       throw new ApiError('INVALID_RESPONSE', { status, requestId });
