@@ -1,6 +1,6 @@
 # 지금이니? — 기본 회원 인증 계약
 
-- 버전0.4 / 2026-10-06 / Notion v0.33 기준
+- 버전0.5 / 2026-10-07 / Notion v0.34 기준
 - 메일 인증은 후순위, 개발 loopback 주소 호환 및 운영 origin 검증을 유지한다.
 
 ## 17. 이메일·비밀번호 회원 인증 — 첫 버전
@@ -16,6 +16,7 @@
 - GET /auth/csrf는 임시/기존 세션의 CSRF 토큰을 교체해 반환한다. CSRF 원문은 프론트 메모리에만 유지하며 서버에는 해시를 저장한다. 새로고침 시 재조회.
 - 가입/로그인/로그아웃 POST는 Origin 및 X-CSRF-Token을 검사, 실패403 CSRF_INVALID. 운영은 설정된 HTTPS Origin과 정확히 일치해야 한다. 개발은 AUTH_PUBLIC_ORIGIN에 설정된 동일 HTTP 포트의 `localhost`와 `127.0.0.1` 두 origin만 허용하며 기본80 포트 표기는 정규화한다. 다른 포트·외부 도메인·Origin 누락/null은 거절한다. CSRF 토큰·세션 쿠키 검사는 유지하며 요청 Host/전달 헤더로 허용 origin을 만들지 않는다. 로그인 시 기존 세션 삭제/새 세션·CSRF 교체, 로그아웃 시 세션 삭제/쿠키 제거.
 - 모든 인증 응답 Cache-Control:no-store, 공통 data/meta 또는 error/meta 및 요청 ID. 비밀번호/쿠키/CSRF/이메일 원문을 로그에 남기지 않는다.
+- 계정 화면의 가입·로그인·회원 조회·로그아웃 실패 안내에는 해결에 필요한 메시지만 표시하고 요청 ID는 표시하지 않는다. 요청 ID의 API 응답·클라이언트 내부 보존·서버 로그 연결은 유지한다.
 ### API
 <table header-row="true">
 <tr>

@@ -25,7 +25,7 @@ describe('실제 계정 폼', () => {
     expect(await screen.findByText('비밀번호는 15~128자여야 하며, 흔한 비밀번호는 사용할 수 없어요.')).toBeTruthy();
     expect(screen.getByLabelText('비밀번호').getAttribute('aria-invalid')).toBe('true');
     expect(screen.getByLabelText('비밀번호').getAttribute('aria-describedby')).toBe('account-feedback');
-    expect(screen.getByText('req_validation')).toBeTruthy();
+    expect(screen.queryByText('req_validation')).toBeNull();
   });
   it('StrictMode 재마운트에서도 계정 확인 로딩이 끝난다', async () => {
     apiRequest.mockRejectedValue(new ApiError('AUTH_REQUIRED'));
@@ -45,7 +45,7 @@ describe('실제 계정 폼', () => {
     expect(screen.getByRole('button', { name: '로그인하기' })).toBeTruthy();
     expect(apiRequest.mock.calls[2][1].headers['X-CSRF-Token']).toBe('csrf_test');
   });
-  it('중복 가입 오류와 요청 ID를 표시한다', async () => {
+  it('중복 가입 오류를 안내하고 요청 ID는 표시하지 않는다', async () => {
     const u=await open(); await u.click(screen.getByRole('button', { name: '회원가입' }));
     await u.type(screen.getByLabelText('이메일'),'member@example.invalid');
     await u.type(screen.getByLabelText('이름'),'테스트');
@@ -53,7 +53,8 @@ describe('실제 계정 폼', () => {
     apiRequest.mockResolvedValueOnce(reply({ csrf_token: 'csrf_test' })).mockRejectedValueOnce(new ApiError('EMAIL_UNAVAILABLE',{requestId:'req_duplicate'}));
     await u.click(screen.getByRole('button', { name:'계정 만들기' }));
     expect(await screen.findByText('이미 가입된 이메일이에요. 로그인해주세요.')).toBeTruthy();
-    expect(screen.getByText('req_duplicate')).toBeTruthy();
+    expect(screen.queryByText('req_duplicate')).toBeNull();
+    expect(screen.queryByText(/문의용 요청 ID/)).toBeNull();
   });
   it('로그인과 로그아웃을 연결한다', async () => {
     const u=await open(); await u.type(screen.getByLabelText('이메일'),'member@example.invalid');
