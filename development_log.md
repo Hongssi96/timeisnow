@@ -4,6 +4,16 @@
 
 ## 실제 기록
 
+### 2026-10-07 — F02-01 계정 오류 요청 ID 비노출
+- 사용자 요청: 회원가입 실패 시 request 식별자를 사용자에게 표시하지 않는다.
+- 최신 main(928af7c, 회원 인증 병합)에서 codex/auth-error-message 생성. AccountForm.jsx의 문의용 ID 행 제거, 입력 조건·중복 오류·재시도·접근성 유지. 계정 폼 전체에 동일 표현 적용.
+- 변경 파일: AccountForm.jsx/기존 테스트, api_contract.md/auth_api.md, screen_plan.md/design_guide.md/logging.md, todo.md/feature_breakdown.md, 본 일지.
+- 명세: 최신 Notion v0.33 확인 → v0.34 계정 화면 비노출 정책과 변경 이력 저장 → 재조회 확인, 전체 본문 api_contract.md 동기화. API 응답·ApiError 내부 ID·서버 로그는 유지하며 백엔드 계약/코드 변경 없음.
+- 검증: 프론트 테스트27개 및 빌드 통과. 기존 입력 오류/중복 오류 검증을 요청 ID 비노출 요구로 갱신. 실제 localhost 가입 폼에서 합성 입력과 차단된 비밀번호로 실패 안내 확인(회원 생성 없음), 데스크톱1440×900·모바일390×844 오류 문구/입력/재시도와 ID 비노출 확인. 임시 뷰포트 원복. 백엔드 변경이 없어 백엔드 테스트 재실행 없음.
+- 배운 개념: 개발용 요청 추적 식별자를 API/로그에 보존하는 것과 사용자 화면에 표시하는 것은 별개다. 오류 화면은 해결 가능한 안내를 중심으로 구성한다.
+- 완료: F02-01의 오류 표현 수정. 다음: 사용자 브랜치 검토·MR/병합 후 F03-01 고정 장소 검색·저장. 메일 인증/복구 후순위 유지.
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
 ### 2026-10-06 — localhost 회원가입 CSRF 차단 수정
 - 증상/근거: 사용자 화면의 req_7634d878dc6b49c888608d9ab60a82a7은 POST register403 CSRF_INVALID. 사용자가 앱 주소 http://localhost:5173을 확인했다. 개발 설정은 http://127.0.0.1:5173이며 정확한 Origin 비교가 localhost를 거절했다. 수정 전 같은 쿠키/CSRF 절차의 실제 프록시 POST는127.0.0.1에서204, localhost에서403으로 재현했다.
 - 선행 계약/구현: 최신 Notion v0.32 읽고 v0.33에 개발 AUTH_PUBLIC_ORIGIN 동일 HTTP 포트의 localhost/127.0.0.1만 허용하도록 기록. backend/app/auth.py에 설정값에서만 계산한 두 origin 집합 적용, 기본80 정규화. 운영은 기존 HTTPS origin 정확한 일치 유지, CSRF 토큰·쿠키·외부/다른 포트/null 거절 유지. 요청 Host/X-Forwarded-For를 신뢰하거나 wildcard CORS를 추가하지 않았다.

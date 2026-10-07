@@ -68,7 +68,6 @@ export default function AccountForm() {
     <div role="status" aria-live="polite">
       {busy && <p className="muted">계정을 확인하고 있어요…</p>}
       {state.message && <p id="account-feedback">{state.message}</p>}
-      {state.requestId && <p className="muted small request-id">문의용 요청 ID: <code>{state.requestId}</code></p>}
     </div>
     {member ? <><h3>{member.display_name}님, 반가워요.</h3><p className="info-box">로그인했어요. 첫 탑승 여유는 {member.profile.first_boarding_buffer_seconds / 60}분이에요.</p><button className="secondary wide" disabled={busy} onClick={event => submit(event, true)}>로그아웃</button></> : <>
       <div className="auth-tabs"><button disabled={busy} aria-pressed={mode === 'login'} onClick={() => { setMode('login'); setPassword(''); setState({ phase: 'ready' }); }}>로그인</button><button disabled={busy} aria-pressed={mode === 'register'} onClick={() => { setMode('register'); setPassword(''); setState({ phase: 'ready' }); }}>회원가입</button></div>
