@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import App from './App';
+import App from '../../src/app/App';
 vi.spyOn(console, 'info').mockImplementation(() => {});
 const nav = (label) => within(screen.getByRole('navigation', { name: '주 메뉴' })).getByRole('button', { name: label });
 describe('화면 체험의 주요 사용자 흐름', () => {
@@ -55,7 +55,7 @@ describe('화면 체험의 주요 사용자 흐름', () => {
   });
 });
 // 장소 API는 PlacesCard.test.jsx에서 별도로 검증한다.
-vi.mock('./PlacesCard', () => ({ default: () => <section><h2>내 장소</h2></section> }));
+vi.mock('../../src/components/PlacesCard', () => ({ default: () => <section><h2>내 장소</h2></section> }));
 describe('서버 연결 확인', () => {
   afterEach(() => vi.unstubAllGlobals());
   it('정상 응답이면 연결됨과 확인 시각을 표시한다', async () => {

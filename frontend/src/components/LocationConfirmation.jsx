@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { apiRequest, ApiError, isServerTime } from './api';
+import { apiRequest, ApiError, isServerTime } from '../lib/api';
 import MapPinPicker from './MapPinPicker';
 
 export default function LocationConfirmation({ initialLocation, disabled, onDraft, onConfirmed, onAuthError }) {

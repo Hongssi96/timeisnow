@@ -50,10 +50,12 @@ PC에서는 왼쪽 메뉴와 2열 콘텐츠, 휴대전화에서는 한 열과 �
 
 React + Vite + 일반 CSS로 구성했다. 기존 기획의 구현 순서와 별개로 사용자의 화면 구성 요청에 따라 UI 검토용 프로토타입을 먼저 만든 것이다. F00~F11의 실제 API 연동 완료 체크박스를 변경하지 않는다.
 
-- frontend/src/App.jsx: 화면과 체험용 상태·이벤트.
-- frontend/src/styles.css: 색상·간격·반응형 화면.
+- frontend/src/app/App.jsx: 화면과 체험용 상태·이벤트.
+- frontend/src/components/: 계정·장소·지도 UI.
+- frontend/src/lib/: API 클라이언트·지도 SDK 로더.
+- frontend/src/styles/styles.css: 색상·간격·반응형 화면.
 - frontend/src/main.jsx: React 진입점.
-- frontend/src/App.test.jsx: 주요 사용자 흐름 5개 검증.
+- frontend/tests/: app·components·lib 테스트 및 setup.js 공통 DOM 설정. 기존57개 검증 유지.
 - 상태는 메모리에만 유지하며 새로고침하면 초기화된다.
 - 가입·로그인은 실제 API를 사용한다. 장소·루틴·이동 체험이 계정에 저장되는 것처럼 표시하지 않는다.
 - 개발 콘솔에는 ui_demo 이벤트명과 시각만 기록하며 사용자 입력은 출력하지 않는다.

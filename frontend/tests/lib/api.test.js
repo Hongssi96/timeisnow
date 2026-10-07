@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiRequest } from './api';
+import { apiRequest } from '../../src/lib/api';
 
 const meta = { request_id: 'req_1', server_time: '2026-10-06T00:00:00Z' };
 const response = (status = 200, body = { data: { status: 'ok' }, meta }, id = 'req_1') => ({

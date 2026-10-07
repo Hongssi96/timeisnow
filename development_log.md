@@ -4,6 +4,16 @@
 
 ## 실제 기록
 
+### 2026-10-07 — R01 프론트엔드 실행 코드·테스트 디렉터리 분리
+- 요청/목표: frontend/src에 섞인 실행·테스트 파일을 역할별 폴더로 구분한다. 화면·API·계산·로그 정책은 그대로 유지한다.
+- Git/선행 확인: 최신 main30b62a9를 fetch하고 깨끗한 상태에서 codex/frontend-structure 생성. F03-04 235d617은 아직 main 미병합이며 codex/current-origin에 보존되어 있어 이번 작업에 합치지 않았다. TODO·기능 목록/기획/화면/디자인·기존 import/mocks/Vite 설정과 Notion 최신v0.38의 기존 인증/장소 계약을 확인했다.
+- 구조: src/main.jsx는 진입점, src/app/App.jsx는 앱 화면, src/components는 계정/장소/지도 UI, src/lib는 API/지도 SDK, src/styles는 기존 CSS. tests/app·components·lib로 기존7개 테스트 파일을 옮기고 tests/setup.js로 공통 환경을 분리했다. index.html·vite.config.js·package.json과 잠금 파일은 도구 진입점으로 frontend 루트에 유지, node_modules/dist 생성 폴더는 이동하지 않았다.
+- 변경: 위 파일16개 이동·main/import/vi.mock/동적import 경로 수정, vite.config.js test.include=tests/**/*.test.{js,jsx}·setupFiles=tests/setup.js. frontend/README.md에 트리·파일 추가 규칙·기존 실행 명령·미병합 F03-04 경로 대응 안내. README.md·screen_plan.md·design_guide.md 경로/안내 및 TODO/기능 목록 R01 갱신. 과거 일지의 당시 파일 경로는 역사 기록으로 보존한다.
+- 실제 검증: npm --prefix frontend test에서 기존7개 파일/57개 모두 통과, npm --prefix frontend run build 통과(1893모듈). 실행 중 Vite5173에서 새 src/app 및 import 경로로 홈 렌더링 확인, 브라우저 콘솔 error0건. 화면/CSS 내용 변경 없이 파일 위치만 이동하여 별도 시각 재설계·새 테스트·백엔드 테스트는 수행하지 않았다.
+- 명세 영향: 없음. 경로·인증·입출력·권한·시간/계산·보관/로그·화면 동작 계약을 바꾸지 않은 내부 파일 정리이므로 Notion 수정 불필요. 최신 Notion v0.38 확인, main의 로컬v0.37과 차이는 미병합 F03-04 명세이며 기존 계약은 유지한다. https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+- 배운 개념: 브라우저 실행 모듈과 테스트 러너 코드를 폴더로 분리할 수 있다. Vitest include/setupFiles와 실제 import·mock 경로를 함께 옮겨야 기존 검증을 유지한다. HTML/설정/package 파일은 Vite/npm이 찾는 프로젝트 루트에 두는 것이 적절하다.
+- 남은 일/다음: 기능 브랜치 커밋/푸시 후 사용자 MR/병합. 미병합 F03-04의 App/지도 변경과 OriginSelector/currentOrigin/테스트도 새 src/components·lib/tests 경로로 맞춰 병합해야 한다. 그 후 F03-05 위치 품질/저장 장소 일치 판정 진행. MR 생성/병합은 수행하지 않는다.
+
 ### 2026-10-07 — F03-03 내 장소 이름 수정·삭제
 - 목표: 기존 목록/상세·위치/출입구 수정에 저장 이름(label) 수정과 삭제 확인/취소·DELETE204를 추가했다. 실제 루틴·도보·경로 저장소는 아직 없으므로 해당 연결 처리는 F04~06 후속이다.
 - Git/선행 확인: 최신 main4225eea(init→main, F03-02 병합)를 fetch하고 깨끗한 상태에서 codex/place-management 생성. Notion v0.36, TODO/기능 목록, 장소 API·기획·DB·정책·디자인·화면·개인화·프롬프트·로그·일지와 기존 JSX/CSS/API를 비교했다. 기능 브랜치 커밋/푸시, MR 생성·병합은 사용자 수행.

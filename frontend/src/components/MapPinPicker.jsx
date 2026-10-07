@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { apiRequest, ApiError } from './api';
-import { loadKakaoMap } from './kakaoMap';
+import { apiRequest, ApiError } from '../lib/api';
+import { loadKakaoMap } from '../lib/kakaoMap';
 
 export default function MapPinPicker({ location, onChange, disabled = false, onAuthError }) {
   const host = useRef(null);
