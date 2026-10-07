@@ -1,6 +1,6 @@
 # 지금이니? — F04-01~03 대중교통 후보·구간 모델·비교 화면
 
-기준: [Notion v0.42](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa). 홈 ‘경로 후보 비교’에서 실제 후보 조회·정렬·구간 상세를 사용할 수 있다. AI/실시간/실제 출발 안내·루틴 저장은 후속이다.
+기준: [Notion v0.43](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa). 홈 ‘경로 후보 비교’에서 실제 후보 조회·정렬·구간 상세와 무경로/지원 범위/정보 부족 안내를 사용할 수 있다. AI/실시간/실제 출발 안내·루틴 저장은 후속이다.
 
 ### 5.2.3 F04-01 대중교통 경로 후보 조회 (구현 단계 계약)
 - 범위: 로그인 사용자의 출발/도착 입력으로 카카오 대중교통 후보를 비동기 조회한다. 이번 단계는 depart_now(Asia/Seoul)만 실행하며 arrive_by는422 UNSUPPORTED_TIMING으로 명시한다. 목표 도착 검색·AI 도보 산정·실시간 도착·비교 화면·루틴 저장은 후속이며 기존 설계에서 삭제하지 않는다.
@@ -50,3 +50,7 @@
 마이그레이션: `backend/.venv/Scripts/python.exe backend/migrate.py upgrade head`. 최신 head0006_journey_searches는 기존 회원/장소를 보존한다. 카카오 키는 기존 서버 .env를 사용하고 프론트에 전달하지 않는다. [카카오 공식 REST 문서](https://developers.kakao.com/docs/ko/kakaomap/rest-api)의 대중교통 경로 스키마를 따른다.
 
 실제 검증: 백엔드106개·프론트79개·빌드 통과. 공개 강남역→서울역 카카오 후보15개, 로컬202/200·no-store·요청ID·멱등 재현 확인. 실제 기기 GPS/휴대전화·AI 도보·실시간·목표 도착·비교 화면/완전한 방향·역 내부 검증은 수행하지 않았다. 상세 development_log.md.
+
+## F04-05 무경로·지원 범위·정보 부족 (2026-10-07, Notion v0.43)
+NO_ROUTE/ENDPOINT_UNRESOLVED/TRANSFER_LIMIT를 각각 무경로/승하차 연결 불가/최대2회 환승 제한으로 안내한다. 모두 환승 제한으로 제외되면 NO_ROUTE를 덧붙이지 않는다. 정상 빈 후보와 공급자 실패는 구분하며 미확인 후보는 insufficient_data로 유지한다. 출입구/플랫폼·방향·접근/환승/마지막 도보·AI/실시간·중간지역/시간 불일치 사유를 표시하고 알 수 없는 사유는 안전한 일반 안내를 제공한다.
+지역 확인은 POST202 이후 worker에서 수행하므로 지역 밖은 GET200 failed/error.code=UNSUPPORTED_REGION이다. 기존 POST /origin-validations의 지역 밖422와 구분한다. 화면은 만료와 다른 지역 안내를 제공하고 입력/검색 snapshot을 제거한 뒤 양 끝 위치 재선택으로 복구한다. 재선택/새 검색은 새 키, 완료 결과 재확인은 GET만 사용한다. 모델/DDL/보관/권한 유지. F04-04는 사용자 요청으로 보류, 다음 F05-01. 프론트101개/백엔드117개/빌드 및 합성 PC/모바일 상태 검증; 실공급자 추가 호출은 없음.

@@ -65,3 +65,36 @@ it('changing an endpoint cancels pending GET and ignores late completion',async(
   const request=apiRequest.mock.calls.find(([path])=>path.includes('/journey-searches/'))[1];await user.click(screen.getByRole('button',{name:'출발지 변경'}));
   expect(request.signal.aborted).toBe(true);await act(async()=>resolve(result()));expect(screen.queryByRole('article')).toBeNull();
 });
+
+it('endpoint and transfer reasons appear together and reselecting starts a new request',async()=>{
+  mockApi(()=>{const value=result([]);value.data.unavailable_reasons=['ENDPOINT_UNRESOLVED','TRANSFER_LIMIT','FUTURE_REASON'];return value;});
+  const user=await open();await search(user);
+  expect(screen.getByText(/승하차 지점과 연결하지 못했어요/)).toBeTruthy();expect(screen.getByText(/최대 2회 환승 안/)).toBeTruthy();
+  expect(screen.queryByText('FUTURE_REASON')).toBeNull();expect(screen.getByText(/제공된 정보만으로/)).toBeTruthy();
+  await user.click(screen.getByRole('button',{name:'도착지 다시 선택'}));await user.click(screen.getByRole('button',{name:'검증 위치 적용'}));await search(user);
+  const posts=apiRequest.mock.calls.filter(([path])=>path==='/api/v1/journey-searches');expect(posts).toHaveLength(2);
+  expect(posts[0][1].headers['Idempotency-Key']).not.toBe(posts[1][1].headers['Idempotency-Key']);
+});
+
+it('unsupported region clears inputs and offers reselect without a false expiry',async()=>{
+  mockApi(()=>result(),()=>{throw new ApiError('UNSUPPORTED_REGION');});const user=await open();await search(user);
+  expect(screen.getByRole('heading',{name:'서울·경기 안의 위치를 선택해주세요'})).toBeTruthy();
+  expect(screen.queryByText('출발 검증역')).toBeNull();expect(screen.queryByText(/만료됐어요/)).toBeNull();
+  expect(screen.getByRole('button',{name:'경로 후보 조회'}).disabled).toBe(true);
+  await user.click(screen.getByRole('button',{name:'출발지 다시 선택'}));expect(screen.getByRole('button',{name:'검증 위치 적용'})).toBeTruthy();
+  expect(apiRequest.mock.calls.filter(([path])=>path==='/api/v1/journey-searches')).toHaveLength(1);
+});
+
+it('insufficient candidates remain visible and unknown missing reasons stay safe',async()=>{
+  const value=structuredClone(fixtures.direct);value.missing_segments.push('FUTURE_MISSING');mockApi(()=>result([value]));const user=await open();await search(user);
+  expect(screen.getByText(/구간 정보 확인 필요 ·/)).toBeTruthy();await user.click(screen.getByRole('button',{name:'구간 자세히'}));
+  expect(screen.getByText('추가 구간 정보 확인 필요')).toBeTruthy();expect(screen.queryByText('FUTURE_MISSING')).toBeNull();
+  expect(screen.getByText('공공 노선의 실제 운행 방향 확인 필요')).toBeTruthy();expect(screen.getAllByRole('article')).toHaveLength(1);
+});
+
+it('accepted worker region failure offers reselect rather than repeating the same invalid search',async()=>{
+  mockApi(()=>{const value=result([],'failed');value.data.error.code='UNSUPPORTED_REGION';return value;});const user=await open();await search(user);
+  expect(screen.getByRole('heading',{name:'서울·경기 안의 위치를 선택해주세요'})).toBeTruthy();
+  expect(screen.queryByText('도착 검증역')).toBeNull();expect(screen.queryByRole('button',{name:'경로 후보 다시 조회'})).toBeNull();
+  await user.click(screen.getByRole('button',{name:'도착지 다시 선택'}));expect(screen.getByRole('button',{name:'검증 위치 적용'})).toBeTruthy();
+});
