@@ -1,5 +1,7 @@
 # 프론트엔드
 
+F04-03: 홈 ‘경로 후보 비교’ → 출발/도착 직접 선택 → 경로 후보 조회 → 정렬/구간 자세히. JourneyComparison/JourneyCandidates는 src/components, 모델 검증/조회 중지는 src/lib/journeys.js, 대응 테스트는 tests/components·lib·app, 합성 공통 모델 fixture는 tests/fixtures. 서버/API가 실행 중이어야 하며 AI/실시간/출발 안내·루틴 저장은 후속이다. 프론트97개 테스트·빌드, 실제15후보/PC·모바일 확인. 상세 [journey_api.md](../journey_api.md).
+
 실행 코드와 테스트를 별도 디렉터리로 관리합니다.
 
 ```text
