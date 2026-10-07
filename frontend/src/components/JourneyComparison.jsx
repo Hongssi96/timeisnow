@@ -6,6 +6,11 @@ import OriginSelector from './OriginSelector';
 import JourneyCandidates from './JourneyCandidates';
 import JourneyUnavailable from './JourneyUnavailable';
 
+function placeRef(origin) {
+  if (!origin || origin.origin?.type !== 'saved_place') return null;
+  return { place_id: origin.origin.place_id, location_version: origin.origin.location_version };
+}
+
 function selection(value) {
   const origin=value?.origin;
   if (!Number.isFinite(value?.deadline) || typeof value?.label !== 'string') return false;
@@ -15,26 +20,29 @@ function selection(value) {
     && (origin.type==='map_pin' || origin.location_confirmed===true);
 }
 
-export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAuthError }) {
+export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAuthError, onRoutineSaved }) {
   const [origin,setOrigin]=useState(()=>selection(initialOrigin)&&initialOrigin.deadline>Date.now()?initialOrigin:null);
   const [destination,setDestination]=useState(null);
   const [editing,setEditing]=useState(null);
   const [preference,setPreference]=useState('balanced');
   const [state,setState]=useState({phase:'idle'});
-  const pending=useRef(null),snapshot=useRef(null);
+  const [saves,setSaves]=useState({});
+  const pending=useRef(null),snapshot=useRef(null),saver=useRef(null);
   const busy=['loading','waiting'].includes(state.phase);
   function stop(){pending.current?.abort();pending.current=null;}
+  function stopSaving(){saver.current?.abort();saver.current=null;}
   function reset(){stop();snapshot.current=null;setState({phase:'idle'});}
+  function resetSaves(){stopSaving();setSaves({});}
   function expire(){
     stop();snapshot.current=null;setEditing(null);
     setOrigin(value=>value?.deadline>Date.now()?value:null);setDestination(value=>value?.deadline>Date.now()?value:null);
     setState({phase:'expired',message:journeyError({code:'SEARCH_EXPIRED'})});
   }
   function authFailure(){
-    stop();snapshot.current=null;setOrigin(null);setDestination(null);setEditing(null);
+    stop();resetSaves();snapshot.current=null;setOrigin(null);setDestination(null);setEditing(null);
     setState({phase:'anonymous',message:'로그인이 필요해요. 다시 로그인하고 위치를 선택해주세요.'});onAuthError?.();
   }
-  useEffect(()=>()=>{pending.current?.abort();},[]);
+  useEffect(()=>()=>{pending.current?.abort();saver.current?.abort();},[]);
   useEffect(()=>{
     const deadlines=[origin?.deadline,destination?.deadline].filter(Number.isFinite);
     if(!deadlines.length)return;
@@ -52,11 +60,11 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
     if(['AUTH_REQUIRED','SESSION_EXPIRED'].includes(error.code)){authFailure();return;}
     if(error.code==='SEARCH_EXPIRED'){expire();return;}
     if(error.code==='UNSUPPORTED_REGION'){
-      stop();snapshot.current=null;setOrigin(null);setDestination(null);setEditing(null);
+      stop();resetSaves();snapshot.current=null;setOrigin(null);setDestination(null);setEditing(null);
       setState({phase:'unsupported'});return;
     }
     if(['VERSION_CONFLICT','RESOURCE_NOT_FOUND','VALIDATION_ERROR','UNSUPPORTED_TIMING'].includes(error.code)){
-      snapshot.current=null;setOrigin(null);setDestination(null);setEditing(null);
+      snapshot.current=null;resetSaves();setOrigin(null);setDestination(null);setEditing(null);
       setState({phase:'expired',message:journeyError(error)});return;
     }
     setState({phase:'error',message:journeyError(error),deadline:snapshot.current?.deadline,
@@ -97,10 +105,43 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
     }catch(error){if(!controller.signal.aborted)failure(error);}
     finally{if(pending.current===controller)pending.current=null;}
   }
-  function edit(purpose){reset();setEditing(purpose);}
+  function edit(purpose){reset();resetSaves();setEditing(purpose);}
   function choose(value){
     if(!selection(value)||value.deadline<=Date.now()){failure(new ApiError('INVALID_RESPONSE'));return;}
-    reset();if(editing==='origin')setOrigin(value);else setDestination(value);setEditing(null);
+    reset();resetSaves();if(editing==='origin')setOrigin(value);else setDestination(value);setEditing(null);
+  }
+  async function saveRoutine(candidateId,name){
+    if(saver.current)return;
+    if(saves[candidateId]==='saved')return;
+    const refs=[placeRef(origin),placeRef(destination)];
+    if(!refs[0]||!refs[1]){failure(new ApiError('SEARCH_EXPIRED'));return;}
+    if(!state.candidates?.some(c=>c.candidate_id===candidateId)){failure(new ApiError('INVALID_RESPONSE'));return;}
+    const controller=new AbortController();saver.current=controller;
+    const key=state.saveKeys?.[candidateId]||crypto.randomUUID();
+    setSaves(previous=>({...previous,[candidateId]:'saving'}));
+    try{
+      const csrf=await apiRequest('/api/v1/auth/csrf',{signal:controller.signal});
+      if(typeof csrf.data?.csrf_token!=='string')throw new ApiError('INVALID_RESPONSE');
+      const response=await apiRequest('/api/v1/routines',{method:'POST',
+        body:{name,origin_place_id:refs[0].place_id,destination_place_id:refs[1].place_id,
+              search_id:snapshot.current.accepted.search_id,candidate_id:candidateId},
+        signal:controller.signal,headers:{'X-CSRF-Token':csrf.data.csrf_token,'Idempotency-Key':key}});
+      if(controller.signal.aborted)return;
+      const data=response.data;
+      if(response.status!==201||!safeJourneyId(data?.routine_id)||typeof data.name!=='string'||data.name.length<1||data.name.length>30
+        ||!safeJourneyId(data.route?.journey_plan_id)||typeof data.route.type!=='string'
+        ||!Number.isSafeInteger(data.route.total_seconds)||data.route.total_seconds<0
+        ||!Number.isSafeInteger(data.route.transfer_count)||data.route.transfer_count<0||data.route.transfer_count>2
+        ||!['active','needs_attention'].includes(data.status)||!Number.isInteger(data.version)||data.version<1
+        ||typeof data.origin_place?.label!=='string'||typeof data.destination_place?.label!=='string')throw new ApiError('INVALID_RESPONSE');
+      state.saveKeys={...state.saveKeys,[candidateId]:key};
+      setSaves(previous=>({...previous,[candidateId]:'saved'}));
+      onRoutineSaved?.(data);
+    }catch(error){
+      if(controller.signal.aborted)return;
+      setSaves(previous=>({...previous,[candidateId]:'error'}));
+      failure(error);
+    }finally{if(saver.current===controller)saver.current=null;}
   }
   return <div className="journey-comparison">
     <button className="text-button comparison-back" onClick={onBack}><ArrowLeft size={18}/>오늘의 출발로 돌아가기</button>
@@ -116,6 +157,6 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
     {state.message&&<div className="info-box" role="alert">{state.message}{state.retryAt&&<p>잠시 기다리면 다시 확인할 수 있어요.</p>}</div>}
     {state.phase==='anonymous'&&<button className="primary" onClick={onLogin}>로그인하기</button>}
     {['empty','unsupported'].includes(state.phase)&&<JourneyUnavailable unsupported={state.phase==='unsupported'} codes={state.reasons} onOrigin={()=>edit('origin')} onDestination={()=>edit('destination')}/>}
-    {state.phase==='ready'&&<JourneyCandidates key={snapshot.current?.accepted?.search_id} candidates={state.candidates} preference={preference} onRecheck={()=>run(true,true)}/>}
+    {state.phase==='ready'&&<JourneyCandidates key={snapshot.current?.accepted?.search_id} candidates={state.candidates} preference={preference} onRecheck={()=>run(true,true)} onSavedLocations={candidateId=>saves[candidateId]} onSaved={saveRoutine} defaultRoutineName={origin&&destination?`${origin.label} → ${destination.label} 통근`:''}/>}
   </div>;
 }

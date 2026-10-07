@@ -351,6 +351,13 @@ def delete(request: Request, place_id: str):
                                  (parsed_id(place_id), user_id)).fetchone()
         if not row:
             missing()
+        # Routines keep their route history but wait for repair after the place is gone (F06-04).
+        connection.execute('''UPDATE routines SET
+            origin_place_id=CASE WHEN origin_place_id=%s THEN NULL ELSE origin_place_id END,
+            destination_place_id=CASE WHEN destination_place_id=%s THEN NULL ELSE destination_place_id END,
+            status='needs_attention', version=version+1, updated_at=now()
+            WHERE user_id=%s AND (origin_place_id=%s OR destination_place_id=%s)''',
+            (row['id'], row['id'], user_id, row['id'], row['id']))
         # FK SET NULL retains only the bounded retry marker, preventing late creation retries.
         connection.execute('DELETE FROM saved_places WHERE id=%s AND user_id=%s', (row['id'], user_id))
     return Response(status_code=204, headers={'Cache-Control': 'no-store'})
