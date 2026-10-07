@@ -6,3 +6,16 @@
 .mobile-trip-return{display:none}@media(max-width:680px){.mobile-trip-return{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:#e9f0d8;border-radius:9px;margin-bottom:20px;font-size:12px}}
 .request-id{overflow-wrap:anywhere;margin:12px 0 0}
 .auth-tabs{display:flex;gap:8px;margin:0 0 20px}.auth-tabs button{flex:1;padding:12px;border:1px solid var(--line);border-radius:10px}.auth-tabs button[aria-pressed=true]{background:#eff4e8;color:var(--green);font-weight:700}
+/* Place search follows the existing card, form and selected-action palette. */
+.places-card .place-row { cursor: default; }
+.places-card .place-row > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.place-form { margin-top: 20px; }
+.place-form .info-box { font-size: 14px; color: var(--ink); }
+.place-form label { display: block; font-size: 14px; font-weight: 600; margin: 16px 0 10px; }
+.place-form input { display: block; width: 100%; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #fafbf7; color: var(--ink); font: inherit; }
+.place-candidates { display: grid; gap: 8px; margin: 12px 0; max-height: 320px; overflow-y: auto; }
+.place-candidate { min-height: 60px; text-align: left; border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--surface); color: var(--ink); overflow-wrap: anywhere; }
+.place-candidate strong, .place-candidate span { display: block; }
+.place-candidate span { font-size: 14px; margin-top: 4px; }
+.place-candidate.selected { background: #eff4e8; border-color: var(--green); }
+.places-card .primary, .places-card .secondary { min-height: 44px; }

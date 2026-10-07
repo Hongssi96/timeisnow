@@ -33,10 +33,10 @@ class MigrationTest(unittest.TestCase):
                     command.upgrade(config, "head")
                     self.assertEqual(connection.execute(text(
                         "SELECT version_num FROM alembic_version")).scalars().all(),
-                        ["0002_member_auth"])
+                        ["0003_saved_places"])
                     self.assertEqual(sorted(inspect(connection).get_table_names(schema=schema)),
                                      ['alembic_version', 'auth_credentials', 'auth_rate_limit_buckets',
-                                      'auth_sessions', 'user_profiles', 'users'])
+                                      'auth_sessions', 'place_creation_keys', 'place_searches', 'saved_places', 'user_profiles', 'users'])
                     connection.commit()
                     command.downgrade(config, "base")
                     self.assertEqual(connection.execute(text(

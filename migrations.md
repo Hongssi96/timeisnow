@@ -40,6 +40,8 @@ current는 DB 적용 위치, history는 파일의 변경 순서다. upgrade head
 
 ## 파일과 로그
 
+- 2026-10-07 현재 head:0003_saved_places. saved_places/place_searches/place_creation_keys 추가, 기존 회원 데이터 유지. 개발 DB upgrade 적용, 임시 스키마에서 head 적용/중복 적용/전체 downgrade/re-upgrade 두 차례 검증. 개발 public에서 downgrade하지 않는다.
+
 - alembic.ini: 변경 파일 위치. 접속 문자열·비밀 없음.
 - backend/migrations/env.py: 기존 connect_db() 설정으로 연결, 트랜잭션 적용.
 - backend/migrations/versions/0001_baseline.py: 빈 시작점.

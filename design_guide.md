@@ -108,6 +108,8 @@
 
 ## 6. 문구·상태·접근성
 
+- F03-01 장소 카드(2026-10-07): 기존 card/section-heading/place-row/soft-icon/primary/secondary 및 색상 변수를 재사용한다. 신규 .place-form/.place-candidate는 같은 입력 배경·8/10px 모서리·선택#eff4e8/var(--green). 후보 주소/폼 안내14px, 정보 카드의 글자는 var(--ink), 최소44px 행동. 후보 목록 최대320px 내부 스크롤 및 긴 주소 줄바꿈. 검색/저장 중 비활성·빈 결과·만료·실패·로그인 필요 상태 유지. 데스크톱1440×1000/모바일390×844 실제 브라우저 확인, 모바일 가로 넘침 없음.
+
 - F00-03 요청 ID 보조 표현: 기존 서버 연결 카드에 `.muted.small.request-id`를 재사용, 12px 상단 간격/overflow-wrap:anywhere로 긴 ID가 카드 밖으로 넘치지 않게 한다. 새 색상·폰트·카드 체계 없음. role=status·aria-live=polite·aria-busy와 로딩 버튼 비활성 유지. 데스크톱/390×844 실제 확인(2026-10-06).
 
 - 짧고 구체적인 해요체: '3분 뒤 출발하세요', '약 5분의 여유가 있어요', '다시 확인해주세요'.

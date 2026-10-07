@@ -4,6 +4,21 @@
 
 ## 실제 기록
 
+### 2026-10-07 — F03-01 고정 장소 검색·저장
+- 목표: TODO 순서의 F03-01을 작은 기능 단위로 진행. ‘내 설정 → 내 장소’에서 주소/장소 검색 → 후보 선택 → 집·회사 등 이름 저장 → 본인 목록을 제공한다. F03-02~05는 후속이며 F03 전체 완료와 구분한다.
+- Git: 깨끗한 작업 폴더에서 origin/main fetch(ac28d5f) 후 codex/fixed-place-search 생성. 기존 회원 오류 안내 main 병합 내용 보존. 이 브랜치에 커밋/푸시하며 MR 생성·병합은 사용자 수행.
+- 선행 확인: Notion v0.34 최신 조회, todo/feature_breakdown/planning/personalization/ai_prompts/logging/development_log 및 기존 JSX/CSS/design_guide/screen_plan 확인. 최신 카카오 공식 Local 주소/키워드 API 문서 https://developers.kakao.com/docs/ko/local/dev-guide 확인. 사용자 D02 조건 추가 확인 생략 지시 유지, 공급자 저장/전체 서비스 조건 검증 완료로 표시하지 않는다.
+- 계약: Notion v0.35에5.1.1 상세 계약·목록/생성 표·예시·구현 상태·DB 상태·변경 이력 추가/정정 후 저장 재조회. 검색/후보 UUID·사용자 소유권·600초 만료·좌표 대조, 라벨1~30자·검색어1~100자·서울/경기 주소·각 첫10건/최대20건, 429/502/503, 선택 멱등 키24시간 및 목록 limit/cursor 구체화. 미구현 생성 초안에 search_id/candidate_id 필수 및 name/address 응답 추가. entrance_ref는 null만 지원하며 지도 핀/출입구는 후속. 기존 인증/health/루틴 계약 영향 없음.
+- 구현 파일: backend/app/places.py·main.py, migrations/versions/0003_saved_places.py, tests/test_places.py·test_migrations.py; frontend/src/PlacesCard.jsx·PlacesCard.test.jsx·App.jsx·App.test.jsx·api.js·styles.css. 관련 api_contract/place_api/planning/database_schema/migrations/screen_plan/design_guide/logging/README/backend README/TODO/기능 목록 동기화.
+- DB: saved_places·place_searches·place_creation_keys와 FK/라벨·좌표 CHECK/인덱스 추가. 개발 public에0003 upgrade 및 head 확인. 임시 migration_test 스키마에서 head 적용/중복 적용/전체 downgrade/re-upgrade 두 차례 검증. 기존 회원 데이터 유지. 검색어·공급자 원본 저장 없음; 선택 후보의 이름/주소/좌표를 본인 장소에 저장한다.
+- 백엔드 검증: 전체68개 통과(장소12개 포함). 실제 PostgreSQL/ASGI에서 저장201·상세/목록200·재로그인 유지, 타인 검색/장소/cursor404, 변조좌표422·만료404·불명후보404, 인증401·CSRF403·입력422, 분당10회 제한429/Retry-After·공급자실패503, 만료 청소, 페이지 경계, 동시 로그인 세션의 같은 키 재시도에서 장소1개 생성 확인. 동일 키/본문201·다른본문409·후보 만료 후 기존201·멱등 만료 후404 확인.
+- 로그 검증: 장소 검색200/생성201/상세200 실행 로그의 request_id와 응답 일치, 실제 ID 대신 /places/{place_id} 템플릿 및 검색어/주소/좌표/라벨/쿠키/키 제외 확인. 입력/공급자 예외 원문 미노출.
+- 프론트 검증:35개 통과 및 Vite 빌드 성공. 신규8개로 로그인/빈 결과/실패/만료/검색어 변경 시 선택 해제/멱등 재시도/세션 만료 자료 제거/StrictMode 및 이탈 취소 확인. 기존 health 테스트는 장소 카드와 분리하여 API별 요청 횟수와 결과를 검증한다. 최초 테스트의 쿼리 전달/후보 accessible name 및 완료 요청 취소 기대 오류를 수정하고 다시 통과했다.
+- 실제 브라우저: 기존8000 서버가 이전 코드를 실행 중이라 별도8001/5175 검증 서버 사용. 샌드박스 외부 통신 차단에서 장소 검색503/재시도 확인, 통신 허용 후 카카오 공개 강남역 키워드/공개 주소 검색200·후보10/11건, 합성 계정에서 집/회사 이름 저장201·목록200·새로고침 유지 확인. 데스크톱1440×1000 후보 선택·저장, 모바일390×844 주소 검색·선택·저장 및 가로 넘침 없음(documentWidth=390) 확인. 로그아웃/계정 모달 복귀 시 이전 장소 제거 확인. 실제 휴대전화·지도 SDK·GPS·경로 연결은 검증하지 않았다.
+- 정리: 본 작업에서 생성한 정확한 합성 이메일/표시명 조건의 QA 회원1명과 연결된 장소/후보/세션만 삭제. 사용자 회원/장소는 변경하지 않았다. 임시 QA Vite 설정/자체 검증 프로세스 정리. 모바일 검증 이미지는 Codex visualizations 폴더에 보관(Git 제외).
+- 배운 개념: 검색 후보는 사용자/검색/기한을 가진 임시 자원이고 저장 장소는 지속 자원이다. 요청 타임아웃이 저장 실패를 뜻하지 않으므로 멱등 키와 DB 잠금으로 재시도/동시 세션 중복을 막는다. 브라우저 위치/지도 선택은 주소 후보 선택과 구분해야 한다.
+- 완료/남은 일: F03-01 완료, F03-03은 목록/상세만 부분 완료라 체크 유지. 다음 F03-02 출입구/지도 핀 확인·수정 및 변경 버전/산정 무효화. 수정/삭제·현재 위치/시각/정확도/저장 장소 일치, 매일 청소 운영 스케줄(F11), 탈퇴 정리 및 실제 루틴 연결은 미구현. Notion https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
 ### 2026-10-07 — F02-01 계정 오류 요청 ID 비노출
 - 사용자 요청: 회원가입 실패 시 request 식별자를 사용자에게 표시하지 않는다.
 - 최신 main(928af7c, 회원 인증 병합)에서 codex/auth-error-message 생성. AccountForm.jsx의 문의용 ID 행 제거, 입력 조건·중복 오류·재시도·접근성 유지. 계정 폼 전체에 동일 표현 적용.
