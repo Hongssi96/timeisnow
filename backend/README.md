@@ -1,5 +1,7 @@
 # 백엔드 실행 환경
 
+F04-01(2026-10-07): POST /journey-searches202·본인 GET 결과/GET /jobs 구현. 실행 전 `backend/.venv/Scripts/python.exe backend/migrate.py upgrade head`로0006_journey_searches를 적용한다. 현재는 depart_now 공급자 후보 조회이며 AI/실시간/목표 도착/비교 화면은 후속이다. GPS/지도 입력 좌표 비저장 및 상태/권한/멱등/만료는 [journey_api.md](../journey_api.md)를 따른다.
+
 개발 앱은 http://localhost:5173 또는 http://127.0.0.1:5173으로 열 수 있다. AUTH_PUBLIC_ORIGIN의 같은 포트에서만 두 loopback 주소를 허용하며 운영은 설정한 HTTPS origin과 정확히 일치해야 한다. CSRF 토큰/세션 쿠키 검증은 양쪽 모두 적용한다.
 
 F00-01~04 및 기본 회원 인증 구현 완료. 상태 API·요청 ID·공통 HTTP 오류·JSON 요청 로그와 React 연결을 제공한다. 경로/현재 위치/약속 API는 미구현이다. PostgreSQL은 health 요청과 분리하며 [DB 안내](../database.md)를 참고한다.
