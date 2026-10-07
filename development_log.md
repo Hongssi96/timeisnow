@@ -4,6 +4,18 @@
 
 ## 실제 기록
 
+### 2026-10-07 — F04-02 버스·지하철·도보 공통 구간 모델
+- 목표/기반: F04-01 사용자 병합 main9670281을 fetch로 확인하고 codex/journey-segments를 생성했다. API 후보의 최소 단계 데이터를 후속 비교 화면/F05 근거에서 사용할 공통 모델로 보강했다. 에이전트 MR 생성/main 병합 없음.
+- 사전 확인/명세: todo/feature_breakdown F04-02, 최신 Notion v0.40 5.2.3/20절, journey_api·planning·personalization·ai_prompts·logging·development_log·실제 provider/작업/테스트를 비교했다. 최신 카카오 공식 REST route/step/stops/vehicles/path 스키마를 확인했고 이름·순서를 공공ID/물리 방향으로 추정하지 않았다(https://developers.kakao.com/docs/ko/kakaomap/rest-api). 구현 전에 Notion v0.41 5.2.4·변경 이력/호환성/입출력·완료 범위를 구체화했다. GPS 수치 보류·수동 확인/권한/기한/원본 비저장·AI 미호출 유지. 최종 재조회/로컬 api_contract.md 전문 동기화 확인. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+- 모델: backend/app/journey_models.py의 엄격한 공통 Candidate/Leg/Connection/Breakdown과 이전 형식 모델. 기존 필드/ID/순서/초·미터를 유지하고 journey.v1·도보 access/transfer/egress·교통 boarding/alighting/direction/vehicle_options·교통단계 기반 환승수·connections·timing_breakdown을 추가했다. 승하차는 공급자 첫/마지막 정류장명, 공공ID/출입구/플랫폼은null. 방향은 provider_stop_order이며 같은 이름/가까운 위치로 물리 일치·환승 가능을 확정하지 않는다.
+- 보강/검증: journey_provider.py는 geometry를 검증 후 폐기하고 차량 세부분류 문자열만 추가 보존한다. 교통 단계수/공급자 환승수 최대2회, 모순된 route 종류·순서/ID·유효하지 않은 숫자/필드는 안전한 PROVIDER_RESPONSE_INVALID. 누락된 접근/마지막/환승 도보·공공방향을 사유로 표시하고 명시0초만0으로 유지한다. 총시간/단계 합계 차이는 unallocated(대기/여유로 단정하지 않음), 음수 차이는null/inconsistent·DURATION_TOTAL_MISMATCH. 후보 validity=insufficient_data·estimated_arrival_at:null 유지.
+- 이전 결과/스키마: journeys.py GET는 공통 모델로 저장 결과를 읽고 누락 사유를 합친다. 이전 JSONB 후보는 기존leg/candidate ID를 유지해 보강, 차량 종류null·connection_id는candidate+인접교통leg의uuid5로 안정적이며 재조회마다 바뀌지 않는다. DB 쓰기/공급자 재호출 없음. 이상 필드/잘못된 결과는502, worker 입력 문제는기존failed/error. SearchEnvelope/Candidate/Leg/Connection/Breakdown을 OpenAPI GET200 스키마에 노출했다. DB head0006 유지, 새 마이그레이션 없음.
+- 실제 검증: 백엔드115개 통과(기존106+모델8+저장결과ASGI1). 직접 버스/지하철·버스↔버스/버스↔지하철/지하철↔버스/지하철↔지하철의 공통 타입/순서·역할·이름/차량분류·연결, 연속 도보·누락과0초·시간차/모순·환승수차/상한·route종류/참조/숫자/추가좌표 거절·legacy ID/값 유지·OpenAPI/실응답 일치·DB 재저장/공급자 재호출 없음 확인. 기존 PostgreSQL auth/작업/소유권/버전/멱등/만료/로그 비노출·migration 검증 유지. 프론트11파일79개·빌드1896모듈 통과, UI 코드 변경 없으므로 새 시각 검증 수행하지 않았다. 최초 모델 단독 테스트는 backend import 경로 누락으로 실패했고 독립 실행 경로를 맞춘 뒤8개 및전체115개가 통과했다.
+- 실제 실행: 검증용 uvicorn을 최신 코드로 재시작, 합성 계정과 공개 강남역→서울역으로 카카오 경로1회 요청. HTTP202→GET200의15후보가 SearchEnvelope 검증에 통과했고 재조회 후보/leg/connection ID 일치·no-store/요청ID 확인. 실제 교통순서는 SUBWAY>SUBWAY>SUBWAY3개, SUBWAY>SUBWAY2개, SUBWAY>SUBWAY>BUS3개, BUS>SUBWAY>SUBWAY1개, BUS>BUS1개, BUS직행5개. 도보17개는모두transfer이며 연결17개 feasibility=unknown. 접근/마지막도보는 실제 응답에서 빠져 누락 사유로 유지했다. 합성 회원/세션/후보/작업 제거, 실제 사용자GPS/실제 환승 성공/물리 방향·공공ID/역 내부/AI·실시간은 미검증이다.
+- 문서/완료: journey_api.md·api_contract.md·planning.md·personalization.md·ai_prompts.md·logging.md·README.md·backend/README.md·todo.md·feature_breakdown.md·일지 동기화. F04-02만 체크, F04-03~05 및F05/F07은 후속 유지. 공식 명세의 세부 차량명 변경 가능성을 상수 목록으로 고정하지 않았다.
+- 배운 개념: 공통 모델은 서로 다른 교통수단을 같은 순서/시간/참조로 다루되 근거 수준을 보존한다. 빠진 도보와0초 도보, 공급자 총시간과 단계 합계, 정류장 순서와 물리 방향은 다르다. UUID 기반 안정적 연결 ID는 재조회·legacy 보강에서도 참조를 유지한다.
+- 다음: 사용자 codex/journey-segments→main MR/병합 후 F04-03 후보 비교 화면. 실제 제공되지 않은 출입구/플랫폼/접근/마지막 도보와 실시간 연결 근거는 후속에서 확보한다.
+
 ### 2026-10-07 — F04-01 비동기 카카오 대중교통 경로 후보 API
 - 최종 main 통합: 게시 전 fetch에서 사용자가 F03-05a를 main8b4b40b에 병합한 것을 확인했다. F04 기능 브랜치에 origin/main을 merge하며 Notion v0.40 전체 계약과 F03-05a/F04 일지·정책·TODO를 모두 보존해 문서 충돌을 해결했다. 통합 후 백엔드106개·프론트11파일79개·빌드1896모듈 통과, conflict marker0건·diff --check 확인. 아래105개/73개는 통합 전 실제 검증 이력이다. 다음MR은 codex/journey-search→main만 필요하며 에이전트가 main/MR을 병합하지 않는다.
 - 목표: 사용자 F04 진행 요청에 따라 작은 기능 단위인 F04-01 API부터 구현했다. 최신 main0402d67에서 codex/journey-search 생성, F03-05a/codex/origin-quality/0168464는 아직 main 미병합으로 중복 코드 포함하지 않았다. GPS 수치 보류·수동 확인 요구는 여정 입력에서 location_confirmed:true 필수로 유지한다. 에이전트 MR 생성/병합 없음.

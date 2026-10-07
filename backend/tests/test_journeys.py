@@ -169,6 +169,36 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(job['status'],'failed');self.assertEqual(job['error']['code'],'VERSION_CONFLICT')
         with auth.database() as c:self.assertEqual(c.execute('SELECT candidates FROM journey_searches').fetchone()['candidates'],[])
 
+    async def test_cached_legacy_models_upgrade_without_provider_or_id_changes(self):
+        from app.journey_models import LegacyCandidate, LegacyLeg, SearchEnvelope
+        from app.main import app
+        from psycopg.types.json import Jsonb
+        await self.signup_login()
+        value=route(seconds=1500,transfers=1)
+        value['steps'].insert(2,copy.deepcopy(value['steps'][0]))
+        value['steps'].insert(3,copy.deepcopy(value['steps'][1]))
+        accepted,result,_=await self.completed(data={'status':'OK','routes':[value]})
+        SearchEnvelope.model_validate(result[2])
+        self.assertIn('Candidate',app.openapi()['components']['schemas'])
+        original=result[2]['data']['candidates'][0]
+        old={key:copy.deepcopy(original[key]) for key in LegacyCandidate.model_fields}
+        old['ordered_legs']=[{key:copy.deepcopy(leg[key]) for key in LegacyLeg.model_fields} for leg in original['ordered_legs']]
+        identifier=accepted[2]['data']['search_id'];path='/journey-searches/'+identifier
+        with auth.database() as c:c.execute('UPDATE journey_searches SET candidates=%s WHERE id=%s',(Jsonb([old]),identifier))
+        with patch.object(journey_provider,'fetch_routes') as provider:
+            first=(await self.call(path))[2]['data']['candidates'][0]
+            second=(await self.call(path))[2]['data']['candidates'][0]
+            self.assertEqual(first,second);self.assertEqual(first['candidate_id'],old['candidate_id'])
+            self.assertEqual(first['connections'],original['connections'])
+            self.assertIsNone(first['ordered_legs'][1]['vehicle_options'][0]['provider_type']);provider.assert_not_called()
+        with auth.database() as c:
+            persisted=c.execute('SELECT candidates FROM journey_searches WHERE id=%s',(identifier,)).fetchone()['candidates'][0]
+            self.assertNotIn('model_version',persisted)
+            old['ordered_legs'][0]['latitude']=37.5
+            c.execute('UPDATE journey_searches SET candidates=%s WHERE id=%s',(Jsonb([old]),identifier))
+        failed=await self.call(path);self.assertEqual(failed[0],502)
+        self.assertNotIn('37.5',json.dumps(failed[2]))
+
 
 class ProviderTests(unittest.TestCase):
     def test_normalize_sort_cap_and_discard_raw_coordinates(self):

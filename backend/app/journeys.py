@@ -10,6 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from psycopg.types.json import Jsonb
 from app import auth, origins, places, journey_provider
+from app.journey_models import common_candidate, SearchEnvelope
 
 router = APIRouter(prefix='/api/v1')
 
@@ -189,11 +190,15 @@ def owned(request, identifier, job=False):
         return row
 
 
-@router.get('/journey-searches/{search_id}')
+@router.get('/journey-searches/{search_id}', response_model=SearchEnvelope)
 def result(request: Request, search_id: str):
     row = owned(request,search_id)
+    if not isinstance(row['candidates'],list) or len(row['candidates']) > 20:
+        raise auth.AuthError(502,'PROVIDER_RESPONSE_INVALID','경로 구간을 확인할 수 없어요.')
+    candidates = [common_candidate(candidate) for candidate in row['candidates']]
+    reasons = list(dict.fromkeys(row['unavailable_reasons'] + [reason for candidate in candidates for reason in candidate['missing_segments']]))
     response = auth.answer(request,{'search_id':str(row['id']),'job_id':str(row['job_id']),'status':row['status'],
-        'candidates':row['candidates'],'unavailable_reasons':row['unavailable_reasons'],'error':row['error'],'expires_at':auth.iso(row['expires_at'])})
+        'candidates':candidates,'unavailable_reasons':reasons,'error':row['error'],'expires_at':auth.iso(row['expires_at'])})
     if row['status'] in ('queued','running'): response.headers['Retry-After'] = '2'
     return response
 
