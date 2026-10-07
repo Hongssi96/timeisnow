@@ -5,6 +5,7 @@ import '../styles/styles.css';
 import { apiRequest, ApiError, isServerTime } from '../lib/api';
 import AccountForm from '../components/AccountForm';
 import PlacesCard from '../components/PlacesCard';
+import OriginSelector from '../components/OriginSelector';
 
 // 이동 화면은 합성 데이터. 계정과 서버 연결은 실제 API를 사용합니다.
 const initialRoutines = [
@@ -22,13 +23,21 @@ export default function App() {
   const [trip, setTrip] = useState(null);
   const [history, setHistory] = useState([]);
   const [scenario, setScenario] = useState('ready');
+  const [origin, setOrigin] = useState(null);
+  const [originExpired, setOriginExpired] = useState(false);
+  useEffect(() => { if (modal === 'account') { setOrigin(null); setOriginExpired(false); } }, [modal]);
+  useEffect(() => {
+    if (!origin) return;
+    const timer = setTimeout(() => setOriginExpired(true), Math.max(0, origin.deadline - Date.now()));
+    return () => clearTimeout(timer);
+  }, [origin]);
   const routine = routines.find(r => r.id === selected) || routines[0];
   const busMinutes = scenario === 'next' ? 20 : 13;
   const waitMinutes = busMinutes - 5 - buffer;
   const notify = (message) => setToast(message);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 4000); return () => clearTimeout(t); }, [toast]);
   function navigate(next) { setPage(next); log('ui.navigation'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-  function startTrip() { setTrip({ routine: { ...routine }, stage: 0, events: [{ type: 'departed', at: new Date().toISOString() }], slack: busMinutes - 5 }); navigate('trip'); log('ui.trip.started'); }
+  function startTrip() { if (origin) return; setTrip({ routine: { ...routine }, stage: 0, events: [{ type: 'departed', at: new Date().toISOString() }], slack: busMinutes - 5 }); navigate('trip'); log('ui.trip.started'); }
   function advanceTrip() {
     const last = trip.routine.transfer ? 6 : 3;
     if (trip.stage === last) {
@@ -55,7 +64,12 @@ export default function App() {
         {page === 'home' && <>
           <div className="page-heading"><div><p className="eyebrow">YOUR DAILY DEPARTURE</p><h1>오늘도, 여유 있게 출발해요<span>.</span></h1><p>밖에서 기다리는 시간 대신, 집에서 조금 더 편안하게.</p></div><div className="morning"><Sun size={23}/><span>좋은 아침이에요</span></div></div>
           <div className="routine-toolbar"><div className="tabs" aria-label="출발 루틴">{routines.map(r=><button key={r.id} className={selected===r.id?'selected':''} onClick={()=>{setSelected(r.id);setScenario('ready');}}><span>{r.transfer?'학교':'출근'}</span> {r.name}</button>)}</div><button className="text-button" onClick={()=>setModal('location')}><Navigation size={16}/> 다른 곳에서 출발 <ArrowUpRight size={15}/></button></div>
-          <div className="home-grid"><div className="primary-column">
+          {origin ? <section className="card origin-summary" aria-live="polite"><span className="soft-icon"><Navigation size={24}/></span>
+            <h2>{originExpired ? '출발지를 다시 확인해주세요' : `${origin.label}에서 출발 준비`}</h2><p>{origin.location_address}</p>
+            {origin.origin.type === 'current_location' && <p className="small muted">측정 시각 {new Date(origin.origin.captured_at).toLocaleTimeString('ko-KR')} · 측정 정확도 약 {Math.round(origin.origin.accuracy_meters)}m · 위치 품질 확인 전</p>}
+            <div className="info-box">{originExpired ? '출발지 선택이 만료됐어요. 다시 선택해주세요.' : '출발지를 확인했어요. 실제 경로와 출발 시간 안내는 준비 중이에요.'}</div>
+            <div className="button-row"><button className="primary" onClick={()=>setModal('location')}>출발지 다시 선택</button><button className="secondary" onClick={()=>{setOrigin(null);setOriginExpired(false);}}>예시 화면으로 돌아가기</button></div>
+          </section> : <><div className="home-grid"><div className="primary-column">
             <section className={'departure-card '+(scenario==='stale'?'stale':'')}>
               <div className="hero-top"><span className="pill"><span className="dot"/>{scenario==='stale'?'정보 확인이 필요해요':'아직 집에서 기다려도 돼요'}</span><span className="hero-routine">{routine.name} · 예시</span></div>
               <div className="hero-center"><div><p className="hero-label">{scenario==='stale'?'출발 안내를 잠시 멈췄어요':'권장 출발까지'}</p><h2>{scenario==='stale'?<span className="stale-title">다시 확인할게요</span>:<><strong>{waitMinutes}</strong><span>분 뒤 출발</span></>}</h2><p className="hero-sub">{scenario==='stale'?'오래된 정보로 출발 시간을 안내하지 않아요.':'서두르지 않아도 괜찮아요.'}</p></div><div className="clock-art" aria-hidden="true"><div className="orbit-dot"/><div className="clock-face"><i className="tick t1"/><i className="tick t2"/><i className="tick t3"/><i className="tick t4"/><div className="hand hour"/><div className="hand minute"/><b/></div><div className="clock-leaf"><Leaf size={23}/></div></div></div>
@@ -69,7 +83,7 @@ export default function App() {
             <section className="comfort-card"><div className="coffee-icon"><Coffee size={28}/></div><p className="eyebrow">A LITTLE MORE TIME</p><h2>한 모금 더,<br/>마음은 느긋하게.</h2><p>출발 시간은 확인했으니,<br/>남은 시간은 나를 위해 써요.</p><span className="comfort-line"/></section>
             <section className="learning-note"><span className="soft-icon"><Footprints size={20}/></span><div><strong>내 걸음에 맞춰가는 중</strong><p>정확한 이동 기록 5개부터<br/>나에게 맞는 시간을 찾아요.</p></div></section>
           </aside></div>
-          <div className="demo-controls"><span>화면 상태 확인</span><button onClick={()=>setScenario('ready')}>기본 안내</button><button onClick={()=>setScenario('next')}>다음 버스</button><button onClick={()=>setScenario('stale')}>정보 만료</button></div>
+          <div className="demo-controls"><span>화면 상태 확인</span><button onClick={()=>setScenario('ready')}>기본 안내</button><button onClick={()=>setScenario('next')}>다음 버스</button><button onClick={()=>setScenario('stale')}>정보 만료</button></div></>}
         </>}
         {page==='routines'&&<><PageHeading eyebrow="MY ROUTINES" title="매일 가는 길을 기억해요." description="한 번 저장한 경로로, 내일 아침은 조금 더 간단하게."/><div className="section-heading"><h2>저장한 루틴 <span className="count">{routines.length}</span></h2><button className="primary compact" onClick={()=>setModal({type:'routine'})}><Plus size={17}/> 루틴 추가</button></div><div className="routine-grid">{routines.map(r=><section className="card routine-card" key={r.id}><span className="soft-icon"><Repeat2/></span><h2>{r.name}</h2><p>{r.origin} → {r.destination}</p><div className="day-list">{['월','화','수','목','금','토','일'].map(d=><span key={d} className={r.days.includes(d)?'on':''}>{d}</span>)}</div><div className="routine-details"><span>목표 도착 <strong>{r.time}</strong></span><span>환승 <strong>{r.transfer?1:0}회</strong></span></div><div className="button-row"><button className="secondary" onClick={()=>setModal({type:'routine',routine:r})}>수정</button><button className="primary" onClick={()=>{setSelected(r.id);setScenario('ready');navigate('home');}}>출발 확인 <ArrowRight size={16}/></button></div></section>)}</div><p className="muted small">루틴 변경은 이 미리보기에서만 유지돼요. 새로고침하면 초기화됩니다.</p></>}
         {page==='trip'&&trip&&<><PageHeading eyebrow="ON YOUR WAY" title={trip.stage===0?'천천히, 이제 출발해볼까요?':'잘 가고 있어요.'} description="도착과 탑승을 구분해서 알려주면 내 이동 시간을 더 잘 알 수 있어요."/><section className="card trip-card"><div className="section-heading"><h2>{trip.routine.name}</h2><span className="tag">이동 체험</span></div><div className="trip-banner"><Navigation size={22}/><strong>{trip.stage===0?`지금 출발 기준 예상 여유 ${trip.slack}분`:'현재 위치·교통 정보는 연동 전이에요'}</strong></div><ol className="timeline">{(trip.routine.transfer?['집에서 출발','버스 정류장 도착','버스 탑승','환승 정류장에서 하차','지하철 승강장 도착','지하철 탑승','목적지 역에서 하차','목적지 도착']:['집에서 출발','버스 정류장 도착','버스 탑승','목적지 정류장에서 하차','목적지 도착']).map((label,i)=><li key={label} className={i<=trip.stage?'done':''}><span>{i<=trip.stage?<Check size={15}/>:i+1}</span><div><strong>{label}</strong><p>{i===trip.stage?'현재 단계':i<trip.stage?'확인 완료':'아직 확인하지 않았어요'}</p></div></li>)}</ol><button className="primary wide" onClick={advanceTrip}>{(trip.routine.transfer?['정류장에 도착했어요','버스를 탔어요','환승 정류장에서 내렸어요','승강장에 도착했어요','지하철을 탔어요','목적지 역에서 내렸어요','목적지에 도착했어요']:['정류장에 도착했어요','버스를 탔어요','목적지 정류장에서 내렸어요','목적지에 도착했어요'])[trip.stage]}<Check size={18}/></button><button className="text-button cancel" onClick={()=>{setTrip(null);setScenario('next');navigate('home');notify('다음 버스 안내 예시로 돌아왔어요.');}}>이동 취소 / 버스를 놓쳤어요</button></section></>}
@@ -83,7 +97,7 @@ export default function App() {
     {modal&&<Modal title={typeof modal==='object'?'루틴 설정':({route:'오늘의 경로',location:'출발 장소 확인',help:'화면 미리보기 안내',account:'나의 일상을 기억하려면'})[modal]} onClose={()=>setModal(null)}>
       {typeof modal==='object'?<RoutineForm routine={modal.routine} onSave={r=>{setRoutines(items=>modal.routine?items.map(item=>item.id===r.id?r:item):[...items,r]);setModal(null);notify('루틴을 미리보기에 저장했어요.');log('ui.routine.saved');}}/>:
       modal==='route'?<><p className="muted">{routine.origin} → {routine.destination} · 가상 경로</p><ol className="route-detail">{[['도보','집 출입구 → 정류장','5분'],['대기','첫 탑승 여유',`${buffer}분`],['버스',`${routine.bus}번 · 회사 방면`,'17분'],...(routine.transfer?[['환승','정류장 → 지하철 승강장','3분'],['대기','환승 여유','2분'],['지하철','2호선 · 목적지 방면','10분']]:[]),['도보','하차 지점 → 목적지','5분']].map(([type,detail,time],i)=><li key={i}><span className="tag">{type}</span><div><strong>{detail}</strong><p>{time}</p></div></li>)}</ol><p className="small muted">도보·대기·환승을 분리한 화면 예시예요. 실제 노선이나 연결 가능성은 확인되지 않았습니다.</p></>:
-      modal==='location'?<><p>집·회사 같은 고정 장소와 현재 위치에서 출발할 수 있어요.</p><div className="location-options"><button className="secondary" onClick={()=>{setModal(null);notify('저장된 집 출발 예시를 사용해요.');}}><Home size={18}/> 저장된 집에서</button><button className="secondary" onClick={()=>notify('현재 위치·지도 검색은 연동 전이에요. 실제 위치를 수집하지 않습니다.')}><Navigation size={18}/> 현재 위치에서</button></div><p className="muted small">주소 검색과 지도 핀 선택은 지도 연결 후 제공됩니다.</p></>:
+      modal==='location'?<OriginSelector onSelect={value=>{setOrigin(value);setOriginExpired(false);setTrip(null);setModal(null);navigate('home');}} onLogin={()=>setModal('account')} onAuthError={()=>{setOrigin(null);setOriginExpired(false);}}/>:
       modal==='account'?<AccountForm/>:
       <><p>디자인과 화면 흐름을 확인하는 React 프로토타입이에요.</p><ul className="help-list"><li>시간은 고정된 예시이며 실시간 카운트다운이 아니에요.</li><li>루틴과 설정은 새로고침하면 초기화돼요.</li><li>지도·교통·AI·알림은 연결 전이에요. 회원가입·로그인은 계정 화면에서 사용할 수 있어요.</li><li>‘정보 만료’ 버튼으로 안내를 중지한 화면도 볼 수 있어요.</li></ul></>}
     </Modal>}

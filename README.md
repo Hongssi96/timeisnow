@@ -233,4 +233,6 @@ AI 모델은 GPT-5.6 Luna (`gpt-5.6-luna`)로 확정했으며 사용자 승인�
 
 
 자연어 일정 입력 기획: [natural_language_schedule.md](./natural_language_schedule.md). 사용자 확인 후 저장하며 기능은 미구현입니다.
+F03-04(2026-10-07): 홈의 ‘다른 곳에서 출발’에서 로그인 후 현재 위치1회·지도 핀·본인 저장 장소를 선택할 수 있습니다. 권한 거절/시간 초과 시 지도 선택을 제공합니다. 선택은 화면 메모리600초이며 실제 경로/출발 시간은 준비 중입니다. 위치 품질·저장 장소 일치 판정은 F03-05 후속입니다. 상세 [출발지 API](./origin_api.md), Notion v0.38. DB head0005 유지, 백엔드 재시작 필요.
+
 프론트엔드는 실행 코드(`frontend/src`: app/components/lib/styles)와 테스트(`frontend/tests`: app/components/lib)로 분리합니다. 진입점은 src/main.jsx이며 실행 명령은 그대로 유지합니다. 상세 [프론트엔드 디렉터리 안내](./frontend/README.md).
