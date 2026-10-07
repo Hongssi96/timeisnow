@@ -4,6 +4,7 @@ import { apiRequest, ApiError } from '../lib/api';
 import { pollJourney, safeJourneyId, journeyError } from '../lib/journeys';
 import OriginSelector from './OriginSelector';
 import JourneyCandidates from './JourneyCandidates';
+import JourneyUnavailable from './JourneyUnavailable';
 
 function selection(value) {
   const origin=value?.origin;
@@ -50,7 +51,11 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
   function failure(error){
     if(['AUTH_REQUIRED','SESSION_EXPIRED'].includes(error.code)){authFailure();return;}
     if(error.code==='SEARCH_EXPIRED'){expire();return;}
-    if(['VERSION_CONFLICT','RESOURCE_NOT_FOUND','VALIDATION_ERROR','UNSUPPORTED_REGION','UNSUPPORTED_TIMING'].includes(error.code)){
+    if(error.code==='UNSUPPORTED_REGION'){
+      stop();snapshot.current=null;setOrigin(null);setDestination(null);setEditing(null);
+      setState({phase:'unsupported'});return;
+    }
+    if(['VERSION_CONFLICT','RESOURCE_NOT_FOUND','VALIDATION_ERROR','UNSUPPORTED_TIMING'].includes(error.code)){
       snapshot.current=null;setOrigin(null);setDestination(null);setEditing(null);
       setState({phase:'expired',message:journeyError(error)});return;
     }
@@ -86,6 +91,7 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
       if(controller.signal.aborted)return;
       current.deadline=Math.min(current.deadline,result.deadline);
       if(Date.now()>=current.deadline){expire();return;}
+      if(result.status==='failed'&&result.error?.code==='UNSUPPORTED_REGION'){failure(result.error);return;}
       setState(result.status==='failed'?{phase:'failed',message:journeyError(result.error),deadline:current.deadline}
         :{phase:result.candidates.length?'ready':'empty',candidates:result.candidates,reasons:result.unavailable_reasons,deadline:current.deadline});
     }catch(error){if(!controller.signal.aborted)failure(error);}
@@ -109,7 +115,7 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
     {busy&&<div className="info-box" role="status">{state.phase==='loading'?'경로 검색을 접수하고 있어요.':'경로 후보를 확인하고 있어요. 잠시 기다려주세요.'}</div>}
     {state.message&&<div className="info-box" role="alert">{state.message}{state.retryAt&&<p>잠시 기다리면 다시 확인할 수 있어요.</p>}</div>}
     {state.phase==='anonymous'&&<button className="primary" onClick={onLogin}>로그인하기</button>}
-    {state.phase==='empty'&&<section className="card empty-state"><h2>지금 비교할 경로가 없어요</h2><p>{state.reasons.includes('TRANSFER_LIMIT')?'현재 지원하는 최대 2회 환승 안의 후보가 없어요.':'이 위치에서 이용할 경로를 찾지 못했어요.'}</p><p>위치를 다시 선택하거나 잠시 후 새로 조회해주세요.</p></section>}
+    {['empty','unsupported'].includes(state.phase)&&<JourneyUnavailable unsupported={state.phase==='unsupported'} codes={state.reasons} onOrigin={()=>edit('origin')} onDestination={()=>edit('destination')}/>}
     {state.phase==='ready'&&<JourneyCandidates key={snapshot.current?.accepted?.search_id} candidates={state.candidates} preference={preference} onRecheck={()=>run(true,true)}/>}
   </div>;
 }

@@ -643,3 +643,17 @@
 - 배운 개념: AI의 자연어 해석, 서버의 달력 검증, 사용자의 저장 확인은 서로 다른 단계다. 날짜 경계에서 상대 표현이 바뀌지 않도록 기준 시각을 고정한다.
 - 남은 일: D02-04 모델/전송 조건, D03 보관 정책, 기존 인증·루틴/약속 기능 및 F17 구현·평가. 기존 착수 전 결정 순서 유지.
 - 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+### 2026-10-07 — F04-05 경로 없음·지원 범위·구간 정보 부족
+- 목표: 사용자 요청으로 F04-04를 보류하고 F04-05 안내/복구를 진행. 최신 origin/main63674ac에서 codex/journey-unavailable 생성, 미병합 비교 화면33efcec를 fast-forward 통합했다. main/MR 생성·병합은 수행하지 않는다.
+- 변경: backend/app/journey_provider.py의 환승 제한 전체 제외에서 NO_ROUTE 중복 제거. frontend/src/components/JourneyUnavailable.jsx 신규, JourneyComparison.jsx의 정상 빈 후보/지역 밖 재선택과 worker 오류 처리, JourneyCandidates.jsx의 미확인 근거/알 수 없는 사유 안전 표시, styles.css의 비교 화면 범위 본문 대비·버튼44px/줄바꿈. 관련 backend/tests/test_journeys.py·frontend/tests/components/JourneyComparison.test.jsx 보완.
+- 계약: Notion v0.43 5.2.6·변경 이력 추가 및 재조회 저장 확인, api_contract.md 전체 동기화. journey_api.md/planning.md/screen_plan.md/design_guide.md/TODO/기능 목록 동기화. 기존 경로/필드/권한/보관/DB DDL 유지. 무경로 사유 정밀화와 화면 흐름 변경.
+- 발견/수정: 최초 지역 밖 테스트가422 기대/실제202로 실패했다. 코드에서 지역 확인은 worker 단계임을 확인해 계약을POST202→GET200 failed/UNSUPPORTED_REGION으로 바로잡고 프론트의 worker 실패도 재선택 상태로 연결했다. POST /origin-validations의422와 구분한다. 재검증 완료.
+- 실제 검증: 프론트13파일101개·프로덕션 빌드1900모듈 통과. 백엔드 unittest117개(37.164초) 통과: 격리 PostgreSQL/ASGI·모의 공급자 양 끝 지역 밖 결과/경로 공급자 미호출, NO_RESULTS/EQUAL_POINTS/노드없음/전체환승제외 사유, 기존 auth/소유권/멱등/만료 회귀. 프론트 재선택 새 키/복수·미지 사유/지역 실패 입력 제거/정보 부족 후보 유지 검증.
+- 시각 검증: 임시 합성 fixture 화면에서 PC1440×1000/모바일390×844 무경로/지점/환승/지역 밖 안내와 구간 상세/Enter를 확인했다. 읽기전용 DOM 검사 가로넘침없음(390/375), 최종 버튼 전부44px 이상, 콘솔error0. 실제 홈/비교 입력 화면 PC/모바일 회귀도 확인. 임시 f0405-qa.html/jsx 삭제 및 탭/viewport 정리. screenshots f0405-unavailable-desktop.png/mobile.png는 워크스페이스 외 visualizations에 보관.
+- 검증 한계: 무경로/지역 밖 실제 카카오 호출·실기기GPS·실제 환승/운행·물리방향/출입구/플랫폼·AI는 검증하지 않았다. 시각 검증은 합성 상태이며 실공급자 E2E로 보고하지 않는다. 부족 근거를0/검증됨으로 채우지 않는다.
+- 실행 반영: 명령행을 확인한 기존 프로젝트 uvicorn을 종료하고 변경 코드로 localhost:8000 재시작, GET /api/v1/health status=ok 확인. Vite는 기존5173 서버의 변경 감지를 사용한다.
+- 게시 전 통합: 새로 갱신된 F04-03 병합 main4f94af1을 작업 브랜치에 fast-forward 반영했다. 기존33efcec와4f94af1의 파일 트리는 동일해 검증한 코드 변화/충돌 없음. main 기준 MR에는 F04-05 변경만 포함한다. Notion/로컬 진행 상태 재동기화.
+- 배운 개념: 정상 무결과·지원 범위 제한·외부 실패·부분 근거는 별개 상태다. 비동기 접수 HTTP 상태와 작업 결과 상태도 다르며 복구 행동은 실패 위치에 맞춰야 한다.
+- 남은 일: F04-04 및 GPS 수치/자동 판정 보류. 사용자MR/병합 후 다음 F05-01 도보 근거 수집, 실제 후보 선택/루틴 저장·출발 안내는 후속.
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa

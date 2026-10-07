@@ -157,6 +157,17 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
             for _ in range(10): last=await self.search()
         self.assertEqual(last[0],429)
 
+    async def test_unsupported_origin_or_destination_fails_worker_without_routes(self):
+        await self.signup_login()
+        for checked in [0,1]:
+            checks=[auth.AuthError(422,'UNSUPPORTED_REGION','합성 범위 밖')] if checked==0 else ['서울 합성동',auth.AuthError(422,'UNSUPPORTED_REGION','합성 범위 밖')]
+            with patch.object(places,'region_for_location',side_effect=checks),patch.object(journey_provider,'fetch_routes') as provider:
+                response=await self.search()
+            self.assertEqual(response[0],202);provider.assert_not_called()
+            result=await self.call('/journey-searches/'+response[2]['data']['search_id'])
+            self.assertEqual(result[0],200);self.assertEqual(result[2]['data']['status'],'failed')
+            self.assertEqual(result[2]['data']['error']['code'],'UNSUPPORTED_REGION');self.assertEqual(result[2]['data']['candidates'],[])
+
     async def test_worker_rechecks_location_after_provider_returns(self):
         await self.signup_login();_,created=await self.saved();place=created[2]['data']
         body={**BODY,'origin':{'type':'saved_place','place_id':place['place_id'],'location_version':1}}
@@ -201,6 +212,12 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ProviderTests(unittest.TestCase):
+    def test_empty_reasons_distinguish_no_route_endpoint_and_transfer_limit(self):
+        for status, reason in [('NO_RESULTS','NO_ROUTE'),('EQUAL_POINTS','NO_ROUTE'),('STARTNODES_NULL','ENDPOINT_UNRESOLVED'),('ENDNODES_NULL','ENDPOINT_UNRESOLVED')]:
+            self.assertEqual(journey_provider.normalize({'status':status},'balanced'),([], [reason]))
+        self.assertEqual(journey_provider.normalize({'status':'OK','routes':[]},'balanced'),([], ['NO_ROUTE']))
+        self.assertEqual(journey_provider.normalize({'status':'OK','routes':[route(transfers=3)]},'balanced'),([], ['TRANSFER_LIMIT']))
+
     def test_normalize_sort_cap_and_discard_raw_coordinates(self):
         rows=[route(800,1,50),route(1000,0,300),route(700,3,20)]
         for preference,expected in [('balanced',800),('fewer_transfers',1000),('less_walking',800)]:

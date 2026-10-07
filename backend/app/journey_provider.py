@@ -119,4 +119,6 @@ def normalize(data, preference):
             'missing_segments':missing[:]},vehicle_options))
     candidates.sort(key=lambda c: ((c['transfer_count'] if preference == 'fewer_transfers' else c['walking_seconds'] if preference == 'less_walking' else c['total_seconds']), c['total_seconds'],c['transfer_count'],c['walking_seconds']))
     candidates = candidates[:20]
-    return candidates, list(dict.fromkeys(reasons + ([reason for candidate in candidates for reason in candidate['missing_segments']] if candidates else ['NO_ROUTE'])))
+    if not candidates and not reasons:
+        reasons.append('NO_ROUTE')
+    return candidates, list(dict.fromkeys(reasons + [reason for candidate in candidates for reason in candidate['missing_segments']]))
