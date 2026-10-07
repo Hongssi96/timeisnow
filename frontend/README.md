@@ -32,4 +32,4 @@ npm --prefix frontend run build
 
 새 UI는 src/components, 공유 통신/SDK 코드는 src/lib에 추가하고 테스트는 대응하는 tests 하위 폴더에 둡니다. 테스트 파일명은 `*.test.js` 또는 `*.test.jsx`를 사용합니다. 테스트 import와 vi.mock은 같은 실제 소스 경로를 가리켜야 합니다. 테스트 공통 설정은 tests/setup.js에서 관리합니다.
 
-F03-04도 동일 구조에 맞췄습니다. OriginSelector는 src/components, currentOrigin은 src/lib, 관련 테스트는 tests/app·components·lib에 위치합니다. App/지도/import·mock 경로를 통합했고 전체73개 테스트와 빌드를 확인했습니다. codex/current-origin은 폴더 정리가 병합된 main ca8cd93을 포함하며, 사용자 검토 후 main에 병합합니다.
+F03-04와 폴더 정리는 main0402d67에 포함됐습니다. OriginSelector/OriginReview는 src/components, currentOrigin은 src/lib, 관련 테스트는 tests/app·components·lib에 위치합니다. F03-05a 수동 확인은 codex/origin-quality에서 전체79개 테스트와 빌드를 확인했습니다. GPS 수치/자동 일치 판정은 보류하며 사용자 검토 후 main에 병합합니다.

@@ -4,6 +4,16 @@
 
 ## 실제 기록
 
+### 2026-10-07 — F03-05a GPS 수치 보류·실제 출발 위치 수동 확인
+- 목표/사용자 결정: ‘GPS 수치는 보류하고 수동 확인만’. 최신 main0402d67에서 codex/origin-quality를 만들었다. F03-04/ff5a5f4·R01/ca8cd93 포함을 fetch/ancestor로 확인했으며 에이전트는 MR 생성/main 병합을 수행하지 않는다.
+- 명세 확인/변경: 최신 Notion v0.38 5.2.1과 todo·기획/개인화/프롬프트/로깅·정책·디자인/화면·기존 JSX/CSS를 비교했다. 구현 전에 v0.39 5.2.2를 추가하고 API 목록/상태/예시/호환성/변경 이력을 맞췄다. location_confirmed 선택 strict boolean(default false), user_confirmed, quality/place_match 추가. false/pending·지도/장소·auth/소유권/오류 계약 유지. GPS 수치/자동 근접·출입구 일치 판정은 미정/보류이며 F03-05 상위 체크를 유지했다. 최종 원문 저장 재조회 및 api_contract.md 전문 동기화 확인. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+- 구현: backend/app/origins.py는 확인을 본인 보고로 반환하며 품질 unassessed·수치 정책 deferred·장소 일치 unconfirmed를 유지한다. 현재/지도는 기존 지원지역 확인, 저장 장소는 본인/위치 버전 재검사 후 selected_by_user. 과거/미래 관계는 표시 정보이며 자동 승인/거절 없음. DB 스키마0005 유지, 좌표/측정치 저장·AI 전달·로그 원문 없음.
+- 화면: frontend/src/components/OriginSelector.jsx·OriginReview.jsx는 최초 GPS 응답을 미리보기로만 유지한다. 실제 지도 로딩 성공 후 ‘이 위치가 실제 출발 위치예요’로 같은 측정치를 다시 확인하고 성공 후 적용한다. MapPinPicker.jsx에 선택적 로딩 상태 콜백을 추가했다. 핀 이동은 지도 직접 선택으로 전환, 저장 장소는 직접 선택, 재측정/방법 전환/이탈/인증 만료/600초 확인 만료 시 초안 제거. 만료는 진행 중 요청도 취소해 늦은 성공을 무시한다. App.jsx는 위치 직접 확인과 GPS 자동 판정 보류를 함께 표시한다. 기존 클래스/팔레트/반응형 재사용, 새 디자인 값 없음.
+- 실제 검증: PostgreSQL 임시 스키마/ASGI 백엔드95개 통과. 기본false/엄격한 boolean·과거/미래·큰 정확도에서도 자동 수치 판정 없음·본인 장소/버전/CSRF·쿼터·로그 비노출 검증. 프론트11개 파일79개 통과(미확인 자동 적용 없음·확인 실패/잘못된 응답·지도 성공/실패 재시도 상태·핀 전환·초안 만료 및 확인 중 늦은 응답 차단). Vite build1896모듈 통과, git diff --check 통과.
+- 실제 실행: 검증용 백엔드를 최신 코드로 재시작해 localhost8000에서 공개 서울시청 합성 좌표의 pending/user_confirmed200·no-store·future/품질unassessed/일치unconfirmed를 확인했다. 실제 앱의 지도 방향 버튼→서버 지역 확인→준비 카드 적용 회귀 확인. 임시 HTML에서 실제 OriginReview/MapPinPicker를 합성 측정치와 연결하여1440×1000/390×844 실제 지도·미래 안내·확인 버튼/핀 이동 콜백·가로 넘침 없음·브라우저 콘솔 error0건 확인. 실제 기기 GPS/권한 승인·휴대전화 정확도는 검증하지 않았으며 GPS 단계는 모의 테스트다. 임시 HTML/JSX·합성 계정/세션 제거, 검증 이미지는 Codex visualization 폴더에 보관했다.
+- 문서/진행: origin_api.md·api_contract.md·planning.md·personalization.md·ai_prompts.md·logging.md·policy_decisions.md·screen_plan.md·design_guide.md·README.md·frontend/README.md·todo.md·feature_breakdown.md 동기화. F03-05a만 완료, F03-05 자동 품질/일치는 보류. 다음은 사용자 기능 브랜치 MR/병합 후 F04-01 대중교통 경로 후보 조회다.
+- 배운 개념: 사용자가 위치를 확인한 사실과 GPS 오차/최신성 검증은 서로 다르다. 확인 화면 유효기간은 GPS 최신성 보증이 아니며 만료/취소 이후 응답도 적용되지 않아야 한다. W3C Geolocation의 accuracy/timestamp 의미는 참고하되 앱 임계값으로 사용하지 않았다(https://www.w3.org/TR/geolocation/).
+
 ### 2026-10-07 — F03-04 브랜치에 병합된 프론트 폴더 구조 반영
 - 요청: R01이 먼저 main에 병합되어 F03-04를 새 구조에 맞추고 다시 검증/푸시한다. 기존 codex/current-origin을 계속 사용하며 main이나 MR을 에이전트가 병합하지 않는다.
 - 확인: 최신 main ca8cd93에 R01/1ca0991 포함, F03-04/235d617 미포함을 fetch/ancestor로 확인했다. 최신 Notion v0.38 5.2.1 계약·TODO·폴더 README/Vite와 F03-04 import/테스트를 비교했다.

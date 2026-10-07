@@ -66,7 +66,7 @@ export default function App() {
           <div className="routine-toolbar"><div className="tabs" aria-label="출발 루틴">{routines.map(r=><button key={r.id} className={selected===r.id?'selected':''} onClick={()=>{setSelected(r.id);setScenario('ready');}}><span>{r.transfer?'학교':'출근'}</span> {r.name}</button>)}</div><button className="text-button" onClick={()=>setModal('location')}><Navigation size={16}/> 다른 곳에서 출발 <ArrowUpRight size={15}/></button></div>
           {origin ? <section className="card origin-summary" aria-live="polite"><span className="soft-icon"><Navigation size={24}/></span>
             <h2>{originExpired ? '출발지를 다시 확인해주세요' : `${origin.label}에서 출발 준비`}</h2><p>{origin.location_address}</p>
-            {origin.origin.type === 'current_location' && <p className="small muted">측정 시각 {new Date(origin.origin.captured_at).toLocaleTimeString('ko-KR')} · 측정 정확도 약 {Math.round(origin.origin.accuracy_meters)}m · 위치 품질 확인 전</p>}
+            {origin.origin.type === 'current_location' && <p className="small muted">측정 시각 {new Date(origin.origin.captured_at).toLocaleTimeString('ko-KR')} · 측정 정확도 약 {Math.round(origin.origin.accuracy_meters)}m · 위치 직접 확인 · GPS 품질 자동 판정 보류</p>}
             <div className="info-box">{originExpired ? '출발지 선택이 만료됐어요. 다시 선택해주세요.' : '출발지를 확인했어요. 실제 경로와 출발 시간 안내는 준비 중이에요.'}</div>
             <div className="button-row"><button className="primary" onClick={()=>setModal('location')}>출발지 다시 선택</button><button className="secondary" onClick={()=>{setOrigin(null);setOriginExpired(false);}}>예시 화면으로 돌아가기</button></div>
           </section> : <><div className="home-grid"><div className="primary-column">
