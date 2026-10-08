@@ -173,6 +173,7 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
         await self.signup_login()
         body, saved = await self.saved()
         canonical = places_dto.PlaceInput(**body).model_dump(mode='json')
+        canonical.pop('source')  # Reproduce the pre-source F03-01 request hash.
         canonical.pop('entrance_note'); canonical.pop('location_confirmation_id')
         with database() as connection:
             user_id = connection.execute('SELECT id FROM users').fetchone()['id']

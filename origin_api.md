@@ -49,3 +49,7 @@ GPS 수치는 보류하고 수동 확인만 구현한다. 경과 시간/정확�
 ## 실제 검증과 범위
 
 백엔드94개·프론트73개·빌드, 실제 PostgreSQL/ASGI 소유권·버전/삭제·쿼터·로그 비노출 및 공개 좌표 로컬 HTTP200/no-store 확인. 실제 지도 방향 버튼·키보드 선택·1440×1000/390×844 화면과 새로고침 초기화 확인. GPS 성공/거절/시간 초과/미지원/취소는 모의 테스트이며 실제 사용자 위치/권한 승인·실제 휴대전화 측정은 수행하지 않았다. 상세 development_log.md의 F03-04 기록.
+
+## F03-02a 지도 핀 저장 확장 — 2026-10-08
+
+OriginSelector의 지도 선택에서 핀을 직접 정한 후 저장하고 사용을 제공한다. 기존 map_pin 단발 origin-validations 흐름은 유지한다. 명시 저장은 place-location-confirmations와 POST places source=map_pin을 거쳐 기존 created 흐름으로 saved_place 검증/자동 선택한다. 이미 비교 화면에서 선택한 지도 지점도 새 장소 저장에 initialLocation으로 전달해 재검색하지 않는다. 생성 실패/선택 검증 실패를 구분하고 재시도 시 중복 저장하지 않는다. Notion v0.51·place_api.md 기준.

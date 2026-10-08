@@ -4,6 +4,17 @@
 
 ## 실제 기록
 
+### 2026-10-08 — F03-02a 검색 없이 지도 핀 저장·자동 선택
+- 목표/기반: 사용자가 지도에서 고른 지점을 저장하려고 주소를 다시 검색해야 하는 불편을 해결하도록 요청. 최신 origin/main4ddd36b에서 codex/map-pin-place-save 생성. TODO·장소/출발/루틴 명세·기획·기능 목록·디자인/화면·로깅 문서와 Notion v0.50 확인, 구현 전에 v0.51/5.1.4 조건부 핀 생성 계약 추가. F05-01은 별도 codex/walking-evidence에 있으며 이번 브랜치에 미병합 코드를 포함하지 않았다.
+- 원인/변경: 기존 PlaceInput의 search_id/candidate_id 필수와 create의 후보 조회 때문에 지도 핀만으로 새 장소 생성 불가. backend/app/places/dto.py에 source 기본search/map_pin과 조건부 검증, service.py에 확인 ID 기반 생성 분기 추가. map_pin은 name=생성 당시label, address/location_address=서버 확인 법정동, 실제 좌표=확인된 핀. 정밀 주소/공식 장소명을 추측하지 않는다. 검색 입력과 과거 멱등 해시 유지, 새 DDL 없음.
+- 화면/파일: frontend/src/components/PinPlaceSave.jsx 추가, OriginSelector.jsx·JourneyComparison.jsx 연결. 지도 선택 뒤 '이 위치 저장하고 사용'→이름만 입력→지역 확인/POST201→saved_place 검증/자동 선택. 이미 선택한 지도 지점의 '새 장소 저장'에도 기존 핀 전달, 반대쪽 선택 유지. 저장 중 지도/취소/방식 잠금, 이탈 abort/늦은 응답 무시. 응답 유실 재시도는 같은 body/키, 404는 명시적 재확인, 저장 성공 뒤 선택 검증 실패는 저장 목록에서 재선택하여 중복 생성 방지. 기존 단발 지도 사용/검색 저장 유지.
+- 실제 검증: 신규 backend/tests/test_pin_place_create.py4개 포함 백엔드134개(62.698초) 통과. 실제 PostgreSQL의 테스트 임시 스키마/ASGI로 검색 없는 저장/상세·확인 만료/좌표 불일치/타인·CSRF·형식422·멱등409·만료 후 동일키 재시도·삭제 후404·기존 search 해시 호환 확인. 최초 전체 검증에서 레거시 해시 테스트가 새 DTO 필드source를 포함하는 문제 발견, test_place_map_pin.py에 과거 형식 재현을 위한 source 제외 후 전체 재실행 통과.
+- 프론트 검증: PinPlaceSave.test.jsx 신규5개·OriginSelector.test.jsx 추가1개, 전체148개/18파일·빌드1903모듈 통과. 검색 없이 핀 전달/저장 장소 자동 선택, 네트워크 재시도 같은 키/본문·확인 재호출0, 처리 중 잠금/이탈 abort, 확인404 재확인·로그인 만료를 검증했다. 마지막 테스트 assertion 강화 후 OriginSelector12개 재통과. 구현을 복제하는 테스트 대신 API 흐름과 실패 복구를 검증한다.
+- 시각/실행: 임시 localhost 검증 페이지에서 실제 Kakao 지도(공개 서울시청 좌표)+합성 확인/저장/선택 API로 PC1440×1000·모바일390×844 폼/버튼/자동 도착지 선택 완료 확인, 가로 넘침0·콘솔error0. 실제 사용자 계정에 테스트 장소를 생성하지 않았으며 임시 페이지/탭 제거, viewport 원복. UI 저장 결과는 합성이며 실사용 HTTP 생성 테스트로 표시하지 않는다. 프로젝트 백엔드 재시작(worker33740)·health200. 기존 미색/초록·place-form/info-box/버튼 재사용, 새 CSS/팔레트 없음.
+- 문서/명세: Notion v0.51 API 목록/5.1.2 적용범위/5.1.4 입력·예시·오류·화면·구현 상태/변경 이력 저장 후 재조회. api_contract.md 복사·place_api.md/origin_api.md/routine_api.md/planning.md/design_guide.md/screen_plan.md·TODO/feature_breakdown F03-02a 동기화. 기존 클라이언트 search 기본값·기존키 재시도·API 응답/계산/보관 호환, 새 지도 핀 생성 조건과 사용자 흐름 추가. 좌표/이름/주소/쿠키/본문 일반 로그 추가 없음.
+- 배운 개념/다음: 검색 후보의 신원과 사용자가 정한 위치는 서로 다른 생성 근거다. source별 필수값을 검증하면 가짜 검색 후보를 만들지 않고 기존 확인 자원을 재사용할 수 있다. 새 생성 필드가 기본값이어도 과거 멱등 해시와 호환시켜야 한다. F03-02a 완료, 사용자 기능 브랜치 MR/병합 후 F05-02 프롬프트/버전 로딩(선행 F05-01 별도 브랜치 검토). GPS 자동 판정/F04-04/AI·실시간은 기존 후속/보류 상태.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.51, 지도 핀 조건부 생성 입력/사용자 흐름 추가)
+
 ### 2026-10-07 — F04-03 실제 경로 후보 비교 화면
 - 목표/기반: 사용자 진행 요청에 따라 F04-02 main63674ac 병합을 fetch로 확인, 최신 main에서 codex/journey-comparison 생성. 기존 미색/초록·카드/버튼·내비게이션 톤으로 실제 출발/도착 선택과 후보 비교를 연결한다. 에이전트 MR 생성/main 병합 없음.
 - 사전 확인/명세: todo/feature_breakdown F04-03·최신 Notion v0.41 5.2.3~4/20절·planning/personalization/ai_prompts/logging/development_log·design_guide/screen_plan 및 기존 App/OriginSelector/OriginReview/MapPinPicker/PlacesCard·CSS·API클라이언트/테스트를 비교했다. 구현 전에 Notion v0.42 5.2.5에 사용자 흐름·접수/조회/중지/재시도/만료·비교/상세/미확인 근거·호환성을 구체화했다. 기존 서버 API/JSON모델/권한/DB DDL/300초·600초·24시간 및GPS 수치 보류 계약 유지. 최신 재조회/전문 로컬 api_contract.md 동기화 확인. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa

@@ -1,6 +1,6 @@
 # 지금이니? — TODO
 
-- 마지막 갱신: 2026-10-08 (R02 SQL 계층 분리 완료)
+- 마지막 갱신: 2026-10-08 (F03-02a 검색 없이 지도 핀 저장 완료)
 - 프로젝트: `C:/projects/timeisnow`
 - 진행 현황 기준 문서: 이 파일. 상세 요구·완료 기준은 [기능 분리](./feature_breakdown.md), [기획](./planning.md), [약속 확장](./meeting_plan.md), [API 명세](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa)를 따른다.
 - 현재: 공통 요청/로그와 기본 회원 인증 완료. 가입 입력 안내 및 localhost CSRF 차단 수정(2026-10-06, development_log.md·백엔드56개/프론트27개·Notion v0.33). PostgreSQL 회원 인증 테이블5개 적용, 경로/이동/약속 업무 API는 미구현. 장소 구현 상태는 아래 F03-01 기록을 따른다.
@@ -23,7 +23,8 @@
 - 현재: main a99eea4에 인라인 장소 저장까지 병합 확인. F04-03a 이동 방법 우선 보기 완료(2026-10-08, development_log.md·Notion v0.48·프론트138개/빌드·합성 PC/모바일). codex/journey-method-priority에서 구현했다.
 - 현재: F06-04 장소 변경/삭제 후 루틴 복구 안내 완료(2026-10-08, development_log.md·Notion v0.49·백엔드130개/프론트142개/빌드·합성 PC/모바일). codex/routine-recovery는 최신 main a99eea4에서 생성하고 미병합 F04-03a를 포함했다.
 - 현재: R02 남은 경로 서비스 SQL2곳 repository 위임 완료. codex/journey-repository-boundary·백엔드130개 통과·정적 검사 SQL 직접 실행0건·개발 일지 R02 SQL 계층 분리 마무리 근거.
-- 다음 작업: 사용자 검토 후 codex/journey-repository-boundary MR/병합, 이후 F05-01 도보 근거 수집. F07 출발 안내, GPS 자동 판정·메일 인증/복구는 후속이다.
+- 현재: F03-02a 지도 핀 확인 ID로 검색 없이 저장/자동 선택 완료, codex/map-pin-place-save·Notion v0.51·development_log.md 검증 근거. F04-03a는6c238cb로 이미 main 반영 확인.
+- 다음 작업: 사용자 F03-02a 및 F05-01 codex/walking-evidence 검토/MR/병합 후 F05-02 프롬프트 블록·버전 로딩. F07·GPS 자동 판정·메일 인증/복구는 후속이다.
 
 ## 개발 구조 정리
 
@@ -100,6 +101,7 @@
 
 - [x] F03-01: 주소 검색 결과를 선택해 집·회사 이름과 위치를 저장한다. (2026-10-07, development_log.md의 F03-01 기록·Notion v0.35; 실제 카카오 검색/DB 저장·새로고침 유지·권한/만료/멱등 검증)
 - [x] F03-02: 출입구 또는 지도 핀을 확인·수정한다. (2026-10-07, development_log.md의 F03-02 기록·Notion v0.36; 지도 클릭/드래그/방향 버튼·핀 확인·저장/수정·버전/소유권/만료 및 데스크톱/모바일 검증)
+- [x] F03-02a: 지도 선택 좌표를 검색 없이 저장하고 출발지·도착지로 자동 선택한다. (2026-10-08, development_log.md F03-02a·Notion v0.51·백엔드134개/프론트148개/빌드1903·실제 지도+합성 API PC/모바일 확인)
 - [x] F03-03: 내 장소 목록·수정·삭제를 구현한다. (2026-10-07, development_log.md의 F03-03 기록·Notion v0.37; 실제 이름 수정/삭제204·목록·타인 차단·버전/삭제 재시도·데스크톱/모바일 검증. 실제 루틴/산정 연결은 F04~06에서 구현)
 - [x] F03-04: 현재 위치 출발과 권한 거절 시 지도 선택을 제공한다. (2026-10-07, development_log.md의 F03-04 기록·Notion v0.38; 단발GPS/지도/본인 장소 입력 확인·모의 거절/시간초과·실제 지역 확인/데스크톱/모바일. 실제 경로·출발 시간은 F04~07 후속)
 - [ ] F03-05: 위치 시각·정확도 및 저장 장소와의 일치 여부를 처리한다. (부분 완료: 수동 확인은 F03-05a. GPS 수치/자동 일치 판정은 2026-10-07 사용자 결정으로 보류)

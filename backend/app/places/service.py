@@ -90,6 +90,8 @@ def create(request, body):
     if key is not None and not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', key):
         raise AuthError(422, 'VALIDATION_ERROR', '입력값을 확인해주세요.')
     canonical = body.model_dump(mode='json')
+    if body.source == 'search':
+        canonical.pop('source')
     # Preserve F03-01 retry hashes when the new optional fields are omitted/null.
     for field in ('entrance_note', 'location_confirmation_id'):
         if canonical[field] is None:
@@ -109,16 +111,20 @@ def create(request, body):
                 if not row:
                     missing()
                 return place_data(row)
-        result = repository.find_search(connection, body.search_id, user_id)
-        candidate = next((item for item in result['candidates'] if item['candidate_id'] == str(body.candidate_id)), None) if result else None
-        if not candidate:
-            missing()
         location_address = None
-        if body.location_confirmation_id:
+        if body.source == 'map_pin':
             location_address = confirmed_location(connection, user_id, body.location_confirmation_id, body.location)
-        elif candidate['location'] != body.location.model_dump():
-            raise AuthError(422, 'VALIDATION_ERROR', '선택한 장소를 다시 확인해주세요.')
-        row = repository.insert_place(connection, (uuid4(), user_id, body.label, candidate['name'], candidate['address'],
+            name, address = body.label, location_address
+        else:
+            result = repository.find_search(connection, body.search_id, user_id)
+            candidate = next((item for item in result['candidates'] if item['candidate_id'] == str(body.candidate_id)), None) if result else None
+            if not candidate: missing()
+            name, address = candidate['name'], candidate['address']
+            if body.location_confirmation_id:
+                location_address = confirmed_location(connection, user_id, body.location_confirmation_id, body.location)
+            elif candidate['location'] != body.location.model_dump():
+                raise AuthError(422, 'VALIDATION_ERROR', '선택한 장소를 다시 확인해주세요.')
+        row = repository.insert_place(connection, (uuid4(), user_id, body.label, name, address,
                                                    body.location.latitude, body.location.longitude, body.entrance_note,
                                                    'map_pin' if body.location_confirmation_id else 'search', location_address))
         if key:

@@ -1,7 +1,7 @@
 # 지금이니? — 고정 장소 관리 (F03-01~03)
 
-- 기준: [Notion API v0.37](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa) 02절·5.1.1~3절, 2026-10-07 저장 재조회 확인.
-- 범위: 주소/키워드 검색 → 후보 선택 → 지도 핀 확인·출입구 설명 → 집·회사 등 이름 저장 → 본인 목록/상세 및 이름/위치·출입구 수정·삭제. F03-04 현재 위치/지도/본인 장소 출발지 선택은 [origin_api.md](./origin_api.md)·Notion v0.38을 따른다. 위치 품질/일치 판정은 F03-05 후속이다.
+- 기준: [Notion API v0.51](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa) 02절·5.1.1~4절, 2026-10-08 저장 재조회 확인.
+- 범위: 주소/키워드 검색 후보 또는 지도에서 직접 고른 핀 → 위치 확인·출입구 설명 → 집·회사 등 이름 저장 → 본인 목록/상세 및 이름/위치·출입구 수정·삭제. F03-04 현재 위치/지도/본인 장소 출발지 선택은 [origin_api.md](./origin_api.md)·Notion v0.38을 따른다. 위치 품질/일치 판정은 F03-05 후속이다.
 
 React ‘내 설정 → 내 장소’에서 로그인 후 등록한다. 실제 저장 장소는 PostgreSQL 원본이며 화면 체험 루틴의 가상 집/회사에는 자동 적용하지 않는다. 계정 모달을 열면 장소 카드와 요청을 제거하고 닫을 때 다시 조회하여 이전 계정의 화면 자료를 재사용하지 않는다.
 
@@ -10,7 +10,7 @@ React ‘내 설정 → 내 장소’에서 로그인 후 등록한다. 실제 �
 | API | 입력/응답 | 핵심 규칙 |
 | --- | --- | --- |
 | POST /api/v1/place-searches | query(공백 제거 후1~100자) → search_id/expires_at/candidates | 카카오 주소·키워드 각각 첫10건, 서울/경기 주소만, 중복 제거 최대20건, 사용자당10회/분 |
-| POST /api/v1/places | label(1~30자), location, search_id, candidate_id, entrance_ref(null), location_confirmation_id?, entrance_note? →201 장소 | 본인 후보/600초 만료/좌표 일치 또는 본인 핀 확인. 선택 Idempotency-Key로24시간 중복 생성 방지 |
+| POST /api/v1/places | label(1~30자), location, source?(기본search), search_id/candidate_id(search필수), location_confirmation_id(map_pin필수/search선택), entrance_ref(null), entrance_note? →201 장소 | 본인 후보/600초 만료/좌표 일치 또는 본인 핀 확인. 선택 Idempotency-Key로24시간 중복 생성 방지 |
 | GET /api/v1/places | limit(기본20/최대100), cursor? → items/next_cursor | 본인 UUID 내림차순 목록, 타인/없는 cursor404 |
 | GET /api/v1/places/{place_id} | →200 장소 | 본인만, 타인/없는/잘못된 ID404 |
 | PATCH /api/v1/places/{place_id} | expected_version, label?, location?, location_confirmation_id?, entrance_note? →200 장소 | 본인 수정·버전409. location은 본인 확인 ID 필수 |
@@ -70,3 +70,11 @@ UI는 이름 수정/취소와 대상 이름을 표시하는 삭제 확인/취소
 검증: 백엔드90개(관리10개 포함)·프론트57개·빌드. 실제 PostgreSQL 소유권/라벨/충돌/동시 수정·삭제/삭제 후 조회·수정·키 재시도404/다른 장소 보존/로그 비노출 확인. 임시 스키마의 기존version4를location_version4로 보존 및왕복 검증. 실제HTTP/UI 합성 계정 이름 수정200·version2/location_version1·새로고침 유지, 삭제204/빈 본문·조회404·기존 키 재시도404·새 키 신규 저장201, 데스크톱1440×1000/모바일390×844 이름 수정/삭제 확인·취소/빈 상태/키보드 취소 확인. 실제 휴대전화/운영 백업·전체 사본 정리·루틴 연결 미검증.
 
 호환성: 기존PATCH에 선택label, 응답location_version 추가. 기존version 충돌 검사는 유지. DELETE는 기존204 설계를 구현하며 현재 저장소 단건 삭제를 동기 완료한다. 일반 개인 이동/탈퇴의202 사본 정리는 기존 계약을 유지한다.
+
+## F03-02a 검색 없이 지도 핀 생성 — 2026-10-08
+
+source=map_pin은 검색 ID/후보 ID를 생략(null도 허용)하고 본인·600초 미만료 location_confirmation_id와 정확히 일치하는 location으로 저장한다. source=search(생략 기본값)는 기존 후보 ID와 소유권/만료 검증을 유지한다. map_pin과 검색 ID 혼용 또는 확인 ID 누락은422, 확인 타인/만료/없음404, 좌표 불일치422. 인증/CSRF·no-store·24시간 멱등/409·삭제 후 같은키404 유지. 기존 search source 생략/명시의 저장 해시는 과거 형식과 동일하다.
+
+예시 입력: {"source":"map_pin","label":"집","location":{"latitude":37.5665,"longitude":126.9780},"location_confirmation_id":"00000000-0000-0000-0000-000000000001"}. 실제 확인 응답의 ID를 사용한다. 새 DDL/AI/장소 검색 없음. name은 생성 당시 label, address/location_address는 확인된 법정동이며 정밀 주소나 공식 장소명이 아니다. label 수정은 기존 규칙대로 name을 바꾸지 않는다.
+
+지도 선택 뒤 명시 저장→saved_place 자동 선택. 기존 선택 핀도 새 장소 저장 화면에 전달한다. 저장 응답 유실 시 동일 key/body 재시도하며 기존 결과는 확인 만료 후에도 반환된다. 새 생성만 확인 만료404. 신규 백엔드4개/전체134개, 프론트148개/빌드1903, 실제 지도+합성 API PC/모바일 검증은 development_log.md F03-02a 참고.
