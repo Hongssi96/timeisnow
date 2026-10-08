@@ -6,7 +6,9 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import test_places
-from app import auth, places
+from app.auth import security as auth
+from app.common.database import database
+from app.places import dto as places_dto, provider as places_provider
 from test_api_contract import request
 
 
@@ -22,7 +24,7 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
 
     async def confirmation(self, location=None):
         location = location or {'latitude':37.5002, 'longitude':127.0002}
-        with patch.object(places, 'region_for_location', return_value='서울특별시 합성동'):
+        with patch.object(places_provider, 'region_for_location', return_value='서울특별시 합성동'):
             response = await self.call('/place-location-confirmations', {'location':location})
         self.assertEqual(response[0], 200)
         return response[2]['data']
@@ -70,7 +72,7 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
         payload = {**body, 'location':confirmation['location'], 'location_confirmation_id':confirmation['confirmation_id']}
         self.assertEqual((await self.create({**payload, 'location':{'latitude':38, 'longitude':127}}))[0], 422)
         self.assertEqual((await self.create({**payload, 'location_confirmation_id':str(uuid4())}))[0], 404)
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute('UPDATE place_location_confirmations SET expires_at=now()')
         self.assertEqual((await self.create(payload))[0], 404)
         self.assertEqual((await self.update(saved[2]['data']['place_id'], {'expected_version':1,
@@ -81,7 +83,7 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
         await self.signup_login()
         body, saved = await self.saved()
         confirmation = await self.confirmation()
-        with auth.database() as connection:
+        with database() as connection:
             other = uuid4()
             connection.execute('INSERT INTO users(id,display_name) VALUES(%s,%s)',(other,'다른 합성 회원'))
             connection.execute('UPDATE auth_sessions SET user_id=%s WHERE token_hash=%s',(other,auth.digest(self.cookie.split('=')[1])))
@@ -104,7 +106,7 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response[0],422)
             self.assertEqual(response[1][b'cache-control'],b'no-store')
         self.assertEqual((await self.update(place_id, {'expected_version':1,'entrance_note':'정문'},False))[0],403)
-        with patch.object(places,'region_for_location') as provider:
+        with patch.object(places_provider,'region_for_location') as provider:
             self.assertEqual((await self.call('/place-location-confirmations',{'location':{'latitude':91,'longitude':127}}))[0],422)
             provider.assert_not_called()
 
@@ -121,7 +123,7 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
     async def test_map_confirmation_and_update_logs_are_private(self):
         import io
         import logging
-        from app.request_logging import logger, RequestJsonFormatter, RequestEventFilter
+        from app.common.request_logging import logger, RequestJsonFormatter, RequestEventFilter
         await self.signup_login()
         _, saved = await self.saved()
         output=io.StringIO();handler=logging.StreamHandler(output)
@@ -146,14 +148,14 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
     async def test_outside_region_failure_cleanup_and_quota(self):
         await self.signup_login()
         await self.confirmation()
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute('UPDATE place_location_confirmations SET expires_at=now()')
-        with patch.object(places,'region_for_location',side_effect=auth.AuthError(422,'UNSUPPORTED_REGION','지원지역 밖')):
+        with patch.object(places_provider,'region_for_location',side_effect=auth.AuthError(422,'UNSUPPORTED_REGION','지원지역 밖')):
             self.assertEqual((await self.call('/place-location-confirmations', {'location':{'latitude':35,'longitude':129}}))[0],422)
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM place_location_confirmations').fetchone()['n'],0)
         for _ in range(8): await self.confirmation()
-        with patch.object(places,'region_for_location') as upstream:
+        with patch.object(places_provider,'region_for_location') as upstream:
             response = await self.call('/place-location-confirmations', {'location':{'latitude':37,'longitude':127}})
         self.assertEqual(response[0],429)
         self.assertIn(b'retry-after',response[1]); upstream.assert_not_called()
@@ -170,9 +172,9 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
         import hashlib
         await self.signup_login()
         body, saved = await self.saved()
-        canonical = places.PlaceInput(**body).model_dump(mode='json')
+        canonical = places_dto.PlaceInput(**body).model_dump(mode='json')
         canonical.pop('entrance_note'); canonical.pop('location_confirmation_id')
-        with auth.database() as connection:
+        with database() as connection:
             user_id = connection.execute('SELECT id FROM users').fetchone()['id']
             fingerprint = hashlib.sha256(json.dumps(canonical,sort_keys=True).encode()).hexdigest()
             connection.execute("INSERT INTO place_creation_keys VALUES(%s,%s,%s,%s,now()+interval '24 hours')",(user_id,'legacy-key',fingerprint,saved[2]['data']['place_id']))
@@ -181,15 +183,15 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
 
 class RegionTests(unittest.TestCase):
     def test_supported_region_and_outside_or_sea(self):
-        location=places.Location(latitude=37.5,longitude=127)
+        location=places_dto.Location(latitude=37.5,longitude=127)
         for documents in ([],[{'region_type':'B','region_1depth_name':'부산광역시','address_name':'부산 합성동'}]):
-            with patch.object(places,'provider_documents',return_value=documents):
-                with self.assertRaises(auth.AuthError) as error: places.region_for_location(location)
+            with patch.object(places_provider,'provider_documents',return_value=documents):
+                with self.assertRaises(auth.AuthError) as error: places_provider.region_for_location(location)
                 self.assertEqual(error.exception.code,'UNSUPPORTED_REGION')
-        with patch.object(places,'provider_documents',return_value=[{'region_type':'B','region_1depth_name':'경기도','address_name':'경기도 합성동'}]):
-            self.assertEqual(places.region_for_location(location),'경기도 합성동')
+        with patch.object(places_provider,'provider_documents',return_value=[{'region_type':'B','region_1depth_name':'경기도','address_name':'경기도 합성동'}]):
+            self.assertEqual(places_provider.region_for_location(location),'경기도 합성동')
 
     def test_malformed_region_is_not_supported_guess(self):
-        with patch.object(places,'provider_documents',return_value=[{'region_type':'B'}]):
-            with self.assertRaises(auth.AuthError) as error: places.region_for_location(places.Location(latitude=37.5,longitude=127))
+        with patch.object(places_provider,'provider_documents',return_value=[{'region_type':'B'}]):
+            with self.assertRaises(auth.AuthError) as error: places_provider.region_for_location(places_dto.Location(latitude=37.5,longitude=127))
         self.assertEqual(error.exception.code,'PROVIDER_RESPONSE_INVALID')

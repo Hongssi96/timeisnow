@@ -1,6 +1,6 @@
 # 지금이니? — TODO
 
-- 마지막 갱신: 2026-10-08
+- 마지막 갱신: 2026-10-08 (R02 백엔드 3계층 리팩터링)
 - 프로젝트: `C:/projects/timeisnow`
 - 진행 현황 기준 문서: 이 파일. 상세 요구·완료 기준은 [기능 분리](./feature_breakdown.md), [기획](./planning.md), [약속 확장](./meeting_plan.md), [API 명세](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa)를 따른다.
 - 현재: 공통 요청/로그와 기본 회원 인증 완료. 가입 입력 안내 및 localhost CSRF 차단 수정(2026-10-06, development_log.md·백엔드56개/프론트27개·Notion v0.33). PostgreSQL 회원 인증 테이블5개 적용, 경로/이동/약속 업무 API는 미구현. 장소 구현 상태는 아래 F03-01 기록을 따른다.
@@ -27,6 +27,7 @@
 ## 개발 구조 정리
 
 - [x] R01: 프론트엔드 실행 코드와 테스트를 별도 역할별 디렉터리로 정리한다. (2026-10-07, development_log.md R01·프론트57개/빌드·실행 확인; API/화면 동작 변경 없음)
+- [x] R02: 백엔드를 Spring 스타일 3계층(common+도메인별 router/service/repository·dto·provider)으로 재구성한다. (2026-10-08, development_log.md R02·백엔드130개 기준선 동일 통과·OpenAPI 17경로 동일; API 계약/DDL 변경 없음, Notion v0.49 명세 영향 없음)
 
 ## 체크 방법
 

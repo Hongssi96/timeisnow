@@ -2,7 +2,7 @@
 import json
 import sys
 
-from app.database import connect_db
+from app.common.database import connect_db
 
 
 def main():

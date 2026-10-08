@@ -14,8 +14,8 @@ from psycopg import sql
 from sqlalchemy import create_engine, pool, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app import auth
-from app.database import connect_db
+from app.common import database as common_database
+from app.common.database import connect_db, database
 from test_api_contract import request
 
 PASSWORD = 'Sample passphrase for testing 29!'
@@ -39,7 +39,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 command.upgrade(config, 'head')
         finally:
             engine.dispose()
-        self.db_patch = patch.object(auth, 'connect_db', isolated)
+        self.db_patch = patch.object(common_database, 'connect_db', isolated)
         self.db_patch.start()
         self.env_patch = patch.dict(os.environ, {'AUTH_RATE_LIMIT_SECRET':'synthetic-secret-for-testing-32-characters',
                                      'AUTH_ENV':'development', 'AUTH_PUBLIC_ORIGIN':'http://127.0.0.1:5173'})
@@ -95,7 +95,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body['data']['profile']['first_boarding_buffer_seconds'], 300)
         self.assertEqual(body['data']['profile']['transfer_buffer_seconds'], 120)
         self.assertNotIn('email_verified', body['data'])
-        with auth.database() as connection:
+        with database() as connection:
             cred = connection.execute('SELECT * FROM auth_credentials').fetchone()
             self.assertEqual(cred['email_normalized'], 'member@example.invalid')
             self.assertTrue(cred['password_hash'].startswith('$argon2id$'))
@@ -112,7 +112,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first[0], 201)
         self.assertEqual(duplicate[0], 409)
         self.assertEqual(duplicate[2]['error']['code'], 'EMAIL_UNAVAILABLE')
-        with auth.database() as connection:
+        with database() as connection:
             for table in ('users','auth_credentials','user_profiles'):
                 self.assertEqual(connection.execute(f'SELECT count(*) AS n FROM {table}').fetchone()['n'], 1)
 
@@ -157,7 +157,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_session_expiry_and_rotation(self):
         await self.signup_login()
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute("UPDATE auth_sessions SET idle_expires_at=now()-interval '1 second'")
         expired = await self.call('/me')
         self.assertEqual(expired[0],401)
@@ -201,7 +201,7 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_database_failure_is_safe(self):
         from psycopg import OperationalError
-        with patch.object(auth, 'connect_db', side_effect=OperationalError('private-db-secret')):
+        with patch.object(common_database, 'connect_db', side_effect=OperationalError('private-db-secret')):
             result = await self.call('/auth/csrf')
         self.assertEqual(result[0],503)
         self.assertNotIn('private-db-secret',json.dumps(result[2]))

@@ -791,3 +791,18 @@
 - 배운 개념: 위치 근거 버전과 화면 편집 버전을 분리하면 이름 변경으로 경로를 불필요하게 무효화하지 않는다. 상태/버전 변경은 장소 쓰기와 한 트랜잭션으로 묶어야 오래된 후보 저장을 막을 수 있다. 복구는 최신 후보로 기존 루틴을 PATCH하며 진입/취소만으로 자동 저장하지 않는다.
 - 범위/남은 일: F06-04 완료. 실제 카카오 재호출/실제 브라우저 DB 복구는 이번 작업에서 재실행하지 않았다. 실제 운행 변경 자동 감지·실시간/AI 출발 안내는 후속, 과거 active 스냅샷의 위치 일치는 근거 없이 추정/백필하지 않았다. 사용자 MR/병합 후 다음 F05-01 도보 근거 수집.
 - 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+## 2026-10-08 — 백엔드 3계층 구조 리팩터링 (Spring 스타일, 사용자 요청)
+
+- 목표/이유: Java/Spring 경험자인 사용자가 FastAPI 백엔드의 내부 구조를 Spring 친화적 3계층(Controller/Service/Repository)으로 재구성하도록 요청했다. 기존 라우터 파일(auth.py 등 9개)은 Pydantic DTO·SQL·비즈니스 로직·라우트가 한 파일에 섞인 fat router 상태였다.
+- 범위 결정: Python→Java 재작성이 아니라 FastAPI 유지 + 계층 재배치로 확정했다. API 계약 변경이 전혀 없으므로 AGENTS.md 3절에 따라 Notion 명세(v0.49 확인)를 수정하지 않는다. 순수 내부 구조 재편이다.
+- 기준: 최신 main c51d0b7(사용자가 codex/routine-recovery 병합 완료 확인)에서 helpycode/three-tier-refactor 생성. 착수 전 Notion v0.49·todo.md를 확인했고 리팩터링 전 백엔드 전체 테스트 130개 OK를 기준선으로 기록했다.
+- 새 구조: app/common/(errors·timeutil·database·response·http·request_logging), app/auth/(dto·repository·security·service·router), app/places/(dto·provider·repository·service·router), app/origins/(dto·repository·service·router), app/journeys/(dto·models·provider·repository·service·router), app/routines/(dto·repository·service·router), app/main.py는 라우터 조립·미들웨어·전역 예외만 남긴다. router는 요청 파싱/응답 봉투만, service는 비즈니스 규칙(멱등·버전 충돌·만료·할당량), repository는 SQL 전담, provider는 카카오 클라이언트, auth/security.py는 세션/CSRF/레이트리밋/인증 공통(Spring Security 역할)이다.
+- 이전 원칙: SQL 문자열·오류 코드/메시지·상태 전이·트랜잭션 경계·잠금 순서(routine-write·journey-admission advisory lock)를 한 글자도 바꾸지 않고 이동했다. 응답 봉투 {data,meta}·{error,meta}·X-Request-ID·Cache-Control·ISO UTC 시각 표현 유지로 프론트 무수정 호환을 보장한다.
+- 테스트 이전: 9개 테스트 파일의 import를 새 계층 경로로 수정했다. DB 격리 패치 대상을 auth.connect_db→app.common.database.connect_db로, 패치 대상 places.provider_search→app.places.provider로 옮겼다. 테스트 시나리오·단언은 변경하지 않았다.
+- 확인된 계약 유지: migrations/env.py·check_db.py의 connect_db 경로만 갱신, Alembic 0001~0008·DB 스키마·Docker 구성 무변경. backend/README.md의 구조 설명을 새 계층에 맞춰 갱신했다.
+- 실제 검증: 리팩터링 후 unittest discover 전체 130개 OK(기준선과 동일, 약 52초, 실제 PostgreSQL 격리 스키마/ASGI). OpenAPI 17경로·22엔드포인트 동일 확인. app import 스모크 및 uvicorn 진입 모듈 로드 확인. API 계약 테스트(test_api_contract) 포함 전 계약 응답 동등. Notion 명세 영향 없음(읽기만 수행, v0.49).
+- 중간 수정 기록: 분리 과정에서 datetime import 누락(timezone) 2건(routines/service.py·origins/dto.py)을 테스트 실패로 발견해 수정했다. 로그에서 exception_type=NameError만 확인 가능한 프라이버시 설계 때문에 격리 스키마 재현 스크립트로 직접 트레이스백을 확인해 원인을 좁혔다.
+- 배운 개념: Spring 3계층은 Controller(요청/응답)·Service(규칙)·Repository(영속성)로 책임을 나눈다. Python에서는 패키지당 router/service/repository 파일로 같은 관심사 분리가 가능하다. 계약 테스트가 남아 있으면 구조 리팩터링의 안전망이 되고, 예외 메시지를 로그에 남기지 않는 설계에서는 재현 스크립트가 디버깅 도구가 된다.
+- 남은 일/다음: 사용자 MR/병합 검토 대상. 기능 순서는 기존대로 F05-01 도보 근거 수집이 다음이다. F04-04(환승·출입구·플랫폼)·GPS 자동 판정·메일 인증/복구는 기존 보류 유지.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.49, 변경 없음)

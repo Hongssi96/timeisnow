@@ -4,13 +4,18 @@ import copy
 import io
 import json
 import logging
+import os
 import unittest
 import urllib.error
 from unittest.mock import patch
 from uuid import uuid4
 import test_places
 from test_api_contract import request
-from app import auth, places, journeys, journey_provider
+from app.auth import security as auth
+from app.common.database import database
+from app.places import dto as places_dto, provider as places_provider
+from app.journeys import provider as journey_provider
+from app.journeys import service as journeys_service
 
 
 def route(seconds=900, transfers=0, walking=100, kind='BUS'):
@@ -45,7 +50,7 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
         return await request('/api/v1/journey-searches','POST',headers=headers,body=json.dumps(body).encode())
 
     async def completed(self,body=BODY,key=None,data=None):
-        with patch.object(places,'region_for_location',return_value='서울 합성동'),patch.object(journey_provider,'fetch_routes',return_value=data or {'status':'OK','routes':[route()]}) as provider:
+        with patch.object(places_provider,'region_for_location',return_value='서울 합성동'),patch.object(journey_provider,'fetch_routes',return_value=data or {'status':'OK','routes':[route()]}) as provider:
             accepted=await self.search(body,key)
         self.assertEqual(accepted[0],202)
         result=await self.call('/journey-searches/'+accepted[2]['data']['search_id'])
@@ -53,7 +58,7 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_async_contract_privacy_and_idempotency(self):
         await self.signup_login()
-        from app.request_logging import logger, RequestJsonFormatter, RequestEventFilter
+        from app.common.request_logging import logger, RequestJsonFormatter, RequestEventFilter
         output=io.StringIO();handler=logging.StreamHandler(output)
         handler.setFormatter(RequestJsonFormatter());handler.addFilter(RequestEventFilter())
         previous,level=logger.handlers[:],logger.level;logger.handlers[:]=[handler];logger.setLevel(logging.INFO)
@@ -74,7 +79,7 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replay[2]['data'],accepted[2]['data'])
         changed=copy.deepcopy(BODY);changed['origin']['latitude']=37.5
         self.assertEqual((await self.search(changed,key='safe-retry'))[0],409)
-        with auth.database() as c:
+        with database() as c:
             row=c.execute('SELECT * FROM journey_searches').fetchone()
             text=json.dumps(row,default=str)
             hashed=c.execute('SELECT body_hash FROM journey_search_keys').fetchone()['body_hash'];self.assertEqual(len(hashed),64)
@@ -101,11 +106,11 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
         await self.signup_login();_,created=await self.saved();place=created[2]['data']
         body={**BODY,'origin':{'type':'saved_place','place_id':place['place_id'],'location_version':1}}
         accepted,_,_=await self.completed(body,key='saved-key');path='/journey-searches/'+accepted[2]['data']['search_id']
-        with auth.database() as c:c.execute('UPDATE saved_places SET label=%s,version=version+1 WHERE id=%s',('다른 이름',place['place_id']))
+        with database() as c:c.execute('UPDATE saved_places SET label=%s,version=version+1 WHERE id=%s',('다른 이름',place['place_id']))
         self.assertEqual((await self.call(path))[0],200)
-        with auth.database() as c:c.execute('UPDATE saved_places SET location_version=location_version+1 WHERE id=%s',(place['place_id'],))
+        with database() as c:c.execute('UPDATE saved_places SET location_version=location_version+1 WHERE id=%s',(place['place_id'],))
         self.assertEqual((await self.call(path))[0],409);self.assertEqual((await self.search(body,key='saved-key'))[0],409)
-        with auth.database() as c:c.execute('DELETE FROM saved_places WHERE id=%s',(place['place_id'],))
+        with database() as c:c.execute('DELETE FROM saved_places WHERE id=%s',(place['place_id'],))
         self.assertEqual((await self.call(path))[0],404)
         self.cookie=None;self.csrf=None;await self.prepare()
         credentials=self.credentials('other@example.invalid');await self.call('/auth/register',credentials)
@@ -118,25 +123,25 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
         await self.signup_login();accepted,_,_=await self.completed(key='expiry')
         identifier=accepted[2]['data']['search_id'];job_id=accepted[2]['data']['job_id']
         # DB and application clocks can differ slightly; exercise an unambiguously expired row.
-        with auth.database() as c:c.execute("UPDATE journey_searches SET expires_at=now()-interval '1 hour',status='running',worker_deadline=now()-interval '1 hour'")
+        with database() as c:c.execute("UPDATE journey_searches SET expires_at=now()-interval '1 hour',status='running',worker_deadline=now()-interval '1 hour'")
         self.assertEqual((await self.call('/journey-searches/'+identifier))[0],404)
         job=(await self.call('/jobs/'+job_id))[2]['data']
         self.assertEqual(job['error']['code'],'JOB_INTERRUPTED');self.assertTrue(job['result_expired'])
         self.assertIsNone(job['result_ref'])
         self.assertEqual((await self.search(key='expiry'))[0],404)
-        with auth.database() as c:
+        with database() as c:
             row=c.execute('SELECT * FROM journey_searches').fetchone();self.assertEqual(row['candidates'],[])
             user_id=row['user_id']
         with patch.object(journey_provider,'fetch_routes') as provider:
-            journeys.execute(identifier,user_id,None,None,'balanced')
+            journeys_service.execute(identifier,user_id,None,None,'balanced')
             provider.assert_not_called()
-        with auth.database() as c:c.execute("UPDATE journey_searches SET job_expires_at=now()-interval '1 hour'")
+        with database() as c:c.execute("UPDATE journey_searches SET job_expires_at=now()-interval '1 hour'")
         self.assertEqual((await self.call('/jobs/'+job_id))[0],404)
 
     async def test_failed_worker_and_empty_results_are_distinct(self):
         await self.signup_login()
         for failure in [auth.AuthError(504,'PROVIDER_TIMEOUT','합성 실패'),auth.AuthError(503,'PROVIDER_UNAVAILABLE','합성 실패'),ValueError('private raw payload')]:
-            with patch.object(places,'region_for_location',return_value='서울 합성동'),patch.object(journey_provider,'fetch_routes',side_effect=failure):
+            with patch.object(places_provider,'region_for_location',return_value='서울 합성동'),patch.object(journey_provider,'fetch_routes',side_effect=failure):
                 accepted=await self.search()
             data=(await self.call('/journey-searches/'+accepted[2]['data']['search_id']))[2]['data']
             self.assertEqual(data['status'],'failed');self.assertEqual(data['candidates'],[])
@@ -146,15 +151,15 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_concurrent_keys_admission_and_quota(self):
         await self.signup_login()
-        with patch.object(journeys,'execute'),patch.object(journey_provider,'fetch_routes') as upstream:
+        with patch.object(journeys_service,'execute'),patch.object(journey_provider,'fetch_routes') as upstream:
             first,second=await asyncio.gather(self.search(key='concurrent'),self.search(key='concurrent'))
             self.assertEqual(first[0],202);self.assertEqual(second[0],202);self.assertEqual(first[2]['data'],second[2]['data'])
             pending=await self.call('/journey-searches/'+first[2]['data']['search_id'])
             self.assertEqual(pending[1][b'retry-after'],b'2')
             self.assertEqual((await self.search())[0],202);self.assertEqual((await self.search())[0],429)
             upstream.assert_not_called()
-        with auth.database() as c:c.execute("UPDATE journey_searches SET status='failed'")
-        with patch.object(places,'region_for_location',side_effect=auth.AuthError(422,'UNSUPPORTED_REGION','합성 실패')):
+        with database() as c:c.execute("UPDATE journey_searches SET status='failed'")
+        with patch.object(places_provider,'region_for_location',side_effect=auth.AuthError(422,'UNSUPPORTED_REGION','합성 실패')):
             for _ in range(10): last=await self.search()
         self.assertEqual(last[0],429)
 
@@ -162,7 +167,7 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
         await self.signup_login()
         for checked in [0,1]:
             checks=[auth.AuthError(422,'UNSUPPORTED_REGION','합성 범위 밖')] if checked==0 else ['서울 합성동',auth.AuthError(422,'UNSUPPORTED_REGION','합성 범위 밖')]
-            with patch.object(places,'region_for_location',side_effect=checks),patch.object(journey_provider,'fetch_routes') as provider:
+            with patch.object(places_provider,'region_for_location',side_effect=checks),patch.object(journey_provider,'fetch_routes') as provider:
                 response=await self.search()
             self.assertEqual(response[0],202);provider.assert_not_called()
             result=await self.call('/journey-searches/'+response[2]['data']['search_id'])
@@ -173,16 +178,16 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
         await self.signup_login();_,created=await self.saved();place=created[2]['data']
         body={**BODY,'origin':{'type':'saved_place','place_id':place['place_id'],'location_version':1}}
         def changed(*args):
-            with auth.database() as c:c.execute('UPDATE saved_places SET location_version=2 WHERE id=%s',(place['place_id'],))
+            with database() as c:c.execute('UPDATE saved_places SET location_version=2 WHERE id=%s',(place['place_id'],))
             return {'status':'OK','routes':[route()]}
-        with patch.object(places,'region_for_location',return_value='서울 합성동'),patch.object(journey_provider,'fetch_routes',side_effect=changed):
+        with patch.object(places_provider,'region_for_location',return_value='서울 합성동'),patch.object(journey_provider,'fetch_routes',side_effect=changed):
             accepted=await self.search(body)
         job=(await self.call('/jobs/'+accepted[2]['data']['job_id']))[2]['data']
         self.assertEqual(job['status'],'failed');self.assertEqual(job['error']['code'],'VERSION_CONFLICT')
-        with auth.database() as c:self.assertEqual(c.execute('SELECT candidates FROM journey_searches').fetchone()['candidates'],[])
+        with database() as c:self.assertEqual(c.execute('SELECT candidates FROM journey_searches').fetchone()['candidates'],[])
 
     async def test_cached_legacy_models_upgrade_without_provider_or_id_changes(self):
-        from app.journey_models import LegacyCandidate, LegacyLeg, SearchEnvelope
+        from app.journeys.models import LegacyCandidate, LegacyLeg, SearchEnvelope
         from app.main import app
         from psycopg.types.json import Jsonb
         await self.signup_login()
@@ -196,14 +201,14 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
         old={key:copy.deepcopy(original[key]) for key in LegacyCandidate.model_fields}
         old['ordered_legs']=[{key:copy.deepcopy(leg[key]) for key in LegacyLeg.model_fields} for leg in original['ordered_legs']]
         identifier=accepted[2]['data']['search_id'];path='/journey-searches/'+identifier
-        with auth.database() as c:c.execute('UPDATE journey_searches SET candidates=%s WHERE id=%s',(Jsonb([old]),identifier))
+        with database() as c:c.execute('UPDATE journey_searches SET candidates=%s WHERE id=%s',(Jsonb([old]),identifier))
         with patch.object(journey_provider,'fetch_routes') as provider:
             first=(await self.call(path))[2]['data']['candidates'][0]
             second=(await self.call(path))[2]['data']['candidates'][0]
             self.assertEqual(first,second);self.assertEqual(first['candidate_id'],old['candidate_id'])
             self.assertEqual(first['connections'],original['connections'])
             self.assertIsNone(first['ordered_legs'][1]['vehicle_options'][0]['provider_type']);provider.assert_not_called()
-        with auth.database() as c:
+        with database() as c:
             persisted=c.execute('SELECT candidates FROM journey_searches WHERE id=%s',(identifier,)).fetchone()['candidates'][0]
             self.assertNotIn('model_version',persisted)
             old['ordered_legs'][0]['latitude']=37.5
@@ -240,14 +245,14 @@ class ProviderTests(unittest.TestCase):
                              (urllib.error.URLError(TimeoutError('private')),'PROVIDER_TIMEOUT'),
                              (urllib.error.HTTPError('private',302,'private',{},None),'PROVIDER_UNAVAILABLE'),
                              (ValueError('private'),'PROVIDER_RESPONSE_INVALID')]:
-            with patch.dict(auth.os.environ,{'KAKAO_REST_API_KEY':'synthetic'}),patch('urllib.request.build_opener') as opener:
+            with patch.dict(os.environ,{'KAKAO_REST_API_KEY':'synthetic'}),patch('urllib.request.build_opener') as opener:
                 opener.return_value.open.side_effect=failure
-                with self.assertRaises(auth.AuthError) as error:journey_provider.fetch_routes(places.Location(latitude=37.5,longitude=127),places.Location(latitude=37.6,longitude=127))
+                with self.assertRaises(auth.AuthError) as error:journey_provider.fetch_routes(places_dto.Location(latitude=37.5,longitude=127),places_dto.Location(latitude=37.6,longitude=127))
             self.assertEqual(error.exception.code,code);self.assertNotIn('private',error.exception.message)
 
     def test_oversized_response_is_rejected(self):
-        with patch.dict(auth.os.environ,{'KAKAO_REST_API_KEY':'synthetic'}),patch('urllib.request.build_opener') as opener:
+        with patch.dict(os.environ,{'KAKAO_REST_API_KEY':'synthetic'}),patch('urllib.request.build_opener') as opener:
             response=opener.return_value.open.return_value.__enter__.return_value
             response.read.return_value=b'x'*2097153
-            with self.assertRaises(auth.AuthError) as error:journey_provider.fetch_routes(places.Location(latitude=37.5,longitude=127),places.Location(latitude=37.6,longitude=127))
+            with self.assertRaises(auth.AuthError) as error:journey_provider.fetch_routes(places_dto.Location(latitude=37.5,longitude=127),places_dto.Location(latitude=37.6,longitude=127))
         self.assertEqual(error.exception.code,'PROVIDER_RESPONSE_INVALID');response.read.assert_called_once_with(2097153)

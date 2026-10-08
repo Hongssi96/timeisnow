@@ -6,8 +6,9 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from app import auth, journey_provider
-from app.journey_models import Candidate, LegacyCandidate, LegacyLeg, common_candidate
+from app.auth import security as auth
+from app.journeys import provider as journey_provider
+from app.journeys.models import Candidate, LegacyCandidate, LegacyLeg, common_candidate
 import test_journeys
 
 

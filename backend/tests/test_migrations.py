@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, inspect, pool, text
 
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
-from app.database import connect_db
+from app.common.database import connect_db
 
 
 class MigrationTest(unittest.TestCase):

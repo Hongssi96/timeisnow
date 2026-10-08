@@ -36,7 +36,7 @@ class RequestEventFilter(logging.Filter):
 
 def configure_request_logger(level=None):
     if level is None:
-        configured = dotenv_values(Path(__file__).resolve().parents[2] / '.env').get('LOG_LEVEL', 'INFO')
+        configured = dotenv_values(Path(__file__).resolve().parents[3] / '.env').get('LOG_LEVEL', 'INFO')
         level = os.environ.get('LOG_LEVEL', configured)
     level = level if level in ('INFO', 'WARNING', 'ERROR') else 'INFO'
     logger = logging.getLogger(LOGGER_NAME)

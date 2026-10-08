@@ -3,12 +3,15 @@ import json
 import asyncio
 import io
 import logging
+import os
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
 import test_auth
-from app import auth, places
+from app.auth import security as auth
+from app.common.database import database
+from app.places import dto as places_dto, provider as places_provider
 
 
 def candidate():
@@ -31,7 +34,7 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
 
     async def saved(self, label='집', key=None):
         item = candidate()
-        with patch.object(places, 'search_candidates', return_value=[item]):
+        with patch.object(places_provider, 'search_candidates', return_value=[item]):
             result = await self.call('/place-searches', {'query': '합성 장소'})
         self.assertEqual(result[0], 200)
         body = {'label': label, 'search_id': result[2]['data']['search_id'],
@@ -63,7 +66,7 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.call('/places'))[2]['data']['items'], [data])
 
     async def test_place_logs_exclude_address_coordinates_and_ids(self):
-        from app.request_logging import logger, RequestJsonFormatter, RequestEventFilter
+        from app.common.request_logging import logger, RequestJsonFormatter, RequestEventFilter
         await self.signup_login()
         output = io.StringIO()
         handler = logging.StreamHandler(output)
@@ -104,14 +107,14 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
         body, _ = await self.saved()
         self.assertEqual((await self.create({**body, 'location': {'latitude':38, 'longitude':127}}))[0], 422)
         self.assertEqual((await self.create({**body, 'candidate_id':str(uuid4())}))[0], 404)
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute('UPDATE place_searches SET expires_at=now()')
         self.assertEqual((await self.create(body))[0], 404)
 
     async def test_idempotency_after_expiry_conflict_and_scope(self):
         await self.signup_login()
         body, saved = await self.saved(key='retry_key')
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute('UPDATE place_searches SET expires_at=now()')
         again = await self.create(body, 'retry_key')
         self.assertEqual(again[0], 201)
@@ -119,7 +122,7 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
         conflict = await self.create({**body, 'label':'회사'}, 'retry_key')
         self.assertEqual(conflict[0], 409)
         self.assertEqual(conflict[2]['error']['code'], 'IDEMPOTENCY_CONFLICT')
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM saved_places').fetchone()['n'], 1)
             connection.execute('UPDATE place_creation_keys SET expires_at=now()')
         self.assertEqual((await self.create(body, 'retry_key'))[0], 404)
@@ -128,7 +131,7 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
         from test_api_contract import request
         await self.signup_login()
         body, _ = await self.saved()
-        with auth.database() as connection:
+        with database() as connection:
             user_id = connection.execute('SELECT id FROM users').fetchone()['id']
             raw, csrf, _ = auth.create_session(connection, user_id)
         headers = [(b'origin', b'http://127.0.0.1:5173'), (b'cookie', ('timeisnow_dev_session=' + raw).encode()),
@@ -137,11 +140,11 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
             request('/api/v1/places', 'POST', headers=headers, body=json.dumps(body).encode()))
         self.assertEqual((first[0], second[0]), (201, 201))
         self.assertEqual(first[2]['data']['place_id'], second[2]['data']['place_id'])
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM saved_places').fetchone()['n'], 2)
 
     async def test_auth_csrf_validation_and_no_provider_call(self):
-        with patch.object(places, 'search_candidates') as upstream:
+        with patch.object(places_provider, 'search_candidates') as upstream:
             self.assertEqual((await self.call('/place-searches', {'query':'강남역'}))[0], 401)
             await self.signup_login()
             self.assertEqual((await self.call('/place-searches', {'query':'강남역'}, csrf=False))[0], 403)
@@ -152,7 +155,7 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_quota_empty_cleanup_and_safe_provider_error(self):
         await self.signup_login()
-        with patch.object(places, 'search_candidates', return_value=[]):
+        with patch.object(places_provider, 'search_candidates', return_value=[]):
             for _ in range(10):
                 result = await self.call('/place-searches', {'query':'합성'})
                 self.assertEqual(result[0], 200)
@@ -160,12 +163,12 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
             limited = await self.call('/place-searches', {'query':'합성'})
         self.assertEqual(limited[0], 429)
         self.assertIn(b'retry-after', limited[1])
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute('DELETE FROM auth_rate_limit_buckets')
             connection.execute('UPDATE place_searches SET expires_at=now()')
-        with patch.object(places, 'search_candidates', side_effect=auth.AuthError(503, 'PROVIDER_UNAVAILABLE', '검색 불가')):
+        with patch.object(places_provider, 'search_candidates', side_effect=auth.AuthError(503, 'PROVIDER_UNAVAILABLE', '검색 불가')):
             self.assertEqual((await self.call('/place-searches', {'query':'합성'}))[0], 503)
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM place_searches').fetchone()['n'], 0)
             self.assertEqual(connection.execute("SELECT count FROM auth_rate_limit_buckets WHERE scope='place-search'").fetchone()['count'], 1)
 
@@ -186,15 +189,15 @@ class ProviderTests(unittest.TestCase):
     def test_address_first_dedup_and_supported_region(self):
         docs = [dict(address_name='서울 강남구', x='127', y='37.5', road_address={'building_name':'합성'}),
                 dict(address_name='부산 동구', x='129', y='35')]
-        with patch.object(places, 'provider_search', return_value=docs), patch.dict(places.auth.os.environ, {'KAKAO_REST_API_KEY':'synthetic'}):
-            rows = places.search_candidates('합성')
+        with patch.object(places_provider, 'provider_search', return_value=docs), patch.dict(os.environ, {'KAKAO_REST_API_KEY':'synthetic'}):
+            rows = places_provider.search_candidates('합성')
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['name'], '합성')
 
     def test_invalid_coordinate_rejected(self):
-        with patch.object(places, 'provider_search', return_value=[dict(address_name='경기도 합성', x='NaN', y='37')]), patch.dict(places.auth.os.environ, {'KAKAO_REST_API_KEY':'synthetic'}):
+        with patch.object(places_provider, 'provider_search', return_value=[dict(address_name='경기도 합성', x='NaN', y='37')]), patch.dict(os.environ, {'KAKAO_REST_API_KEY':'synthetic'}):
             with self.assertRaises(auth.AuthError) as error:
-                places.search_candidates('합성')
+                places_provider.search_candidates('합성')
         self.assertEqual(error.exception.code, 'PROVIDER_RESPONSE_INVALID')
 
     def test_transport_and_invalid_payload_do_not_expose_exception(self):
@@ -202,6 +205,6 @@ class ProviderTests(unittest.TestCase):
             with patch('urllib.request.build_opener') as opener:
                 opener.return_value.open.side_effect = exception
                 with self.assertRaises(auth.AuthError) as error:
-                    places.provider_search('address', '합성', 'secret')
+                    places_provider.provider_search('address', '합성', 'secret')
             self.assertEqual(error.exception.code, code)
             self.assertNotIn('secret', error.exception.message)
