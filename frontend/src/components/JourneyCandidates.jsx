@@ -14,7 +14,7 @@ const vehicleDetails=leg=>[...new Set(leg.vehicle_options.map(v=>v.name+(v.provi
 const icon=kind=>kind==='BUS'?BusFront:kind==='SUBWAY'?TrainFront:Footprints;
 const WEEKDAYS=[['월',1],['화',2],['수',3],['목',4],['금',5],['토',6],['일',7]];
 
-export default function JourneyCandidates({ candidates, preference, onRecheck, onSavedLocations, onSaved, defaultRoutineName }) {
+export default function JourneyCandidates({ candidates, preference, onRecheck, onSavedLocations, onSaved, defaultRoutineName, defaultWeekdays, defaultTarget, replacing = false }) {
   const [expanded,setExpanded]=useState(null);
   const [naming,setNaming]=useState(null);
   const eligible = !!onSaved && !!onSavedLocations && typeof defaultRoutineName==='string' && defaultRoutineName.length>=1;
@@ -27,7 +27,7 @@ export default function JourneyCandidates({ candidates, preference, onRecheck, o
       return <article className={'card route-candidate '+(open?'expanded':'')} key={c.candidate_id}>
         <div className="section-heading"><h3><TitleIcon size={20}/> {kinds[c.type]} 경로 {index+1}</h3><span className="tag">예상값</span></div>
         <p className="candidate-note">구간 정보 확인 필요 · 상세에서 미확인 근거를 확인해주세요.</p>
-        {saveState!==null&&saveState!=='saved'&&<button className="secondary wide" disabled={saveState==='saving'} onClick={()=>setNaming({id:c.candidate_id,name:defaultRoutineName,weekdays:[1,2,3,4,5],target:''})}><Repeat2 size={17}/>{saveState==='saving'?'루틴 저장 중…':'이 경로를 루틴에 저장'}</button>}
+        {saveState!==null&&saveState!=='saved'&&<button className="secondary wide" disabled={saveState==='saving'} onClick={()=>setNaming({id:c.candidate_id,name:defaultRoutineName,weekdays:defaultWeekdays||[1,2,3,4,5],target:defaultTarget||''})}><Repeat2 size={17}/>{saveState==='saving'?'루틴 저장 중…':replacing?'이 경로로 루틴 변경':'이 경로를 루틴에 저장'}</button>}
         {saveState==='saved'&&<button className="secondary wide" disabled><Repeat2 size={17}/>루틴에 저장했어요</button>}
         {namingThis&&<form className="routine-name-panel" onSubmit={event=>{event.preventDefault();
           onSaved(c.candidate_id,naming.name.trim()||defaultRoutineName,naming.weekdays,naming.target.trim()||null);}}>
@@ -44,7 +44,7 @@ export default function JourneyCandidates({ candidates, preference, onRecheck, o
           <p className="candidate-note">비워두면 '{defaultRoutineName}' 이름으로 저장해요. 요일을 1개 이상 선택해야 저장할 수 있어요.</p>
           <div className="routine-name-actions"><button className="primary" type="submit" disabled={saveState==='saving'||!naming.weekdays.length}>루틴 저장</button><button className="text-button" type="button" disabled={saveState==='saving'} onClick={()=>setNaming(null)}>취소</button></div>
         </form>}
-        {saveState==='saved'&&<p className="candidate-note">요일과 목표 도착 시각은 내 루틴에서 수정할 수 있어요. 루틴 목록 연결은 준비 중이에요.</p>}
+        {saveState==='saved'&&<p className="candidate-note">내 루틴에서 저장한 경로와 반복 일정을 확인하고 수정할 수 있어요.</p>}
         <dl className="candidate-metrics"><div><dt>총 예상 시간</dt><dd>약 {formatJourneyTime(c.total_seconds)}</dd></div><div><dt>환승</dt><dd>{c.transfer_count}회</dd></div><div><dt>{missingWalk(c)?'제공된 일부 도보':'제공된 도보'}</dt><dd>{missingWalk(c)&&c.walking_seconds===0?'확인 필요':`약 ${formatJourneyTime(c.walking_seconds)}`}</dd></div></dl>
         <p className="candidate-line">{c.ordered_legs.filter(leg=>leg.type!=='WALKING').map(leg=>vehicleNames(leg)).join(' → ')}</p>
         {missingWalk(c)&&<p className="candidate-note">빠진 도보 구간이 있어 전체 도보 시간은 확인이 필요해요.</p>}

@@ -170,3 +170,35 @@ it('saving is blocked until both endpoints are saved places',async()=>{
   expect(screen.queryByRole('button',{name:'이 경로를 루틴에 저장'})).toBeNull();
   expect(screen.queryByRole('article')).toBeNull();
 });
+
+
+it('keeps the same creation key after a lost response and retry',async()=>{
+  let saves=0;mockApi(()=>result(),()=>reply(accepted,202),()=>{if(saves++===0)throw new ApiError('NETWORK_ERROR');return reply(saved(),201);});
+  const user=await open();await search(user);
+  await user.click(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})[0]);
+  await user.click(screen.getByRole('button',{name:'루틴 저장'}));
+  await user.click(screen.getByRole('button',{name:'결과 다시 확인'}));await act(()=>vi.advanceTimersByTimeAsync(2000));
+  await user.click(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})[0]);
+  await user.click(screen.getByRole('button',{name:'루틴 저장'}));
+  const calls=apiRequest.mock.calls.filter(([path])=>path==='/api/v1/routines');
+  expect(calls).toHaveLength(2);expect(calls[1][1].headers['Idempotency-Key']).toBe(calls[0][1].headers['Idempotency-Key']);
+});
+
+it('replaces the selected routine route using PATCH and preserves its schedule',async()=>{
+  const existing=saved();existing.weekdays=[2,4];existing.target_arrival_local_time='09:10';
+  mockApi();apiRequest.mockImplementation(path=>{
+    if(path==='/api/v1/auth/csrf')return Promise.resolve(reply({csrf_token:'csrf_test'}));
+    if(path==='/api/v1/journey-searches')return Promise.resolve(reply(accepted,202));
+    if(path==='/api/v1/routines/'+existing.routine_id)return Promise.resolve(reply({...existing,version:2},200));
+    return Promise.resolve(result());
+  });
+  const onRoutineSaved=vi.fn();const user=await open({routineToReplace:existing,onRoutineSaved});await search(user);
+  await user.click(screen.getAllByRole('button',{name:'이 경로로 루틴 변경'})[0]);
+  expect(screen.getAllByRole('button',{pressed:true}).map(node=>node.textContent)).toEqual(['화','목']);
+  expect(screen.getByLabelText(/목표 도착 시각/).value).toBe('09:10');
+  await user.click(screen.getByRole('button',{name:'루틴 저장'}));
+  const request=apiRequest.mock.calls.find(([path])=>path==='/api/v1/routines/'+existing.routine_id);
+  expect(request[1].method).toBe('PATCH');expect(request[1].body).toMatchObject({expected_version:1,weekdays:[2,4],target_arrival_local_time:'09:10'});
+  expect(onRoutineSaved).toHaveBeenCalledOnce();
+  expect(apiRequest.mock.calls.some(([path])=>path==='/api/v1/routines')).toBe(false);
+});

@@ -279,3 +279,6 @@ CASCADE는 부모와 수명이 같은 자식(예: 삭제 대상 이벤트의 정
 ## D03·D05 후속 결정 — 2026-10-06
 
 [policy_decisions.md](./policy_decisions.md)·Notion v0.26 참조. 약속 최대2명·draft 미사용30일 삭제·confirmed 목표시각6시간후 자동종결·종결후 공동30일·개인90일·재전송24시간·공유ETA120초. 주최자 탈퇴/비주최자 탈퇴/메시지 본문 삭제·개인trip 연결해제 규칙은 meeting_api.md 확정 계약을 적용한다. 기존 논리 테이블을 통한 시간/상태/만료 정책이며 신규 DDL/물리 삭제 실행 없음.
+
+### F06-03 루틴 관리 (2026-10-08)
+추가 DDL 없이0008을 재사용한다. 본인 목록은created_at DESC,id DESC 키셋 조회, cursor행의created_at을 소유권 확인 후 경계로 사용한다. 수정은routines version을 잠그고 검증한 후보 스냅샷을 연결한다. 루틴 쓰기는회원별 advisory transaction lock과 공유 plan행 잠금으로 직렬화한다. 삭제 및 경로 교체 후 다른 루틴 참조가 없는journey_plans만 삭제하며routine_creation_keys의삭제 표시는FK SET NULL로 유지한다. 실제trip 이력이 생길 때 스냅샷 보존 관계를 확장해야 한다.
