@@ -171,3 +171,6 @@ OriginSelector의 장소 저장 탭은 기존 PlacesCard의 creationOnly 모드�
 ### F04-03a 이동 방법 버튼 (2026-10-08)
 
 .journey-methods는 기존 --green/--ink/--line·흰 배경·8px 모서리와 간격을 재사용한다. 선택한 버튼은 초록 배경/흰 글씨, 최소44px 높이와 좁은 화면 줄바꿈을 유지한다. aria-pressed와 role=group의 이름으로 선택 상태를 알리고 미제공 방식은 role=status 문구로 안내한다. 전역 테마 변경 없음. 합성 후보 PC1440×1000/모바일390×844 확인.
+### F06-04 복구 안내 (2026-10-08)
+
+기존 info-box/primary/secondary/text-button·루틴 카드·비교 화면을 재사용한다. .routine-recovery-notice는14px와 --ink로 안내 가독성을 유지한다. 색상 외에도 제목/이유/복구 행동으로 상태를 표현하고 모바일에서 버튼을 줄바꿈한다. 기존 테마/내비게이션 유지. 합성 PC1440×1000·모바일390×844 최종 안내 카드/복구 단계·가로 넘침 없음 확인.

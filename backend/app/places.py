@@ -319,6 +319,7 @@ def create(request: Request, body: PlaceInput):
 def update(request: Request, place_id: str, body: PlaceUpdateInput):
     with auth.database() as connection:
         user_id = authenticated(connection, request, True)
+        connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('routine-write:' + str(user_id),))
         row = connection.execute('SELECT * FROM saved_places WHERE id=%s AND user_id=%s FOR UPDATE',
                                  (parsed_id(place_id), user_id)).fetchone()
         if not row:
@@ -340,6 +341,11 @@ def update(request: Request, place_id: str, body: PlaceUpdateInput):
                 location_version=location_version+%s,updated_at=now()
                 WHERE id=%s AND user_id=%s RETURNING *''', (latitude, longitude, source, address, note, label,
                 int(location_changed), row['id'], user_id)).fetchone()
+        if location_changed:
+            connection.execute('''UPDATE routines SET status='needs_attention',
+                version=version+1,updated_at=now()
+                WHERE user_id=%s AND (origin_place_id=%s OR destination_place_id=%s)''',
+                (user_id, row['id'], row['id']))
     return auth.answer(request, place_data(row))
 
 
@@ -347,6 +353,7 @@ def update(request: Request, place_id: str, body: PlaceUpdateInput):
 def delete(request: Request, place_id: str):
     with auth.database() as connection:
         user_id = authenticated(connection, request, True)
+        connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('routine-write:' + str(user_id),))
         row = connection.execute('SELECT id FROM saved_places WHERE id=%s AND user_id=%s FOR UPDATE',
                                  (parsed_id(place_id), user_id)).fetchone()
         if not row:

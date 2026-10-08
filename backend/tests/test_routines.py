@@ -386,3 +386,44 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
             connection.execute("UPDATE journey_searches SET expires_at=now()-interval '1 hour' WHERE id=%s", (fresh_id,))
         self.assertEqual((await self.schedule(path, {**fresh, 'expected_version': 4}))[0], 404)
         self.assertEqual((await self.call('/routines/' + data['routine_id']))[2]['data']['version'], 4)
+
+    async def test_place_change_marks_shared_routines_and_fresh_route_recovers(self):
+        home, work, search_id, candidate = await self.ready()
+        body = self.routine_body(home, work, search_id, candidate)
+        first = (await self.save({**body, 'target_arrival_local_time': '09:10'}))[2]['data']
+        second = (await self.save({**body, 'name': '같은 장소 루틴'}))[2]['data']
+        fresh_home, fresh_work, fresh_id, fresh_candidate = await self.saved_search()
+        unrelated = (await self.save(self.routine_body(fresh_home, fresh_work, fresh_id, fresh_candidate)))[2]['data']
+        headers=[(b'origin', b'http://127.0.0.1:5173'), (b'cookie', self.cookie.encode()), (b'x-csrf-token', self.csrf.encode()), (b'content-type', b'application/json')]
+        async def edit(values):
+            return await request('/api/v1/places/' + home['place_id'], 'PATCH', headers=headers, body=json.dumps(values).encode())
+        renamed=await edit({'expected_version': 1, 'label': '새 집 이름'})
+        self.assertEqual(renamed[0], 200)
+        self.assertEqual((await self.call('/routines/' + first['routine_id']))[2]['data']['version'], 1)
+        changed=await edit({'expected_version': 2, 'entrance_note': '동쪽 출입구'})
+        self.assertEqual(changed[0], 200)
+        self.assertEqual(changed[2]['data']['location_version'], 2)
+        for saved in (first,second):
+            updated=(await self.call('/routines/' + saved['routine_id']))[2]['data']
+            self.assertEqual(updated['status'], 'needs_attention')
+            self.assertEqual(updated['version'], 2)
+            self.assertEqual(updated['route'], saved['route'])
+            self.assertEqual(updated['weekdays'], saved['weekdays'])
+            self.assertEqual(updated['target_arrival_local_time'], saved['target_arrival_local_time'])
+        self.assertEqual((await self.call('/routines/' + unrelated['routine_id']))[2]['data']['status'], 'active')
+        self.assertEqual((await edit({'expected_version': 3, 'entrance_note': '동쪽 출입구'}))[0], 200)
+        self.assertEqual((await self.call('/routines/' + first['routine_id']))[2]['data']['version'], 2)
+        path='/api/v1/routines/' + first['routine_id']
+        self.assertEqual((await self.schedule(path, {**body, 'expected_version': 2}))[0], 409)
+        self.assertEqual((await self.call('/routines/' + first['routine_id']))[2]['data']['status'], 'needs_attention')
+        accepted,result,_=await self.completed({'origin': {'type':'saved_place','place_id':home['place_id'],'location_version':2},
+            'destination': {'type':'saved_place','place_id':work['place_id'],'location_version':1},
+            'timing':{'mode':'depart_now','timezone':'Asia/Seoul'}})
+        restored=await self.schedule(path, {'expected_version':2,'origin_place_id':home['place_id'],
+            'destination_place_id':work['place_id'],'search_id':accepted[2]['data']['search_id'],
+            'candidate_id':result[2]['data']['candidates'][0]['candidate_id']})
+        self.assertEqual(restored[0], 200)
+        self.assertEqual(restored[2]['data']['status'], 'active')
+        self.assertEqual(restored[2]['data']['version'], 3)
+        self.assertEqual(restored[2]['data']['target_arrival_local_time'], '09:10')
+        self.assertEqual((await self.call('/routines/' + second['routine_id']))[2]['data']['status'], 'needs_attention')

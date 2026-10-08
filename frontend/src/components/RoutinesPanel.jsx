@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Repeat2, Trash2 } from 'lucide-react';
 import { apiRequest, ApiError } from '../lib/api';
-import { WEEKDAYS, placeLabel, validRoutine } from '../lib/routines';
+import { WEEKDAYS, placeLabel, validRoutine, needsRoutineRecovery, routineRecoveryMessage } from '../lib/routines';
 import { formatJourneyTime } from '../lib/journeys';
 
 export function RoutineSummary({ routine }) {
+  const recovery=needsRoutineRecovery(routine);
   return <><p>{placeLabel(routine.origin_place)} → {placeLabel(routine.destination_place)}</p>
     <div className="day-list" aria-label="반복 요일">{WEEKDAYS.map((day, index) => <span key={day} className={routine.weekdays.includes(index + 1) ? 'on' : ''}>{day}</span>)}</div>
-    <div className="routine-details"><span>목표 도착 <strong>{routine.target_arrival_local_time || '설정 안 함'}</strong></span><span>환승 <strong>{routine.route.transfer_count}회</strong></span></div>
-    <p className="candidate-note">공급자 예상 약 {formatJourneyTime(routine.route.total_seconds)} · 실제 운행·도보 확인 필요</p>
-    {routine.status === 'needs_attention' && <p className="info-box">장소가 변경되거나 삭제됐어요. 경로를 다시 선택해주세요.</p>}</>;
+    <div className="routine-details"><span>목표 도착 <strong>{routine.target_arrival_local_time || '설정 안 함'}</strong></span>{!recovery&&<span>환승 <strong>{routine.route.transfer_count}회</strong></span>}</div>
+    {recovery?<div className="info-box routine-recovery-notice"><strong>루틴 복구가 필요해요</strong><p>{routineRecoveryMessage(routine)}</p><p>이전 경로의 예상 시간은 사용하지 않아요. 이름과 반복 일정은 유지돼요.</p></div>:<p className="candidate-note">공급자 예상 약 {formatJourneyTime(routine.route.total_seconds)} · 실제 운행·도보 확인 필요</p>}</>;
 }
 export function RoutineStatus({ state, onRetry, onLogin, onAdd }) {
   if (state.phase === 'loading') return <p role="status" className="info-box">루틴을 불러오고 있어요…</p>;
@@ -53,7 +53,7 @@ export default function RoutinesPanel({ state, onRetry, onMore, onLogin, onAdd, 
         onCancel={() => { setEditing(null); setFeedback(null); }} onSave={body => mutate(routine, 'PATCH', body)}/> :
       deleting === routine.routine_id ? <div className="place-delete-confirm"><p>‘{routine.name}’ 루틴을 삭제할까요?</p><div className="button-row"><button autoFocus className="secondary" disabled={busy} onClick={() => setDeleting(null)}>취소</button><button className="primary" disabled={busy} onClick={() => mutate(routine, 'DELETE')}>삭제 확인</button></div></div> :
       <div className="routine-actions"><button className="secondary" disabled={busy} onClick={() => { setEditing(routine.routine_id); setFeedback(null); }}>수정</button>
-        <button className="text-button" disabled={busy} onClick={() => onRouteChange(routine)}>경로 바꾸기</button>
+        <button className="text-button" disabled={busy} onClick={() => onRouteChange(routine)}>{needsRoutineRecovery(routine)?'루틴 복구하기':'경로 바꾸기'}</button>
         <button className="text-button" disabled={busy} onClick={() => { setDeleting(routine.routine_id); setFeedback(null); }}><Trash2 size={16}/>삭제</button>
         <button className="primary" disabled={busy} onClick={() => onSelect(routine)}>루틴 선택 <ArrowRight size={16}/></button></div>}
     </section>)}</div>

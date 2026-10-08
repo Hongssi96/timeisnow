@@ -4,6 +4,12 @@ import { safeJourneyId } from './journeys';
 
 export const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'];
 export const placeLabel = value => value ? value.label : '삭제된 장소';
+export const needsRoutineRecovery = routine => routine.status === 'needs_attention' || !routine.origin_place || !routine.destination_place;
+export function routineRecoveryMessage(routine) {
+  const missing=[!routine.origin_place&&'출발',!routine.destination_place&&'도착'].filter(Boolean);
+  return missing.length ? `${missing.join('·')} 장소가 삭제됐어요. 저장 장소를 다시 선택하고 경로를 조회해주세요.`
+    : '장소 위치·출입구 또는 경로 정보를 다시 확인해야 해요. 현재 장소로 경로를 다시 조회해주세요.';
+}
 const place = value => value === null || (safeJourneyId(value?.place_id) && ['label', 'name', 'address'].every(key => typeof value[key] === 'string'));
 export function validRoutine(value) {
   return safeJourneyId(value?.routine_id) && typeof value.name === 'string' && value.name.trim().length >= 1 && value.name.length <= 30

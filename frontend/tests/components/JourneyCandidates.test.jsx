@@ -32,6 +32,36 @@ async function open(props={}){
 }
 async function search(user){await user.click(screen.getByRole('button',{name:'경로 후보 조회'}));await act(()=>vi.advanceTimersByTimeAsync(2000));}
 
+it.each(['VERSION_CONFLICT','RESOURCE_NOT_FOUND'])('offers latest routine reload after recovery PATCH %s without creating or retrying',async code=>{
+  const existing={...saved('recover'),status:'needs_attention',origin_place:null,version:4,weekdays:[2,4],target_arrival_local_time:'09:10'};
+  apiRequest.mockImplementation(path=>{
+    if(path==='/api/v1/auth/csrf')return Promise.resolve(reply({csrf_token:'csrf_test'}));
+    if(path==='/api/v1/journey-searches')return Promise.resolve(reply(accepted,202));
+    if(path==='/api/v1/routines/recover')return Promise.reject(new ApiError(code));
+    return Promise.resolve(result());
+  });
+  const onRoutineReload=vi.fn(),onRoutineSaved=vi.fn();
+  const user=await open({routineToReplace:existing,onRoutineReload,onRoutineSaved});
+  expect(screen.getByText(/출발 장소가 삭제됐어요/)).toBeTruthy();
+  await search(user);await user.click(screen.getAllByRole('button',{name:'이 경로로 루틴 변경'})[0]);
+  expect(screen.getByLabelText('루틴 이름').value).toBe(existing.name);
+  await user.click(screen.getByRole('button',{name:'루틴 저장'}));
+  expect(screen.queryByRole('heading',{name:'경로 후보 2개'})).toBeNull();
+  await user.click(screen.getByRole('button',{name:'최신 루틴 다시 확인'}));
+  expect(onRoutineReload).toHaveBeenCalledOnce();expect(onRoutineSaved).not.toHaveBeenCalled();
+  expect(apiRequest.mock.calls.filter(([path])=>path==='/api/v1/routines/recover')).toHaveLength(1);
+  expect(apiRequest.mock.calls.some(([path])=>path==='/api/v1/routines')).toBe(false);
+});
+
+it('starts recovery with saved places and ignores an unrelated home origin without writing',async()=>{
+  vi.useFakeTimers();const existing={...saved('recover'),status:'needs_attention',destination_place:null};
+  render(<JourneyComparison routineToReplace={existing} initialOrigin={{label:'다른 곳',origin:{type:'saved_place',place_id:'other',location_version:1},deadline:Date.now()+600000}}/>);
+  expect(screen.queryByText('다른 곳')).toBeNull();
+  await act(async()=>fireEvent.click(screen.getByRole('button',{name:'출발지 선택'})));
+  expect(screen.getByRole('button',{name:'검증 위치 적용'}).dataset.mode).toBe('saved');
+  expect(apiRequest).not.toHaveBeenCalled();
+});
+
 it('saves a candidate as a named routine with idempotency key',async()=>{
   mockApi();const onRoutineSaved=vi.fn();const user=await open({onRoutineSaved});await search(user);
   expect(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})).toHaveLength(2);
