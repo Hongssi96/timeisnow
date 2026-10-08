@@ -29,11 +29,12 @@ function validSchedule(weekdays,target) {
     &&(target===null||/^([01]\d|2[0-3]):[0-5]\d$/.test(target));
 }
 
-export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAuthError, onRoutineSaved, routineToReplace, onManagePlaces }) {
+export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAuthError, onRoutineSaved, routineToReplace }) {
   const [origin,setOrigin]=useState(()=>selection(initialOrigin)&&initialOrigin.deadline>Date.now()?initialOrigin:null);
   const [destination,setDestination]=useState(null);
   const [editing,setEditing]=useState(null);
   const [editingMode,setEditingMode]=useState('current');
+  const [editingBusy,setEditingBusy]=useState(false);
   const [saveMessage,setSaveMessage]=useState(null);
   const [preference,setPreference]=useState('balanced');
   const [state,setState]=useState({phase:'idle'});
@@ -169,9 +170,9 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
     {routineToReplace&&<div className="info-box">‘{routineToReplace.name}’의 경로를 바꿔요. 출발·도착 장소를 선택하고 새 경로를 저장해주세요.</div>}
     <div className="page-heading"><div><p className="eyebrow">COMPARE YOUR ROUTE</p><h1>내 이동 경로를 비교해요<span>.</span></h1><p>출발·도착지를 직접 고르고 예상 시간과 구간을 확인해요.</p></div></div>
     <section className="card comparison-form"><h2>어디에서 어디로 갈까요?</h2>
-      <div className="comparison-endpoints">{[['origin','출발지',origin],['destination','도착지',destination]].map(([key,label,value])=><div className="comparison-endpoint" key={key}><span className="soft-icon"><MapPin size={20}/></span><div><h3>{label}</h3><p>{value?value.label:'위치를 선택해주세요'}</p>{value&&<p className="candidate-note">{value.location_address}</p>}<button className="secondary" onClick={()=>edit(key)}>{label} {value?'변경':'선택'}</button></div></div>)}</div>
-      {editing&&<div className="comparison-editor"><div className="section-heading"><h2>{editing==='origin'?'출발지':'도착지'} 선택</h2><button className="text-button" onClick={()=>setEditing(null)}>위치 선택 취소</button></div><OriginSelector key={editing+':'+editingMode} purpose={editing} initialMode={editingMode} onSelect={choose} onLogin={onLogin} onAuthError={authFailure}/></div>}
-      {origin&&destination&&!canSave&&<div className="info-box routine-save-help"><p>{placeRef(origin)&&placeRef(destination)?'출발지와 도착지는 서로 다른 저장 장소를 선택해주세요.':SAVED_PLACE_REQUIRED}</p><p>내 설정에서 집·회사 등을 저장한 뒤 장소를 선택하고 경로를 다시 조회해주세요.</p><div className="button-row"><button className="secondary" onClick={()=>edit('origin','saved')}>출발지 저장 장소 선택</button><button className="secondary" onClick={()=>edit('destination','saved')}>도착지 저장 장소 선택</button>{onManagePlaces&&<button className="text-button" onClick={onManagePlaces}>내 장소 관리</button>}</div></div>}
+      <div className="comparison-endpoints">{[['origin','출발지',origin],['destination','도착지',destination]].map(([key,label,value])=><div className="comparison-endpoint" key={key}><span className="soft-icon"><MapPin size={20}/></span><div><h3>{label}</h3><p>{value?value.label:'위치를 선택해주세요'}</p>{value&&<p className="candidate-note">{value.location_address}</p>}<button className="secondary" disabled={editingBusy} onClick={()=>edit(key)}>{label} {value?'변경':'선택'}</button></div></div>)}</div>
+      {editing&&<div className="comparison-editor"><div className="section-heading"><h2>{editing==='origin'?'출발지':'도착지'} 선택</h2><button className="text-button" disabled={editingBusy} onClick={()=>setEditing(null)}>위치 선택 취소</button></div><OriginSelector key={editing+':'+editingMode} purpose={editing} initialMode={editingMode} onSelect={choose} onLogin={onLogin} onAuthError={authFailure} onBusyChange={setEditingBusy}/></div>}
+      {origin&&destination&&!canSave&&<div className="info-box routine-save-help"><p>{placeRef(origin)&&placeRef(destination)?'출발지와 도착지는 서로 다른 저장 장소를 선택해주세요.':SAVED_PLACE_REQUIRED}</p><p>새 장소를 이 화면에서 저장하고 선택할 수 있어요. 장소를 선택한 뒤 경로를 다시 조회해주세요.</p><div className="button-row"><button className="secondary" disabled={editingBusy} onClick={()=>edit('origin','saved')}>출발지 저장 장소 선택</button><button className="secondary" disabled={editingBusy} onClick={()=>edit('destination','saved')}>도착지 저장 장소 선택</button><button className="secondary" disabled={editingBusy} onClick={()=>edit('origin','new')}>출발 장소 새로 저장</button><button className="secondary" disabled={editingBusy} onClick={()=>edit('destination','new')}>도착 장소 새로 저장</button></div></div>}
       <label className="comparison-sort">비교 기준<select value={preference} disabled={busy} onChange={event=>{setPreference(event.target.value);if(!['ready','empty','failed'].includes(state.phase))reset();}}><option value="balanced">전체 예상 시간순</option><option value="fewer_transfers">환승 적은 순</option><option value="less_walking">제공된 도보 시간순</option></select></label>
       <p className="candidate-note">조회된 후보 안에서 정렬해요. 빠진 도보 구간과 실제 운행 방향은 따로 확인해야 해요.</p>
       <button className="primary" disabled={busy||!!editing||!origin||!destination||!!state.retryAt} onClick={()=>state.phase==='error'&&snapshot.current?run(true,!!snapshot.current.accepted):run()}>{busy?'경로 확인 중…':state.phase==='error'&&snapshot.current?(snapshot.current.accepted?'결과 다시 확인':'같은 요청 다시 확인'):state.phase==='failed'?'경로 후보 다시 조회':'경로 후보 조회'}<ArrowRight size={18}/></button>

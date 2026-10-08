@@ -50,3 +50,5 @@
 .routines-panel .section-heading{flex-wrap:wrap;gap:14px}.routine-card h2,.routine-home h2{overflow-wrap:anywhere}.routines-panel .routine-card p,.routine-home p{font-size:14px;color:var(--ink);overflow-wrap:anywhere}.routine-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}.routine-actions button,.routines-panel .text-button{min-height:44px}.routine-home{max-width:850px;margin-bottom:22px}.routine-home .button-row,.routines-panel .button-row{flex-wrap:wrap}.routine-home .info-box{font-size:14px;color:var(--ink)}.routine-toolbar .tabs{flex-wrap:wrap}.routines-panel .empty-state p{font-size:14px;color:var(--ink)}.routine-home .day-list{margin:18px 0}.routines-panel .routine-name-panel input{margin-top:8px}.routines-panel .routine-name-panel label{margin-top:12px}
 
 .routine-save-help .button-row{flex-wrap:wrap}.routine-save-help p{margin:0 0 12px}
+
+.origin-place-create .places-card{margin-top:16px}.origin-place-create>.info-box{font-size:14px;color:var(--ink)}.origin-place-create .place-form{margin-top:10px}
