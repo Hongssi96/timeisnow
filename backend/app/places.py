@@ -11,6 +11,7 @@ import urllib.request
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import Response
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from dotenv import dotenv_values
@@ -163,11 +164,19 @@ class PlaceUpdateInput(BaseModel):
     location: Location | None = None
     location_confirmation_id: UUID | None = None
     entrance_note: str | None = None
+    label: str | None = None
     note_length = field_validator('entrance_note')(PlaceInput.note_length.__func__)
+
+    @field_validator('label')
+    @classmethod
+    def label_length(cls, value):
+        if value is None:
+            raise ValueError('Invalid label')
+        return PlaceInput.label_length(value)
 
     @model_validator(mode='after')
     def update_fields(self):
-        if not {'location', 'entrance_note'} & self.model_fields_set:
+        if not {'label', 'location', 'entrance_note'} & self.model_fields_set:
             raise ValueError('No changes')
         if 'location' in self.model_fields_set and (self.location is None or self.location_confirmation_id is None):
             raise ValueError('Location requires confirmation')
@@ -201,7 +210,7 @@ def place_data(row):
             'address': row['address'], 'location': {'latitude': row['latitude'], 'longitude': row['longitude']},
             'entrance_ref': row['entrance_ref'], 'version': row['version'],
             'entrance_note': row['entrance_note'], 'location_source': row['location_source'],
-            'location_address': row['location_address']}
+            'location_address': row['location_address'], 'location_version': row['location_version']}
 
 
 def confirmed_location(connection, user_id, confirmation_id, location):
@@ -323,12 +332,35 @@ def update(request: Request, place_id: str, body: PlaceUpdateInput):
             latitude, longitude = body.location.latitude, body.location.longitude
             source = 'map_pin'
         note = body.entrance_note if 'entrance_note' in body.model_fields_set else row['entrance_note']
-        changed = (latitude, longitude, source, note) != (row['latitude'], row['longitude'], row['location_source'], row['entrance_note'])
-        if changed:
+        label = body.label if 'label' in body.model_fields_set else row['label']
+        location_changed = (latitude, longitude, source, note) != (row['latitude'], row['longitude'], row['location_source'], row['entrance_note'])
+        if location_changed or label != row['label']:
             row = connection.execute('''UPDATE saved_places SET latitude=%s,longitude=%s,location_source=%s,
-                location_address=%s,entrance_note=%s,version=version+1,updated_at=now()
-                WHERE id=%s AND user_id=%s RETURNING *''', (latitude, longitude, source, address, note, row['id'], user_id)).fetchone()
+                location_address=%s,entrance_note=%s,label=%s,version=version+1,
+                location_version=location_version+%s,updated_at=now()
+                WHERE id=%s AND user_id=%s RETURNING *''', (latitude, longitude, source, address, note, label,
+                int(location_changed), row['id'], user_id)).fetchone()
     return auth.answer(request, place_data(row))
+
+
+@router.delete('/places/{place_id}')
+def delete(request: Request, place_id: str):
+    with auth.database() as connection:
+        user_id = authenticated(connection, request, True)
+        row = connection.execute('SELECT id FROM saved_places WHERE id=%s AND user_id=%s FOR UPDATE',
+                                 (parsed_id(place_id), user_id)).fetchone()
+        if not row:
+            missing()
+        # Routines keep their route history but wait for repair after the place is gone (F06-04).
+        connection.execute('''UPDATE routines SET
+            origin_place_id=CASE WHEN origin_place_id=%s THEN NULL ELSE origin_place_id END,
+            destination_place_id=CASE WHEN destination_place_id=%s THEN NULL ELSE destination_place_id END,
+            status='needs_attention', version=version+1, updated_at=now()
+            WHERE user_id=%s AND (origin_place_id=%s OR destination_place_id=%s)''',
+            (row['id'], row['id'], user_id, row['id'], row['id']))
+        # FK SET NULL retains only the bounded retry marker, preventing late creation retries.
+        connection.execute('DELETE FROM saved_places WHERE id=%s AND user_id=%s', (row['id'], user_id))
+    return Response(status_code=204, headers={'Cache-Control': 'no-store'})
 
 
 @router.get('/places')

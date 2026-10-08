@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiRequest } from './api';
+import { apiRequest } from '../../src/lib/api';
 
 const meta = { request_id: 'req_1', server_time: '2026-10-06T00:00:00Z' };
 const response = (status = 200, body = { data: { status: 'ok' }, meta }, id = 'req_1') => ({
@@ -9,6 +9,13 @@ const response = (status = 200, body = { data: { status: 'ok' }, meta }, id = 'r
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('공통 API 응답과 실패 처리', () => {
+  it('Retry-After seconds are exposed safely for callers without automatic retries',async()=>{
+    const pending=response();pending.headers.set('Retry-After','7');const fetchMock=vi.fn(async()=>pending);vi.stubGlobal('fetch',fetchMock);
+    expect((await apiRequest('/api/v1/health')).retryAfterMs).toBe(7000);expect(fetchMock).toHaveBeenCalledOnce();
+    pending.headers.set('Retry-After','Infinity');expect((await apiRequest('/api/v1/health')).retryAfterMs).toBeUndefined();
+    const limited=response(429,{error:{code:'RATE_LIMITED'},meta});limited.headers.set('Retry-After','12');fetchMock.mockResolvedValueOnce(limited);
+    await expect(apiRequest('/api/v1/health')).rejects.toMatchObject({code:'RATE_LIMITED',retryAfterMs:12000});
+  });
   it('가입 입력 오류는 허용된 필드만 고정 문구로 안내한다', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => response(422, { error: { code: 'VALIDATION_ERROR', message: 'private-input', details: [
       { field: 'body.password', reason: 'private-password' },

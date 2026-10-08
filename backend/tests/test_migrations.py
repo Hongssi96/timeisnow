@@ -32,24 +32,27 @@ class MigrationTest(unittest.TestCase):
                     command.upgrade(config, '0003_saved_places')
                     user_id, place_id = str(uuid4()), str(uuid4())
                     connection.execute(text("INSERT INTO users(id,display_name) VALUES(:id,'migration fixture')"), {'id':user_id})
-                    connection.execute(text('''INSERT INTO saved_places(id,user_id,label,name,address,latitude,longitude)
-                        VALUES(:id,:user_id,'home','synthetic','synthetic address',37.5,127)'''), {'id':place_id,'user_id':user_id})
+                    connection.execute(text('''INSERT INTO saved_places(id,user_id,label,name,address,latitude,longitude,version)
+                        VALUES(:id,:user_id,'home','synthetic','synthetic address',37.5,127,4)'''), {'id':place_id,'user_id':user_id})
                     connection.commit()
                     command.upgrade(config, "head")
                     command.upgrade(config, "head")
                     self.assertEqual(connection.execute(text('SELECT location_source,entrance_note,location_address,version FROM saved_places')).one(),
-                                     ('search',None,None,1))
+                                     ('search',None,None,4))
+                    self.assertEqual(connection.execute(text('SELECT location_version FROM saved_places')).scalar_one(),4)
                     connection.commit()
                     command.downgrade(config, '0003_saved_places')
-                    self.assertEqual(connection.execute(text('SELECT latitude,longitude,version FROM saved_places')).one(), (37.5,127.0,1))
+                    self.assertEqual(connection.execute(text('SELECT latitude,longitude,version FROM saved_places')).one(), (37.5,127.0,4))
                     connection.commit()
                     command.upgrade(config, 'head')
                     self.assertEqual(connection.execute(text(
                         "SELECT version_num FROM alembic_version")).scalars().all(),
-                        ["0004_place_map_pin"])
+                        ["0008_routine_schedule"])
                     self.assertEqual(sorted(inspect(connection).get_table_names(schema=schema)),
                                      ['alembic_version', 'auth_credentials', 'auth_rate_limit_buckets',
-                                      'auth_sessions', 'place_creation_keys', 'place_location_confirmations', 'place_searches', 'saved_places', 'user_profiles', 'users'])
+                                      'auth_sessions', 'journey_plans', 'journey_search_keys', 'journey_searches',
+                                      'place_creation_keys', 'place_location_confirmations', 'place_searches',
+                                      'routine_creation_keys', 'routines', 'saved_places', 'user_profiles', 'users'])
                     connection.commit()
                     command.downgrade(config, "base")
                     self.assertEqual(connection.execute(text(

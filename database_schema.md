@@ -1,5 +1,7 @@
 # 지금이니? — 테이블·연관관계 설계 초안
 
+F04-01(2026-10-07, Notion v0.40): 카카오 대중교통 후보 조회 POST /journey-searches202·본인 GET 결과 및 /jobs 상태를 구현했다. depart_now부터 지원하며 arrive_by는 명시적으로 준비 중 오류다. 후보는 provider_estimate/insufficient_data, 도착 시각 null이고 AI 도보·실시간·역 내부/출입구·중간 지역 검증은 후속이다. 입력 GPS/지도 좌표·원본 geometry는 DB/로그에 저장하지 않는다. 검색300초·작업/멱등24시간·재시작60초 실패 처리, 저장 장소 존재/위치 버전 재검사. 상세 [journey_api.md](./journey_api.md). F03-05a는 main8b4b40b에 병합됐으며 GPS 수치 정책 보류를 유지한다. 실제 추가 테이블은0006_journey_searches의journey_searches/journey_search_keys이며 users ON DELETE CASCADE, 멱등 search 참조는ON DELETE SET NULL이다.
+
 - 버전: 0.3 / 작성일: 2026-10-02
 - 상태: **회원 인증5개 테이블은0002_member_auth로 적용**, 나머지 이동/장소/약속 DDL은 설계 제안·미적용.
 - 기준: [API 명세](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa), [기획](./planning.md), [개인화](./personalization.md), [약속 확장](./meeting_plan.md).
@@ -64,6 +66,8 @@ routine → journey_plan은 반복 사용할 경로를 고르는 관계다. guid
 
 ### A. 회원과 고정 장소
 
+F03-03 적용(2026-10-07): 0005_place_management에서 location_version을 기존version으로 초기화, 위치/출입구/출처 변경에만 증가한다. label 변경은 일반version만 증가. 향후 walking_paths origin_version/destination_version에는 장소location_version을 연결한다. 장소 삭제는 물리 삭제, place_creation_keys FK는ON DELETE SET NULL로24시간 삭제 표시만 유지해 동일 저장 키 재생성을 막는다. 삭제/동시성/소유권 및 기존 장소 버전 보존·마이그레이션 왕복 검증. 미구현 실제 루틴 FK NULL/needs_attention과 산정 재사용 차단은 각 기능에서 구현한다.
+
 F03-02 적용(2026-10-07): 0004_place_map_pin이 saved_places에 entrance_note(사용자 입력, null/1~100자), location_source(search/map_pin), location_address(null/법정동 명칭)를 추가하고 place_location_confirmations(본인 좌표/법정동 명칭/600초)을 생성한다. 기존 장소 기본값 search/null/null 유지 및0003↔0004 왕복에서 데이터 보존 검증. PATCH는 본인 행 잠금/expected_version, 좌표 확인 ID/기한/일치 검사 후 좌표·설명·출처가 바뀌면 version 증가. 도보/경로 캐시 테이블은 아직 생성하지 않으며 향후 place_id/version 불일치로 재사용 제외한다.
 
 F03-01 적용(2026-10-07): 0003_saved_places로 saved_places(name/address/좌표/라벨/버전 포함), place_searches(본인 최소 후보 jsonb/10분 만료), place_creation_keys(본인 저장 요청 해시/장소 참조/24시간)를 실제 생성했다. 검색어/공급자 원본은 저장하지 않는다. name/address는 선택 결과 표시용 최소 데이터, entrance_ref는 이번 API에서 null만 허용. 기능별 소유권/만료/멱등·임시 스키마 왕복 검증 완료, 수정/삭제·루틴 FK·산정 무효화는 미구현이다.
@@ -72,7 +76,7 @@ F03-01 적용(2026-10-07): 0003_saved_places로 saved_places(name/address/좌표
 | --- | --- | --- |
 | users | id, display_name, status, created_at, updated_at, version | 서비스 내부 회원 ID. 삭제 진행 중 접근 차단. 비밀번호 컬럼을 먼저 만들지 않음 |
 | user_profiles | user_id(PK/FK), walking_preference, first_boarding_buffer_seconds=300, transfer_buffer_seconds, route_preference, timezone, version | users와 1:1. 여유 정수0~1800초, 첫 탑승 기본300초·환승 기본120초 확정. 학습 계수는 여기서 수동 수정하지 않음 |
-| saved_places | id, user_id, label, latitude, longitude, entrance_ref?, version, created_at, updated_at | users 1:N. 좌표 범위 CHECK. 집·회사 라벨을 고정 enum으로 제한하지 않음 |
+| saved_places | id, user_id, label, name, address, latitude, longitude, entrance_ref?, entrance_note?, location_source, location_address?, version, location_version, created_at, updated_at | users 1:N. 좌표 범위 CHECK. 일반version은 수정 충돌, location_version은 위치 계산. 집·회사 라벨을 고정 enum으로 제한하지 않음 |
 
 D01 변경(2026-10-06): 이메일 중복 확인·비밀번호 로그인, 메일 인증/복구 후순위. users/auth_credentials/user_profiles/auth_sessions/auth_rate_limit_buckets를 적용했다. auth_credentials는 user_id·email_normalized UNIQUE·password_hash, auth_sessions는 token_hash PK·user_id nullable·csrf_token_hash·절대/미사용 만료, rate_limit_buckets는 scope/key_hash/window_start 복합PK·count/expires_at다. 인증 관련 메일 토큰/outbox는 만들지 않는다. 실제 DDL은0002_member_auth가 기준이며 UUID 세션 참조·WS 연결은 해당 후속 기능에서 추가한다.
 
@@ -86,6 +90,10 @@ D01 변경(2026-10-06): 이메일 중복 확인·비밀번호 로그인, 메일 
 | routines | id, user_id, name, origin_place_id?, destination_place_id?, journey_plan_id, weekdays smallint[], target_arrival_local_time?, timezone, status, version | 장소와 경로 모두 본인 것. 요일 1~7 중복 없이 1개 이상. 장소 FK는 정상 상태에서 필수, 삭제 시 NULL + needs_attention |
 
 검색 후보의 candidate_id는 journey_plans.id에 매핑한다. 저장 요청에서는 search_id와 candidate_id의 조합·소유권·유효기간을 확인한다. 루틴 저장 시 경로 구조와 방향은 유지하되 검색 당시 차량 도착 시각을 다음 출발의 근거로 사용하지 않는다. 경로 변경은 새 plan을 만들며 이미 사용된 plan/leg를 덮어쓰지 않는다.
+
+F06-01 적용(2026-10-07, 0007_routines): journey_plans를 id, user_id, search_id, candidate_id, candidate jsonb, total_seconds, transfer_count, model_version, created_at으로 우선 만들었다. candidate는 검색 후보를 journey.v1으로 보강한 전체 스냅샷이며 좌표 등 위치값은 넣지 않고 요약 API만 응답한다. UNIQUE(user_id,search_id,candidate_id)로 같은 후보 재저장 시 스냅샷을 재사용한다. purpose·origin_snapshot/destination_snapshot·valid_until과 journey_legs 분해는 후속(AI 도보·출발 안내)에서 확정한다. routines는 id, user_id, name, origin_place_id, destination_place_id, journey_plan_id, status(active|needs_attention), version, created_at, updated_at이며 name은 1~30자 공백제거 CHECK, 장소 FK ON DELETE SET NULL, plan FK ON DELETE CASCADE다. routine_creation_keys(user_id+key PK, body_hash, routine_id FK ON DELETE SET NULL, expires_at)로 24시간 멱등을 보장하며 루틴 삭제 후 동일 키 재시도는 404로 막는다. 장소 삭제 시 참조 루틴의 해당 FK를 NULL로 하고 status=needs_attention, version+1로 바꾼다.
+
+F06-02 적용(2026-10-07, 0008_routine_schedule): routines에 weekdays smallint[] NOT NULL DEFAULT '{1,2,3,4,5}'(CHECK cardinality 1~7, 값 1~7), target_arrival_local_time time NULL, timezone text NOT NULL DEFAULT 'Asia/Seoul'(CHECK =Asia/Seoul)을 추가했다. weekdays는 ISO 1(월)~7(일)이고 저장 API가 중복 없는 1~7개를 검증하며, 목표 도착은 HH:mm 형식만 받는다. 기존 루틴은 기본값(월~금, 목표 없음)으로 채워진다.
 
 ### C. AI 도보 산정·재사용
 
@@ -271,3 +279,6 @@ CASCADE는 부모와 수명이 같은 자식(예: 삭제 대상 이벤트의 정
 ## D03·D05 후속 결정 — 2026-10-06
 
 [policy_decisions.md](./policy_decisions.md)·Notion v0.26 참조. 약속 최대2명·draft 미사용30일 삭제·confirmed 목표시각6시간후 자동종결·종결후 공동30일·개인90일·재전송24시간·공유ETA120초. 주최자 탈퇴/비주최자 탈퇴/메시지 본문 삭제·개인trip 연결해제 규칙은 meeting_api.md 확정 계약을 적용한다. 기존 논리 테이블을 통한 시간/상태/만료 정책이며 신규 DDL/물리 삭제 실행 없음.
+
+### F06-03 루틴 관리 (2026-10-08)
+추가 DDL 없이0008을 재사용한다. 본인 목록은created_at DESC,id DESC 키셋 조회, cursor행의created_at을 소유권 확인 후 경계로 사용한다. 수정은routines version을 잠그고 검증한 후보 스냅샷을 연결한다. 루틴 쓰기는회원별 advisory transaction lock과 공유 plan행 잠금으로 직렬화한다. 삭제 및 경로 교체 후 다른 루틴 참조가 없는journey_plans만 삭제하며routine_creation_keys의삭제 표시는FK SET NULL로 유지한다. 실제trip 이력이 생길 때 스냅샷 보존 관계를 확장해야 한다.

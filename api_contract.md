@@ -1,9 +1,10 @@
 # 지금이니? API 설계 초안
-- 문서 버전: 0.36 · 작성일: 2026-09-30 · 수정일: 2026-10-07 (F03-02 지도 핀·출입구 확인/수정)
+- 문서 버전: 0.48 · 작성일: 2026-09-30 · 수정일: 2026-10-08 (F04-03a 이동 방법 우선 보기)
 - 프론트엔드: React · 백엔드: Python FastAPI
-- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01 장소 검색·저장·본인 조회와 F03-02 지도 핀/출입구 설명 수정은 구현, 경로/현재 위치/약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
+- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. F03-05a 수동 확인은 구현/검증 완료이며 GPS 수치/자동 일치 판정은 사용자 결정으로 보류. F04-01 depart_now 대중교통 후보 조회 API 및F04-02 공통 구간 모델은 구현, F04-03 후보 비교 화면은 구현. F06-01 루틴 저장·상세 API와 비교 화면 저장 연동, F06-02 루틴 요일·목표 도착 저장(저장 입력과 일정 PATCH 포함)은 구현. F06-03 본인 목록·선택·이름/일정/경로 수정·삭제와 F06-03a 루틴 등록 중 장소 저장·선택은 구현·검증 완료. AI/실시간·목표 도착 기반 출발 안내·약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
 - 기준: 대화에서 확정한 요구사항 및 프로젝트 `C:/projects/timeisnow` 폴더의 `planning.md`, `feature_breakdown.md`, `personalization.md`, `logging.md`, `ai_prompts.md`.
 - 이 페이지는 수동 관리하는 설계 문서다. 코드와 자동 동기화되는 상태가 아니다.
+<table_of_contents/>
 ## 1. 읽는 방법
 API는 React가 FastAPI에 요청하는 약속이다. GET은 조회, POST는 생성·처리 요청, PATCH는 일부 수정, DELETE는 삭제에 사용한다. 경로의 중괄호는 실제 ID로 바꾸는 자리다.
 **필수 기능:** 회원가입·개인 저장, 현재 위치와 집·회사, 환승, AI 도보 산정, 저장값 재사용, 초기 5분 여유, 실제 관측과 개인화, 품질 이력과 로깅.
@@ -32,7 +33,7 @@ API는 React가 FastAPI에 요청하는 약속이다. GET은 조회, POST는 생
 ## 3. 인증 방식 결정
 첫 버전은 이메일 중복 확인과 비밀번호 기반 가입/로그인이다. 메일 소유 확인·복구는 후순위, 가입 즉시 active다. 서버 세션·HttpOnly 쿠키·CSRF 상세 계약은17절을 따른다.
 ## 4. 기능별 API 목록
-GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이다. 성공 응답 열은 공통 data 내부 필드를 요약한다.
+GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1\~2절 출발지 선택/수동 확인·5.2.3절 depart_now 경로 후보 및 본인 작업 조회·5.3절 루틴 저장/상세/일정 및5.3.1절 목록/이름/경로 수정/삭제는 구현되어 있으며 그 외 항목은 **미구현**이다. 성공 응답 열은 공통 data 내부 필드를 요약한다.
 ### 01. 시스템·계정
 <table header-row="true">
 <tr>
@@ -109,6 +110,13 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <td>서울/경기 확인·600초·본인 소유권 및 CSRF</td>
 </tr>
 <tr>
+<td>`POST /origin-validations`</td>
+<td>필요</td>
+<td>origin: current_location/map_pin/saved_place. current_location.location_confirmed 선택boolean(기본false)</td>
+<td>200: origin, label, location, location_address, expires_at, quality_status, quality, place_match</td>
+<td>단발 위치/본인 장소·CSRF·10회/분·600초 메모리 선택. 현재 위치는 location_confirmed로 수동 확인, GPS 수치/자동 일치 판정은 보류</td>
+</tr>
+<tr>
 <td>`GET /places`</td>
 <td>필요</td>
 <td>cursor?, limit?</td>
@@ -132,7 +140,7 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <tr>
 <td>`PATCH /places/{place_id}`</td>
 <td>필요</td>
-<td>expected_version, location?, location_confirmation_id?, entrance_note? (label 수정 후속)</td>
+<td>expected_version, label?, location?, location_confirmation_id?, entrance_note?</td>
 <td>200: place</td>
 <td>본인 위치/설명 수정, 버전409 검사 및 버전 증가. 실제 산정 재사용 무효화는 F04/F05 후속</td>
 </tr>
@@ -141,7 +149,7 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <td>필요</td>
 <td>없음</td>
 <td>204: 본문 없음</td>
-<td>연관 루틴은 needs_attention 상태로 전환</td>
+<td>본인 장소 즉시 삭제204, 저장 재시도 키는NULL 삭제 표시. 연관 루틴은 해당 출발·도착 참조를 해제하고 status를 needs_attention으로 바꾼다(5.3)</td>
 </tr>
 </table>
 ### 03. 경로·AI 도보
@@ -158,7 +166,7 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <td>필요</td>
 <td>origin, destination, timing, preferences?</td>
 <td>202: search_id, job_id</td>
-<td>직행·환승 후보 조회와 필요한 AI 도보 산정을 비동기 실행</td>
+<td>F04-01은 depart_now 카카오 후보 비동기 조회. AI 도보·목표 도착은 후속</td>
 </tr>
 <tr>
 <td>`GET /journey-searches/{search_id}`</td>
@@ -196,38 +204,38 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 <td>필요</td>
 <td>cursor?, limit?</td>
 <td>200: items\[\], next_cursor</td>
-<td>출근·퇴근 루틴 목록</td>
+<td>본인 목록·페이지 조회. F06-03 계약5.3.1, 구현 완료</td>
 </tr>
 <tr>
 <td>`POST /routines`</td>
 <td>필요</td>
-<td>name, origin_place_id, destination_place_id, search_id, candidate_id, weekdays, target_arrival_local_time?, timezone</td>
+<td>name, origin_place_id, destination_place_id, search_id, candidate_id, weekdays(필수), target_arrival_local_time(선택)</td>
 <td>201: routine</td>
-<td>본인 검색의 유효 후보만 저장. 실시간 도착 시각을 영구 경로로 저장하지 않음</td>
+<td>본인 검색의 유효 후보만 저장하고 journey_plans 스냅샷을 만든다(5.3). 실시간 도착 시각을 영구 경로로 저장하지 않음. F06-01 구현, 요일·목표 도착 입력은 F06-02 구현</td>
 </tr>
 <tr>
 <td>`GET /routines/{routine_id}`</td>
 <td>필요</td>
 <td>경로: routine_id</td>
 <td>200: routine</td>
-<td>루틴 상세</td>
+<td>루틴 상세. F06-01 구현</td>
 </tr>
 <tr>
 <td>`PATCH /routines/{routine_id}`</td>
 <td>필요</td>
-<td>변경 필드, expected_version; 경로 변경 시 search_id, candidate_id</td>
+<td>expected_version, name?, weekdays?, target_arrival_local_time?, 경로 참조4개(함께)</td>
 <td>200: routine</td>
-<td>요일·이름·목표 시각·경로 변경</td>
+<td>일정 변경 F06-02 구현, 이름·경로 교체 F06-03 계약5.3.1·구현 완료</td>
 </tr>
 <tr>
 <td>`DELETE /routines/{routine_id}`</td>
 <td>필요</td>
 <td>없음</td>
 <td>204: 본문 없음</td>
-<td>기존 이동 기록은 당시 스냅샷 유지, 삭제된 루틴 참조는 표시용으로만 사용</td>
+<td>기존 이동 기록은 당시 스냅샷 유지, 삭제된 루틴 참조는 표시용으로만 사용. F06-03 계약5.3.1·구현 완료</td>
 </tr>
 </table>
-약속·초대·중간 추천·채팅·공유 API의 입력/응답/권한/이벤트 상세는 이 페이지 16절에 있다. 모든 신규 API는 미구현 설계 초안이다.
+약속·초대·중간 추천·채팅·공유 API의 입력/응답/권한/이벤트 상세는 이 페이지 16절에 있다. F06-01의 POST /routines·GET /routines/\{routine_id\}는 구현했고 F06-03 목록·수정·삭제는5.3.1 구현 완료이며 약속·출발 안내·이동 관측 API는 미구현 설계 초안이다.
 ### 05. 출발 안내
 <table header-row="true">
 <tr>
@@ -358,7 +366,7 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 {"label":"집","location":{"latitude":37.5001,"longitude":127.0001},"search_id":"00000000-0000-4000-8000-000000000001","candidate_id":"00000000-0000-4000-8000-000000000002","entrance_ref":null}
 ```
 ```json
-{"data":{"place_id":"00000000-0000-4000-8000-000000000003","label":"집","name":"합성 건물","address":"서울 합성 주소","location":{"latitude":37.5001,"longitude":127.0001},"entrance_ref":null,"version":1},"meta":{"request_id":"req_demo_01","server_time":"2026-10-07T00:00:00Z"}}
+{"data":{"place_id":"00000000-0000-4000-8000-000000000003","label":"집","name":"합성 건물","address":"서울 합성 주소","location":{"latitude":37.5001,"longitude":127.0001},"entrance_ref":null,"version":1,"location_version":1},"meta":{"request_id":"req_demo_01","server_time":"2026-10-07T00:00:00Z"}}
 ```
 장소 좌표는 필요한 인증 응답에는 포함되지만 일반 실행 로그에는 남기지 않는다. 출입구 변경은 F03-02 후속이다.
 ### 5.1.1 F03-01 장소 검색·저장 상세 계약
@@ -379,12 +387,24 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
 - POST /place-location-confirmations: 로그인·Origin/CSRF·no-store. 입력 location(latitude/longitude). 사용자당10회/분(429/Retry-After), 서버 카카오 coord2regioncode HTTPS로 서울/경기 법정동 범위 확인.200 data.confirmation_id(UUID), location, location_address(법정동 명칭, 정밀 주소가 아님), expires_at(생성후600초). 공급자503/잘못된 응답502는 검색과 동일. 바다/지원지역 밖422 UNSUPPORTED_REGION. 실패를 다른 지역으로 추측하거나 임의 좌표로 성공 처리하지 않는다.
 - POST /places 기존 필드는 유지, 선택 location_confirmation_id와 entrance_note 추가. 기존 후보와 동일 좌표는 기존 저장 가능. 다른 좌표는 본인/미만료 확인 ID와 정확히 일치해야 하며 확인 ID가 없으면422. 타인/만료/없는 확인404. 검색/후보 소유권과 만료 검사도 유지. 선택 확인 ID가 있으면 같은 좌표라도 source=map_pin. 기존 클라이언트 입력과 멱등 재시도 해시 호환 유지.
 - PATCH /places/\{place_id\}: 로그인·Origin/CSRF·no-store. expected_version(정수\>=1) 필수, 선택 location, location_confirmation_id, entrance_note. 최소 하나의 location/entrance_note 필요. location이 있으면 일치하는 본인/미만료 확인 ID 필수. 설명 null은 제거.200 장소 객체. 타인/없는/잘못된 장소 ID404, 오래된 expected_version409 VERSION_CONFLICT. 서버가 행 잠금 후 소유권→버전→확인 ID/좌표를 검사하고 한 트랜잭션으로 갱신한다.
-- 좌표 또는 출입구 설명/위치 출처가 바뀌면 version+1 및 updated_at 갱신. 같은 좌표/설명/출처는 버전을 유지한다. label/name/검색 원래 address는 이번 PATCH에서 수정하지 않는다. 사용자 핀의 법정동 명칭은 location_address로 별도 저장하고 원래 검색 주소와 구분한다.
+- 좌표 또는 출입구 설명/위치 출처가 바뀌면 version+1 및 updated_at 갱신. 같은 좌표/설명/출처는 버전을 유지한다. 검색 원래 name/address는 수정하지 않는다. label 수정은5.1.3절 확장을 따른다. 사용자 핀의 법정동 명칭은 location_address로 별도 저장하고 원래 검색 주소와 구분한다.
 - 장소 응답 추가 필드: entrance_note(null/string), location_source(search/map_pin), location_address(null/법정동 명칭). 기존 location은 실제 계산 출발점이며 지도 핀 또는 검색 좌표다. 기존 장소는 source=search/추가 필드null로 마이그레이션한다.
-- 버전은 도보/경로 근거의 유효성 기준이다. 변경 이전 place_id/version 조합은 최신 장소와 불일치하여 이후 F04/F05의 산정 재사용에서 제외해야 한다. 현재 경로/도보 저장소는 미구현이라 실제 산정 삭제/무효화 검증은 F04/F05에서 진행하며, 이번에는 버전 증가/동시 수정 충돌/동일 값 유지 및 이전 버전 거부를 검증한다.
+- 도보/경로 근거는 F03-03부터 place_id/location_version을 사용한다. 일반version은 모든 수정 충돌 검사, location_version은 위치/출입구/출처 변경에만 증가한다. 이름만 변경해도 위치 근거를 유지한다. 장소가 없거나 location_version이 다르면 재사용하지 않는다. 실제 경로/도보 저장소의 재사용 검증은 F04/F05 후속이다.
 - 확인 결과10분 후 접근 차단/다음 확인에서 만료행 청소, 매일 청소 스케줄은 F11 후속. 일반 로그에 키/좌표/주소/출입구 설명/공급자 원문을 출력하지 않는다. 지도는 해당 위치를 카카오에 표시하며 AI에 전달하지 않는다. 보관·공급자 조건은 기존 사용자 추가 확인 생략 지시와 미검증 상태 유지.
 - UI: 지도 로딩/실패/재시도, 위치 확인 중/실패/지원지역 밖/만료, 핀 변경 시 이전 확인 제거, 저장 중 비활성,409 시 최신 장소 재조회 후 재확인, 세션 만료/화면 이탈 자료 제거와 요청 취소. 키보드 방향 버튼5m 이동 및 검색 위치로 되돌리기를 제공한다. 현재 위치 권한 요청은 F03-04 후속.
-- 호환성: 기존 API에 선택 입력과 응답 필드 추가, 신규 config/확인 API와 기존 설계 PATCH 구현. F03-01 저장 흐름과 인증/health 유지. 장소 삭제/라벨 수정은 F03-03 후속이다.
+- 호환성: 기존 API에 선택 입력과 응답 필드 추가, 신규 config/확인 API와 기존 설계 PATCH 구현. F03-01 저장 흐름과 인증/health 유지. 장소 삭제/라벨 수정은5.1.3절 F03-03 확장에 구현했다.
+### 5.1.3 F03-03 내 장소 이름 수정·삭제 계약
+- 구현 상태(2026-10-07): label PATCH·DELETE204·삭제된 저장 키 재생성 방지·location_version 구현. 백엔드90개(관리10개 포함)·프론트57개·빌드 통과. 실제 DB/ASGI·로컬 HTTP·데스크톱1440×1000/모바일390×844 검증, 근거는 `development_log.md`. 루틴/산정 저장소는 후속.
+- PATCH /places/\{place_id\}에 선택 label 추가(공백 제거 후1\~30자, null/빈 값 거절). 기존 location/확인 ID/entrance_note 및 expected_version 규칙 유지, 최소 label/location/entrance_note 중1개. 같은 값은 유지, 이름 또는 위치/출입구가 바뀌면 일반 version+1.200 장소 객체. 로그인·Origin/CSRF·no-store, 본인 행 잠금·타인/없는404·오래된 version409·입력422.
+- 이름(label)은 사용자가 저장한 이름이며 검색 원래 name/address와 구분한다. 이름만 바꾸면 지도 공급자를 재호출하지 않고 실제 위치/출입구를 바꾸지 않는다.
+- 새 응답 location_version(정수\>=1)은 위치/출입구/출처의 계산 근거 버전이다. 최초 생성1, 위치/출입구/출처가 바뀔 때만+1, label만 수정하면 유지. 기존 장소는 마이그레이션에서 현재 version으로 초기화하여 이미 알려진 위치 버전을 보존한다. 일반 version은 모든 수정 충돌 검사에 사용한다.
+- F04/F05에서 place_id/location_version 일치와 장소 존재 여부로 산정 재사용을 검사한다. 기존5.1.2의 place_id/version 계산 근거 규칙을 location_version으로 구체화하며 label 변경으로 지도/AI를 재산정하지 않는다. 아직 실제 경로/도보/루틴 테이블 및 API는 미구현이다.
+- DELETE /places/\{place_id\}: 로그인·Origin/CSRF·no-store, 입력 본문 없음. 서버가 본인 장소 행을 잠그고 현재 저장소의 장소 이름/주소/좌표/설명을 같은 트랜잭션에서 즉시 물리 삭제. 성공204 본문 없음/X-Request-ID. 타인/없는/잘못된 ID 및 반복 삭제404 RESOURCE_NOT_FOUND, 인증401·CSRF403·DB503. 기존204 계약 유지, 위치 공급자 호출 없음.
+- 연결된 place_creation_keys는24시간 재시도 기한까지 사용자/키/본문 해시/만료만 유지하고 place_id는NULL로 지워 삭제 표시로 사용한다. 같은 저장 키/본문 재시도는404로 반환하여 삭제한 장소를 재생성하지 않는다. 다른 본문은기존409, 다른 키를 통한 명시적 신규 저장은 허용. 후보/위치 확인은 독립된10분 자원이며 다른 검색/확인 자료를 일괄 삭제하지 않는다.
+- 현재 연결 저장소는 saved_places와 생성 재시도 키뿐이다. F06 실제 루틴 추가 시 삭제 장소 참조를NULL 및needs_attention으로 바꾸고 이전 경로/도보를 재사용하지 않아야 한다. 과거 이동 스냅샷은 보관 정책에 따른다. 이번 기능은 미구현 루틴/산정 처리를 완료했다고 표시하지 않는다.
+- UI: 각 장소에 이름 수정·삭제 동작. 이름 수정에 현재 version을 전송,409이면 최신 자료 재조회 후 다시 수정. 삭제는 대상 저장 이름과 취소/삭제 버튼으로 화면에서 확인, 확인 전 요청 없음. 처리 중 비활성·실패/재시도·세션 만료/이탈 취소. 삭제204 또는 이미 없는404는 목록에서 제거하고 목록 첫 페이지 재조회, 재조회 실패는 목록 재시도 안내를 유지. 화면에는 기술용 키/좌표/요청 ID를 노출하지 않는다.
+- 동시 수정/삭제는 본인 장소 행 잠금으로 직렬화, 삭제 후 조회/수정/동일 저장 키 재시도는404. 사용자별 소유권·버전/동시성·삭제 재시도·목록/페이지·로그 비노출을 검증한다. 일반 로그에는 라벨/주소/좌표/본문/쿠키/삭제 대상 원문을 출력하지 않는다.
+- 호환성: 기존PATCH에 선택label·응답location_version 추가, 기존 설계DELETE204 구현. 현재 일반version 클라이언트의 수정 충돌 검사는 유지. 향후 경로/도보 클라이언트는location_version 계산 근거를 사용한다. 장소 삭제는 현 저장소에서 동기 완료하므로 별도202 job을 만들지 않으며 개인 이동/탈퇴의202 사본 정리 계약은 유지한다.
 ### 5.2 현재 위치에서 경로 검색
 `POST /api/v1/journey-searches`
 ```json
@@ -394,7 +414,8 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
     "latitude": 37.5001,
     "longitude": 127.0001,
     "accuracy_meters": 15,
-    "captured_at": "2026-09-30T00:00:00Z"
+    "captured_at": "2026-09-30T00:00:00Z",
+    "location_confirmed": true
   },
   "destination": {"type": "saved_place", "place_id": "place_work_demo"},
   "timing": {"mode": "depart_now", "timezone": "Asia/Seoul"},
@@ -407,10 +428,112 @@ GET /health는 구현되어 있으며 그 외 아래 항목은 **미구현**이�
   "meta": {"request_id": "req_demo_02", "server_time": "2026-09-30T00:00:00Z"}
 }
 ```
-origin/destination은 saved_place 또는 좌표 출발 객체다. 권한 거절 시 지도 선택은 type=map_pin과 좌표를 전달한다. 현재 위치의 최신성·정확도가 부족하면 재확인 상태를 반환한다.
+origin/destination은 saved_place 또는 좌표 출발 객체다. 권한 거절 시 지도 선택은 type=map_pin과 좌표를 전달한다. v0.40 실행 계약은5.2.3절을 따르며 현재 위치는location_confirmed:true 수동 확인 필수, GPS 수치 판정은 보류한다.
 목표 도착 검색은 timing.mode=arrive_by와 timing.arrive_by의 절대 시각을 필수로 전달한다. 루틴의 반복 목표는 local time과 timezone으로 별도 저장한다.
 후보는 candidate_id, validity, ordered_legs, transfer_count, total_seconds, estimated_arrival_at, time_sources, missing_segments를 포함한다. 후보 ID는 해당 사용자의 search_id 안에서만 유효하다.
-### 5.3 도보 결과
+### 5.2.1 F03-04 현재 위치·지도 출발지 선택
+- 이 절은 최초 F03-04 기반 계약/검증 이력이다. 현재 위치 수동 확인·200 응답 확장은 아래 v0.39 5.2.2절을 함께 적용한다.
+- 구현/검증(2026-10-07): 백엔드94개·프론트73개·빌드 통과. 실제 PostgreSQL/ASGI 소유권·위치 버전·CSRF·지원지역/공급자 실패·실패 포함 쿼터·메타데이터/로그 비노출 확인. 공개 서울시청 좌표의 로컬 HTTP current_location200/quality_status=pending·UTC 정규화·no-store, 실제 지도 방향 버튼/키보드·데스크톱1440×1000/모바일390×844 선택·준비 카드·새로고침 초기화 확인. GPS 성공/거절/시간초과/미지원/취소는 모의 검증이며 실제 기기 위치 요청/권한 승인·실제 휴대전화 GPS 확인은 미실행. 근거: `development_log.md`.
+```json
+{"origin":{"type":"current_location","latitude":37.5665,"longitude":126.978,"accuracy_meters":10,"captured_at":"2026-10-07T11:00:00+09:00"}}
+```
+- 위 합성 요청의200 data 예: origin.captured_at=2026-10-07T02:00:00Z, origin.type=current_location, label=현재 위치, location은 입력 좌표, location_address=서울특별시 중구 태평로1가, quality_status=pending, expires_at=meta.server_time 이후600초. 장소/경로 생성·GPS 최신성 보증으로 해석하지 않는다.
+- 범위: 다른 곳에서 출발 → 로그인 확인 → 기기 현재 위치1회 요청 또는 지도 핀/본인 저장 장소 선택 → 서버 확인 → 화면 메모리에 출발지 선택. 실제 경로 검색/출발 시각은F04\~07 후속이며 선택된 실제 출발지에는 기존 집 기준 예시 안내를 적용하지 않는다.
+- POST /origin-validations: 로그인·Origin/CSRF·no-store, JSON body.origin. 부작용 없는 출발지 입력 확인 API이며 장소/루틴/이동/검색 자원을 생성하지 않는다. 생성 멱등 결과 저장 규칙 대상 아님. 사용자당10회/분(429/Retry-After), 공급자 호출 전 제한 소비, 실패도 포함.
+- origin 구분: current_location은 type, latitude/longitude, accuracy_meters(유한·0이상), captured_at(시간대 있는ISO8601) 필수. map_pin은 type, latitude/longitude. saved_place는 type, place_id 및 선택 location_version(정수\>=1). 알 수 없는 필드·종류/좌표/시각 형식422 VALIDATION_ERROR.
+- current_location/map_pin은 서버 카카오 지역 확인으로 서울/경기 범위를 검증한다. 지역 밖/바다422 UNSUPPORTED_REGION, 공급자503/잘못된 응답502는 기존 동일. saved_place는 본인/존재404·location_version 불일치409 VERSION_CONFLICT, 이름만 바뀌면 현재 저장 이름으로 반환하며 공급자 재호출 없음. 근처에 있다는 이유로 current_location을saved_place로 변환하지 않는다.
+- 200 data: origin(검사한 종류/필드, saved_place는현재location_version 포함), label(현재 위치/지도 선택 위치/본인 저장 이름), location(latitude/longitude), location_address(법정동 또는 저장 주소), expires_at(서버 확인후600초), quality_status(current_location=pending, map_pin/saved_place=not_applicable). meta는 기존 공통. captured_at은UTC로 정규화, accuracy는측정치이며 위치 보증 아님.
+- F03-04는 측정 시각/정확도의 형식과 전달을 구현한다. v0.39에서 수동 확인만 추가한다. GPS 수치 기준·자동 저장 장소/출입구 일치 판정은 사용자 결정으로 보류하며 pending/user_confirmed 모두 실제 경로 계산 가능 보증으로 처리하지 않는다. 현재 화면에는 실제 출발 안내 없음.
+- 기기 위치 요청은 명시 버튼 클릭 후 getCurrentPosition 1회, enableHighAccuracy=true/maximumAge=0/timeout=10000ms. 앱 전체 대기는15000ms까지(권한 응답 대기 포함) 제한, 거절/시간 초과/위치 불가/HTTPS·API 미지원은 지도 선택과 재시도. watchPosition/백그라운드 추적/자동 권한 요청/역 내부 도착 판정 없음.
+- 지도 시작은 본인 첫 저장 장소 또는 공개 서울시청 근사좌표(37.5665,126.9780). 시작 중심을현재 위치로 간주하지 않고 클릭/방향 버튼으로 명시 선택한 뒤 확인한다. 지도는 기존 SDK/공개 키/서버 REST 키 구분 유지, 선택 좌표를카카오로 지원지역 확인한다. GPS 원문·주소·좌표·쿠키/키는 로그 제외, 위치를AI로 전달하거나고정 장소에자동 저장하지 않는다.
+- 선택은 화면 메모리에서만 유지, 새로고침/계정 모달 진입/인증 만료 인지 시 제거.600초 뒤 만료 안내/재선택, 실제 경로/출발 안내 대신 준비 중 카드, 예시 이동 시작 차단. 화면 이탈/방법 변경 시 요청 취소/늦은GPS 응답 무시. 저장 장소 목록 기본20/최대100 규칙·더보기/빈목록/조회실패 재시도 유지.
+- 호환성: 신규 입력 확인API 및 출발지 선택UI 추가, 기존auth/장소/경로 검색 객체 유지. 현재GPS/지도 좌표를 영구 DB/URL/로그에 저장하지 않는다(요청 제한은기존HMAC 버킷). 경로 API에서는 다시인증/소유권/위치품질을검사해야 하며600초 선택유효기간은GPS 최신성 보장이 아니다.
+### 5.2.2 F03-05 수동 위치 확인 (자동 GPS 수치 판정 보류)
+- 사용자 결정(2026-10-07): GPS 측정 후 경과 시간·정확도·미래 시각 허용폭의 수치 기준은 보류한다. 60초/50m/5초 등 제안값을 구현하거나 확정 정책으로 사용하지 않는다. 자동 저장 장소 근접/출입구 일치 임계값도 미정이며 자동 일치 판정·도보 근거 재사용은 구현하지 않는다. F03-05는 수동 확인 부분만 구현하고 자동 품질/일치 판정 완료로 체크하지 않는다.
+- POST /origin-validations current_location에 location_confirmed(선택 strict boolean, 기본false) 추가. false는200 quality_status=pending이며 확인 전, true는사용자가 지도상의 현재 출발 위치를 확인했다고 신고한200 quality_status=user_confirmed이다. 이 값은 GPS 정확성/최신성/실제 출입구 일치 검증이 아니며 서버가 위치를 보증하지 않는다. 다른 origin 종류에는 해당 필드를 받지 않는다.
+- 모든200 data에 quality와 place_match 추가. quality는 assessment(current_location=unassessed, map_pin/saved_place=user_selected), confirmation(current_location false=required/true=reported, 나머지=not_applicable), numeric_policy=deferred, time_relation(current_location은서버처리시각 기준future/past_or_present, 나머지not_applicable). 측정 시각·정확도는origin의기존필드이며 시간 관계는표시 정보, 자동 유효/무효 판정 아님. quality_status=not_applicable은 지도/저장 장소 기존값 유지.
+- place_match.status=current_location/map_pin은unconfirmed, saved_place는selected_by_user. 저장 장소의 명시 선택은 place_id/location_version 소유권·충돌 재검사 후 해당 저장 위치를 사용하는 행동이며 GPS와 물리적으로 같다는 인증이 아니다. GPS/고도/지하철 내부·출입구를자동확정하지 않는다.
+- 구현/검증(2026-10-07): F03-05a 수동 확인 완료. 백엔드95개·프론트79개·빌드 통과. 실제 로컬 HTTP pending/user_confirmed200·no-store·미래 시각 표시 정보/품질 unassessed/일치 unconfirmed 확인. 실제 지도와 공개 좌표 합성 OriginReview 화면을 데스크톱1440×1000/모바일390×844에서 확인했고 지도 선택은 실제 앱/API로 회귀 검증했다. GPS 측정·확인/만료·실패는 모의 검증이며 실제 기기 GPS 권한 승인/정확도 검증은 수행하지 않았다. 임시 화면·합성 계정/세션 제거. GPS 수치·자동 일치 판정은 보류, 상위F03-05 미완료 유지. 근거 development_[log.md](http://log.md).
+- UI: 명시GPS1회/인증·서울/경기 확인 → 지도 로딩 성공 후 측정 위치·측정 시각·정확도/미래 시각 표시 → '이 위치가 실제 출발 위치예요' 버튼으로같은 origin/location_confirmed=true 재확인 → 준비 카드. 확인 전 onSelect/실제선택 없음, 지도 핀을옮기면map_pin으로직접선택, 저장 장소는별도버튼으로사용자가선택한다. 다시측정/다른방법/이탈/계정/인증만료/600초 확인만료는 미확인자료를제거한다.
+- 기존600초 선택/확인 유효기간은 유지하며GPS 최신성 기준으로 해석하지 않는다. 기한은meta.server_time과expires_at 차이로처리, 확인기간이끝나면현재위치를다시확인하도록한다. 입력이오래되거나미래라는이유로임의수치 차단하지 않고 화면에시각을표시해수동확인한다. 경로/출발 안내는F04\~07 후속이며지도/저장 장소의명시선택에도실제예시안내를적용하지않는다.
+- 인증/Origin·CSRF/no-store/사용자10회·분(최초/확인/실패포함)/지역/오류/로그 비노출·임시App 메모리/DB좌표저장없음/AI전달없음은유지. 수동확인도기존출발지검증을다시호출하며확인 중서버실패/세션만료는선택하지않는다.
+- 호환성: 기존current_location 요청은기본false와pending유지. 추가quality/place_match는추가필드이며user_confirmed는새location_confirmed=true요청에만반환한다. 수동확인UI를적용하려면프론트갱신/새로고침이필요, 이전pending을검증된품질로취급하지않는다. 이후경로API는인증/소유권/수동확인근거·미정GPS정책을재검사해야한다.
+```json
+{"origin":{"type":"current_location","latitude":37.5665,"longitude":126.978,"accuracy_meters":10,"captured_at":"2026-10-07T04:00:00Z","location_confirmed":true}}
+```
+- 위 공개 합성 좌표 요청은quality_status=user_confirmed, quality.assessment=unassessed/confirmation=reported/numeric_policy=deferred, place_match.status=unconfirmed로반환한다. GPS 위치 품질을valid로반환하지 않는다.
+### 5.2.3 F04-01 대중교통 경로 후보 조회 (구현 단계 계약)
+- 이 절은 최초F04-01 입력/작업 계약과 검증 이력이다. 현재 후보 구간/응답 확장은v0.41 5.2.4절을 함께 적용한다.
+- 구현/검증(2026-10-07): 최신main8b4b40b 통합 후 백엔드106개·프론트79개·빌드 통과. 임시 PostgreSQL/ASGI에서 동시 멱등·소유권/위치 변경·초안 수동 확인 필수·만료/중단/늦은 응답·쿼터·응답 상한/리다이렉트/시간초과·로그/DB 입력 좌표 비저장·OpenAPI202 확인. 실제 로컬 공개 강남역→서울역 카카오 후보15개·POST202→GET200·no-store/요청ID·멱등 재현·작업 조회 성공, 합성 계정/세션/후보/키 제거. 실제 기기 GPS·AI/실시간·목표 도착·비교 화면·실제 환승/역 내부 정확도는 미검증. 근거 development_[log.md](http://log.md), journey_[api.md](http://api.md). UI 변경 없음.
+- 범위: 로그인 사용자의 출발/도착 입력으로 카카오 대중교통 후보를 비동기 조회한다. 이번 단계는 depart_now(Asia/Seoul)만 실행하며 arrive_by는422 UNSUPPORTED_TIMING으로 명시한다. 목표 도착 검색·AI 도보 산정·실시간 도착·비교 화면·루틴 저장은 후속이며 기존 설계에서 삭제하지 않는다.
+- POST /journey-searches: 쿠키·Origin/CSRF·no-store, origin/destination은 saved_place(place_id, location_version 선택), map_pin(latitude/longitude), current_location(기존 좌표/측정치 및 location_confirmed:true 필수). 현재 위치는 본인 보고만 사용하며 GPS 수치/자동 일치 판정은 보류한다. timing=\{mode:depart_now,timezone:Asia/Seoul\}, preferences.route_preference 선택 balanced/fewer_transfers/less_walking. 없는 선호는 본인 프로필 사용. 알 수 없는 필드/형식422. 양 끝 위치 서울/경기 확인은 접수 후worker에서 수행하며 지역 밖은GET200 failed/error.code=UNSUPPORTED_REGION이다. 본인 장소404·위치 버전409는 접수 전 검사, 이름 변경은 유효 유지.
+- Idempotency-Key 선택(1\~128자 ASCII 영문/숫자/밑줄/하이픈): 사용자+경로+키와 비밀키 HMAC 본문 해시만24시간 보관, 같은 본문202 동일 search_id/job_id/queued 응답·현재 권한/위치 버전 재검사, 다른 본문409 IDEMPOTENCY_CONFLICT. 키 없이 새 검색이다. 사용자10회/분(실패 포함), 동시 진행 최대2개/사용자·전체8개로429 Retry-After. 중복 재현은 새 공급자 호출 없음.
+- 접수202 data=\{search_id,job_id,status:queued\}. worker는 running→succeeded/failed로 전환하며 본인 장소 위치를 작업 전/후 다시 검사한다. 개별 공급자10초·지역 확인3초/회, 전체 작업60초 제한. 재시작/60초 초과 미완료 작업은 조회/새 요청에서 failed JOB_INTERRUPTED 처리, 사용자 좌표는 재실행하지 않는다. 실행 중 작업은 DB 상태/기한 조건으로 최종 결과를 반영하므로 늦은 응답이 실패 상태를 되돌리지 않는다.
+- GET /journey-searches/\{search_id\}: 본인만200, 없거나타인/검색5분 만료404. status queued/running/succeeded/failed, candidates\[\], unavailable_reasons\[\], error(null 또는 공통code/message/details), expires_at 및 job_id. 진행 중 Retry-After:2; 후속 클라이언트는2/5/10/최대30초 및 비활성 중지 규칙 적용. 후보는 candidate_id,type,validity:insufficient_data,ordered_legs,transfer_count,total_seconds,total_distance_meters,walking_seconds,estimated_arrival_at:null,time_sources,missing_segments를 포함한다. 경로 ID는 본인 검색 안에서만 유효.
+- ordered_legs는 최소 WALKING/BUS/SUBWAY 종류·순서·공급자 seconds/meters·정류장명/차량명만 정리한다. 시간 출처는 provider_estimate이며 접근/환승/마지막 도보의 AI 산정·실시간/미래 환승·역 출입구/플랫폼·중간 지역 범위는 미확인으로 명시한다. 후보 총 시간을 현재 시각에 더해 실제 도착 시각으로 만들지 않는다. 지도 geometry/공공 ID 매핑·완전한 방향/내부 이동은 F04-02\~05 후속이다.
+- 최대2회 환승을 적용해 제외 사유 TRANSFER_LIMIT를 기록한다. 후보는 최대20개, balanced 총 소요시간·fewer_transfers 환승수·less_walking 공급자 도보시간 우선으로 정렬하며 동률은총시간/환승수/도보시간·공급자순서로 결정한다. 이 순서는 실시간 탑승 가능/최적 경로 보증이 아니다.
+- 정상 무결과/EQUAL_POINTS/출발·도착 노드 없음은 succeeded/candidates\[\]/NO_ROUTE 또는 ENDPOINT_UNRESOLVED 사유, 공급자 장애는 failed PROVIDER_UNAVAILABLE, 시간초과 failed PROVIDER_TIMEOUT, 잘못된 응답 failed PROVIDER_RESPONSE_INVALID. failed 조회 자체는200, 접수 전 입력/권한/DB/제한 오류는 공통 HTTP 오류. 예상 밖 worker 오류는 안전한 INTERNAL_ERROR, 원문/스택 미노출.
+- GET /jobs/\{job_id\}: 본인 작업 상태·종료/error/result_ref/결과 만료 여부만 조회, 후보/입력 좌표는 포함하지 않는다. 작업 상태는 종료 후24시간, 진행기한초과는failed 처리. 검색 결과는 생성부터300초, 선택/재현 시 별도 만료·장소 존재/위치 버전 검사. 만료 검색은 재실행하지 않고 새 요청을 요구한다.
+- PostgreSQL0006_journey_searches: 소유자·검색/작업ID·상태/기한·saved_place 최소참조(place_id/location_version)·정규화 후보만 저장한다. 최초/재현 응답과 HMAC 키는24시간, 후보는300초 이후 사용 차단/요청 시 삭제. GPS/지도 입력 좌표·측정시각/정확도·원본공급자응답/geometry/landingURL/원문guidance·키·주소/본문 로그/DB 저장 없음. 좌표는 worker 메모리에서 공급자 요청에만 사용하고AI에 전달하지 않는다. 별도 매일 청소 스케줄은 후속이며 요청 시 만료 자료를 정리한다.
+- 호환성: 기존 미구현 여정 설계를 단계적으로 구체화한 신규 API. F03/auth/장소 API 유지, F03-05a 수동 확인 변경은 별도 브랜치의 구현을 중복 포함하지 않는다. F04-01 완료는 F04 전체·GPS 정책·도보/실시간/출발 안내 완료가 아니다.
+### 5.2.4 F04-02 공통 구간 모델 (journey.v1)
+- 구현/검증(2026-10-07): 최신main9670281에서codex/journey-segments 구현. 백엔드115개·프론트79개·빌드 통과. 직접 버스/지하철·버스↔버스/버스↔지하철/지하철↔지하철 및연속도보는합성모델검증, 실제공개강남역→서울역15후보의구간/연결17개·GET재조회ID안정성·스키마 일치 확인. 실제응답의도보17개는환승만포함하며접근/마지막도보는누락표시한다. 실제기기GPS·물리방향/실시간환승/역내부/AI/비교화면은미검증, 합성계정/작업/후보제거. 근거 `development_log.md`, `journey_api.md`. UI/DB DDL 변경 없음.
+- F04-01 경로/인증/입력/202 작업·본인 조회/멱등/만료/정렬/최대2회환승/300초·24시간 보관을 유지한다. 이번 변경은 후보 응답의 추가 필드이며 UI 비교/선택·실시간/AI/목표 도착·GPS 수치 정책은 변경하지 않는다.
+- 후보 model_version=journey.v1. 기존 candidate_id/type/validity/ordered_legs/transfer_count/total_seconds/total_distance_meters/walking_seconds/estimated_arrival_at/time_sources/missing_segments는 유지한다. 새 transfer_count_computed는 BUS/SUBWAY 단계 수-1, provider 값과 다르면 TRANSFER_COUNT_MISMATCH로 미확인 표시한다. 공급자 환승수 또는 교통 단계 기반 수가2를넘으면TRANSFER_LIMIT로제외하며계산수를실제물리적환승인증으로해석하지않는다. route type과 실제 교통수단 종류 모순·순서/ID 중복·잘못된 값은 PROVIDER_RESPONSE_INVALID로 안전하게 거절한다.
+- WALKING 구간에 walking_role=access/transfer/egress: 첫 교통수단 전 접근, 교통수단 사이 환승, 마지막 교통수단 뒤 마지막 도보. 연속 도보 단계도 공급자 순서를 유지하며 같은 역할로 분류한다. BUS/SUBWAY walking_role은null. 어느 도보 구간도 AI 산정이나 내부 동선 인증으로 바꾸지 않는다.
+- 모든 leg에 boarding/alighting/direction/vehicle_options 추가. BUS/SUBWAY boarding/alighting은 stops 첫/마지막 name 및 public_id/entrance_ref/platform_ref:null. direction=\{source:provider_stop_order,from_stop_name,to_stop_name,public_direction_id:null\}. 이는 공급자 정류장 순서만 의미하며 공공 노선 운행방향/물리적으로 같은 승강장 확인이 아니다. WALKING은boarding/alighting:null, direction.source=unknown·이름/공공ID:null,vehicle_options\[\].
+- vehicle_options는 \[\{name,provider_type\}\]이며 provider_type은 공급자가 제공한 버스/지하철 분류 문자열 또는null. 미등록 새로운 세부 문자열도 허용하되 문자열 형식/길이를 검사한다. 기존 vehicles\[\] 문자열은 그대로 유지하고 노선 ID로 해석하지 않는다.
+- 후보 connections\[\]는 연속 교통 단계 사이의 connection_id/from_leg_id/to_leg_id/from_stop/to_stop/walking_leg_ids/walking_seconds/feasibility:unknown/time_source:provider_estimate/physical_stop_match:unconfirmed를 포함한다. 순서만 연결하고 버스↔버스·버스↔지하철·지하철↔지하철을 같은 모델로 다룬다. 명시 도보 단계가 없으면 walking_seconds:null/TRANSFER_WALK_MISSING, 실제0초 도보가 제공된 경우만0을 유지한다. 정류장 이름이 같아도 일치/환승 가능을 확정하지 않는다.
+- 접근/마지막 도보가 공급자 단계에 없으면 ACCESS_WALK_MISSING/EGRESS_WALK_MISSING, 공공 방향은 PUBLIC_DIRECTION_UNVERIFIED로 표시한다. 기존 AI/실시간·출입구/플랫폼·중간지역 미확인 사유를 유지하며 후보 validity=insufficient_data/estimated_arrival_at:null을 유지한다.
+- timing_breakdown=\{walking_seconds,in_vehicle_seconds,legs_total_seconds,provider_total_seconds,unallocated_seconds,status\}. 합계가 공급자 총시간 이하이면 unallocated_seconds=차이/status=unallocated, 동일하면0/status=consistent. 차이를 실시간 대기·환승 여유로 단정하지 않는다. 단계 합계가 총시간을 넘으면 unallocated_seconds:null/status=inconsistent 및 DURATION_TOTAL_MISMATCH로 표시하고 공급자 total_seconds는 바꾸지 않는다.
+- `app/journey_models.py` 공통 모델로 새 공급자 정규화와 GET 결과를 검증하며 GET200 OpenAPI SearchEnvelope/Candidate/Leg/Connection/Breakdown 스키마를 노출한다. 정수초/미터(음수·bool 거절), 이름/목록/순서·연결 참조/일관성을 확인하며 좌표/원문guidance/landingURL 등 미정 필드가 응답으로 유입되지 않게 한다. 신형 JSONB 후보는 저장 전 검증한다. 이전 F04-01 후보는 GET 시 기존leg ID/순서/시간/정류장명으로 보강하고 차량 세부종류는null, connection_id는 candidate_id+교통legID 기반으로 안정적으로 생성한다. 재조회마다 ID가 바뀌지 않고 새 공급자 호출/입력좌표 저장/DB migration은 없다.
+- 호환성: 기존 필드/ID/시간값과 선택/작업 계약 유지, 추가 필드를 무시하는 클라이언트는 계속 동작한다. 신형 모델 검증 실패는502 PROVIDER_RESPONSE_INVALID, worker 단계 실패는 기존failed/data.error이다. F04-02 모델 완료와 실제 물리 방향/환승·내부이동·사용자 비교 화면 검증 완료는 구분한다.
+### 5.2.5 F04-03 경로 후보 비교 화면
+- F04-03a 이동 방법 우선 보기: 결과에서 전체(기본)·버스(BUS)·버스 + 지하철(BUS_AND_SUBWAY)·지하철(SUBWAY)을 선택하면 해당 type 후보를 즉시 앞에 배치한다. 각 그룹 안에서는 기존 시간/환승/도보 비교 기준을 유지하며 다른 후보를 숨기지 않는다. 선택한 방식이 없으면 안내하고 기존 후보를 유지한다. 선택은 현재 결과 화면 메모리에만 보관하며 새 결과는 전체로 시작한다. 후보 ID에 연결된 상세·루틴 입력 상태를 유지한다. 추가 API/공급자 요청·DB 저장·응답 필드 변경 없음, 기존 클라이언트 호환성 영향 없음. 구현/검증 완료(2026-10-08): 프론트 138개 테스트·빌드1902모듈 통과. 합성 후보 PC1440×1000/모바일390×844에서 세 방식 즉시 첫 카드 이동·전체 복원·가로 넘침 없음·콘솔error0 확인. 실제 공급자 재호출/백엔드 재검증은 이번 작업에서 실행하지 않았다. 근거 `development_log.md`.
+- 구현/검증(2026-10-07): 최신main63674ac에서codex/journey-comparison 구현. 프론트97개·빌드1899모듈·백엔드115개 회귀 통과. 실제합성계정/공개강남역→서울역 위치직접선택→POST202/GET200→15후보 비교/로컬정렬·상세/정류장순서·누락도보·키보드 Enter를확인했다. PC1440×1000/모바일390×844 카드·상세/하단메뉴·홈/설정/계정 회귀·가로넘침없음/콘솔error0, 자연검색만료시후보/상세제거 확인. 숨김/재시도/빈결과/실패/인증만료/늦은응답은 모의검증, 실제GPS권한/측정·실시간/운행시간표·AI/출발안내·루틴저장은미검증. 합성계정/장소/검색/작업/세션제거. 근거 `development_log.md`.
+- 홈 '경로 후보 비교' 진입으로 기존 내비게이션/미색·초록 디자인을 유지한 비교 페이지를 제공한다. 아직 유효한 홈 출발지는 초기값으로 사용할 수 있으며 출발/도착은 기존 current_location/map_pin/saved_place 확인 흐름을 재사용한다. 도착 위치도 목적을 표시해 직접 선택한다. 로그인 전 기기 위치를 요청하지 않고 GPS 수동 확인/수치 보류를 유지한다.
+- 출발/도착·선호를 명시 선택한 뒤 '경로 후보 조회'를 누를 때만 기존 POST /journey-searches를 호출한다. depart_now/AsiaSeoul 및balanced/fewer_transfers/less_walking만사용하며현재시각·주소원문을임의로입력하지않는다. 최초 접수에 새 Idempotency-Key, 접수 응답을 못 받은 네트워크/시간초과 재시도는 동일 본문/키를 유지한다. 입력 변경/새 검색은 새 키, 접수된 검색의 조회 실패는 GET만 재시도하며 POST 자동 재전송 없음.
+- queued/running 접수는 완료로 표시하지 않는다. 최초2초→5→10→최대30초 간격으로 GET 결과 조회, 유효한 Retry-After 초 헤더를 우선하고1\~3600초 범위를 처리한다. 비활성 화면은 새 조회를 멈추며 진행 중 GET을 취소, 복귀 시 같은 search_id를 이어서 조회한다. 페이지 이탈/방법·입력 변경/로그인 모달·인증 만료 인지/입력600초 및검색300초 기한은 타이머·요청을 취소하고 늦은 응답을 무시한다. meta.server_time/expires_at 차이로 만료를 계산하며 입력 선택 유효기한보다 연장하지 않는다.
+- 화면 상태: 위치 미선택/로그인 필요·접수/조회중·succeeded 후보/정상무결과·failed 안전한오류·네트워크조회재시도·권한/장소버전충돌·만료/재선택. 인증 실패는 좌표/목록/후보를 제거하고로그인행동,409 VERSION_CONFLICT는입력재선택,404 결과조회는만료/재검색. 숨겨진 화면/새로고침/계정변경에서 URL/DB/localStorage로 개인 위치/후보를 복원하지 않는다.
+- 비교 카드: 카카오 예상 total_seconds·transfer_count·교통구간수기반차이가있으면횟수확인필요·제공된 walking_seconds 및누락여부. 접근/환승/마지막 도보가 빠지면0분으로확정하지않고‘도보 확인 필요/일부 도보·미확인 구간 있음’으로표시한다. DURATION_TOTAL_MISMATCH는총시간확인필요,unallocated_seconds는대기/여유로채우지않는다. 도착시각·출발까지카운트다운·탑승보장 없음. 실제응답에심야노선이포함될수있으므로 운행시간과지금이용가능여부는확인필요로표시하고시간표를추정해제외/인증하지않는다.
+- 전체 예상 시간/환승수/제공된 도보시간 기준으로 로컬 정렬하며새 공급자요청을자동발생시키지않는다. 상세보기는화면메모리의한후보구간을펼치는동작이며실제이동/루틴저장이아니다. WALKING 역할과seconds/meters, BUS/SUBWAY 차량명·선택적세부분류/승하차 정류장순서를표시한다. 운행방향/공공ID·물리정류장일치·연결 feasibility는검증되지않았음을쉬운문구로표시한다. 연결 도보null과0을구분하며빠진접근/마지막도보·AI/실시간/출입구/플랫폼·중간지역·미정GPS 근거를안내한다.
+- 프론트는journey.v1 후보/순서/ID/시간분해/연결참조·응답ID/기한·상태를검증하고깨진형식/미지원모델버전은성공으로표시하지않는다. 공급자/서버오류원문·주소·키/본문·좌표/후보를로그에출력하지않는다. React 텍스트출력·기존lucide/카드/버튼/CSS 변수·44px 행동·키보드 상세보기·모바일 줄바꿈을 유지한다.
+- 기존API경로·입출력/권한/DB DDL·작업/보관·지도공급자 계약은 유지한다. 공통클라이언트는Retry-After 파싱 결과만 추가노출하고 자동재시도는추가하지않는다. API모델의실시간/AI/목표도착 미구현 상태를화면에서검증됨으로바꾸지않는다.
+### 5.2.6 F04-05 경로 없음·지원 범위·정보 부족 안내
+- 구현/검증(2026-10-07): 최신main63674ac에서codex/journey-unavailable 생성 후 필요한F04-03 커밋33efcec를fast-forward 통합했다. 게시 전F04-03 병합main4f94af1을다시fast-forward 반영했으며트리변경없음을확인했다. 프론트101개·백엔드117개·빌드1900모듈 통과. PostgreSQL/ASGI 모의공급자로 양 끝 지역 밖 worker failed/공급자 미호출, 무경로/지점/환승 제한과 실패 구분, 위치 재선택/새 키·정보 부족 유지·알 수 없는 사유 비노출 확인. PC1440×1000/모바일390×844 합성 상태 컴포넌트 시각검증·Enter 상세·44px 버튼·가로넘침없음·콘솔error0, 실제홈/비교입력 화면회귀 확인. 실공급자 새 호출/실GPS·운행/물리근거 검증은 수행하지 않았다. 임시시각검증파일 제거, 근거 `development_log.md`.
+- 사용자 지시(2026-10-07): F04-04 물리 환승/출입구/플랫폼 근거 보강은 보류하고 F04-05를 먼저 진행한다. 보류 근거를 검증된 값으로 채우지 않는다.
+- 정상 succeeded 빈 후보와 failed 공급자 장애를 구분한다. NO_ROUTE는 조회된 경로 없음, ENDPOINT_UNRESOLVED는 승하차 지점 연결 불가, TRANSFER_LIMIT는 최대2회 환승 지원 범위 초과로 각각 안내하며 복수 사유는 함께 표시한다. 알 수 없는 코드/빈 사유는 일반 확인 불가 안내로 처리하고 원문 코드나 공급자 메시지를 표시하지 않는다. 모든 후보가 환승 제한으로 제외되면 TRANSFER_LIMIT만 반환하고 NO_ROUTE를 추가하지 않는다.
+- 입력 양 끝 지역은 POST202 접수 후 worker에서 확인한다. 지역 밖은 GET200 data.status=failed/error.code=UNSUPPORTED_REGION으로 반환한다. 기존 위치 선택 POST /origin-validations는 지역 밖422이며 경로 작업 실패와 구분한다. 화면은 검색 만료와 구분해 서울·경기 지원 안내 및 출발/도착 재선택 행동을 제공한다. 입력 선택/후보/검색 snapshot은 제거하며 잘못된 입력의 자동 재전송은 없다. 중간 경로 REGION_PATH_UNVERIFIED는 지역 밖으로 확정하지 않고 미확인 근거로 표시한다.
+- 후보가 있는 insufficient_data는 삭제하거나 이용 가능으로 승격하지 않는다. 목록에 ‘구간 정보 확인 필요’와 상세에서 접근/환승/마지막 도보·방향·출입구/승강장·실시간·AI·지역/시간 불일치 사유를 구분해 표시한다. 알 수 없는 누락 사유는 일반 미확인 안내, 누락값을0으로 채우지 않는다. 결과 재확인은 기존GET이며 새 조회는 새POST/키를 사용한다.
+- API 경로/필드/인증/소유권/기한/보관/로깅 및 journey.v1 모델 유지. 사유 정밀화는 기존 unavailable_reasons 필드 안의 동작 보완이며 이전 클라이언트의 TRANSFER_LIMIT 안내와 호환된다. GPS 수치·자동 판정과 실제 경로 선택/저장·출발 안내는 이번 범위에 포함하지 않는다.
+### 5.3 루틴 저장·일정 계약(F06-01·F06-02)
+- 구현/검증(2026-10-07): main 2367681에서 helpycode/routine-save 브랜치로 구현했다. 백엔드 unittest 123개(루틴 6개 신규 포함), 프론트 테스트 110개(루틴 9개 신규 포함), Vite 빌드 통과. 실제 카카오 공급자로 PC1440×1000과 모바일390×844에서 후보 카드 안 이름 입력 패널(기본 이름 '출발 → 도착 통근' 미리 채움, 빈 값은 기본 이름 사용)·저장 완료 표시·토스트와 가로넘침 없음을 확인했다. 근거는 `development_log.md`다.
+- F06-02 구현/검증(2026-10-07): helpycode/routine-schedule 브랜치. 저장 패널에 반복 요일(기본 월\~금, ISO 1\~7)·목표 도착 시각(선택) 입력을 추가하고 일정 PATCH를 구현했다. 백엔드 unittest 125개(일정 저장·PATCH 신규 포함), 프론트 테스트 114개(요일·목표 도착 신규 포함), Vite 빌드, 마이그레이션 0008 up/down roundtrip 통과. 합성 fixture를 실제 브라우저(PC1440×1000·모바일390×844)에서 열어 요일 토글·요일 0개 저장 차단·목표 도착 입력·저장 전달값(weekdays·target_arrival_local_time)·가로넘침 0·콘솔 오류 0과 기존 톤 유지를 확인했다. 근거는 `development_log.md`다.
+- `POST /api/v1/routines`(인증+CSRF, Idempotency-Key 선택 1\~128 ASCII): 입력 `{name, origin_place_id, destination_place_id, search_id, candidate_id, weekdays, target_arrival_local_time?}`. name은 1\~30자(앞뒤 공백 제거), origin과 destination은 서로 다른 본인 저장 장소다. search_id는 본인 검색이고 status=succeeded이며 만료 전이고, candidate_id는 그 검색 결과 후보 중 하나여야 한다. weekdays는 ISO 1(월)\~7(일)에서 중복 없이 1\~7개 필수이고, target_arrival_local_time은 HH:mm 형식의 선택 값이며 timezone은 입력받지 않고 Asia/Seoul로 저장한다(요일·목표 도착은 F06-02). 요청 장소의 현재 location_version이 검색 당시와 같아야 하고 다르면 409 VERSION_CONFLICT로 경로 재조회를 요구한다. 검색 없음·만료·미완료·타인 자원·후보·장소 없음은 404 RESOURCE_NOT_FOUND, 장소가 검색 참조와 일치하지 않으면 422 VALIDATION_ERROR다.
+- 저장 시 그 후보를 journey.v1로 보강한 스냅샷을 journey_plans(user_id+search_id+candidate_id 고유)에 남긴다. 위치 좌표·참고 시각은 저장하지 않는다. 같은 후보를 다시 저장하면 스냅샷을 재사용하고 루틴만 새로 만든다. 루틴 행은 weekdays smallint\[\], target_arrival_local_time, timezone(Asia/Seoul 고정 CHECK) 컬럼을 함께 저장한다(마이그레이션 0008_routine_schedule).
+- 성공 201 data: `{routine_id, name, origin_place:{place_id,label,name,address}|null, destination_place:동일 형태|null, route:{journey_plan_id,type,total_seconds,transfer_count}, weekdays, target_arrival_local_time, timezone, status, version, created_at, updated_at}`. status는 active\|needs_attention, version은 1부터다. weekdays는 저장된 ISO 요일 배열, target_arrival_local_time은 저장된 목표 도착(없으면 null), timezone은 항상 Asia/Seoul이다. 좌표·참고 시각은 응답 어디에도 없다.
+- `GET /api/v1/routines/{routine_id}`(인증): 본인 루틴만 200으로 같은 형태를 돌려준다. 없거나 타인이면 404다.
+- `PATCH /api/v1/routines/{routine_id}`(인증+CSRF, F06-02 일정 부분): 입력 `{expected_version, weekdays?, target_arrival_local_time?}`이고 알 수 없는 필드는 422다. expected_version이 현재 version과 다르면 409 VERSION_CONFLICT다. weekdays를 보내면 배열 전체를 바꾸고, target_arrival_local_time을 보내지 않으면 기존 값을 유지하며 명시적 null이면 삭제한다. weekdays가 비거나 범위를 벗어나면, target이 HH:mm이 아니면 422 VALIDATION_ERROR다. 성공 200은 상세와 같은 형태이며 version+1과 updated_at 갱신을 함께 돌려준다. F06-03 이름·경로 변경 확장 계약은5.3.1을 따른다.
+- 멱등: 같은 키+같은 본문은 최초 201 응답을 재현하고, 같은 키+다른 본문은 409 IDEMPOTENCY_CONFLICT다. 저장에 성공한 루틴이 삭제되면 24시간 동안 같은 키 재시도는 404로 막는다(장소 저장과 동일한 삭제 표시).
+- 장소 삭제 연동: DELETE /places/\{place_id\}는 그 장소를 출발이나 도착으로 참조하는 루틴의 해당 참조를 NULL로 해제하고 status=needs_attention, version+1로 바꾼다. 이전 경로 스냅샷은 유지되며 복구는 F06-04 안내에 따른다. 응답 스키마 변화는 없다.
+### 5.3.1 루틴 목록·선택·수정·삭제(F06-03)
+- 구현·검증 <mention-date start="2026-10-08"/>: codex/routine-management(최신 main2248346에서 생성, 미병합 F06-02 선행 커밋 포함). 백엔드129개(루틴12개 포함), 프론트121개·Vite 빌드 통과. 실제 PostgreSQL/HTTP POST201·GET목록200·PATCH200·DELETE204, PC1440×1000/모바일390×844 목록·선택·이름/요일/목표 시각 수정·새로고침 유지·삭제 확인/취소 확인. 실제 카카오15후보 중 기존 루틴 경로 PATCH 교체와 새 후보 POST 저장·최신 목록 반영 성공. 검증용 루틴만 삭제204 및 빈 목록 확인, 기존 사용자 데이터 보존. 루틴 추가/저장 후 목록 갱신·페이지 조회·인증 전환·버전 충돌·응답 검증·저장 키 재시도는 프론트 회귀 검증. 실기기GPS·실시간 차량/출발 안내·이동 이력은 미검증/미구현이며 이번 완료에 포함하지 않는다. 근거는 `development_log.md`와 `routine_api.md`.
+- 계약 확정 <mention-date start="2026-10-08"/>: 구현·검증 완료. 저장된 루틴을 홈·내 루틴에서 조회하며 가상 루틴 2개와 메모리 전용 추가/수정을 제거한다. 추가는 경로 비교의 후보 저장으로 연결하고, 저장 완료 후 목록을 재조회한다.
+- GET /api/v1/routines(인증): limit 기본20, 정수1\~100. cursor는 마지막 항목 routine_id(UUID), 본인 루틴이 아니거나 삭제됐으면404 RESOURCE_NOT_FOUND, 잘못된 형식/범위는422 VALIDATION_ERROR. user_id 필터·created_at 내림차순 및 동률 id 내림차순으로 limit개를 반환하고 다음 페이지가 있으면 마지막 ID를 next_cursor로 돌려준다. 200 data는 items(5.3 상세와 같은 객체 배열), next_cursor(문자열 또는 null). needs_attention 및 장소 null도 숨기지 않는다. Cache-Control: no-store.
+- PATCH는 expected_version 필수 양의 정수, name(공백 제거1\~30자), weekdays, target_arrival_local_time을 선택적으로 받는다. 미전송은 유지, target 명시적 null은 삭제, name/요일의 null은422. 경로 변경은 origin_place_id·destination_place_id·search_id·candidate_id를 모두 함께 보내며 null/일부만 전송은422다. POST와 동일한 본인 저장 장소·서로 다른 장소·본인 성공 검색·5분 만료·후보·location_version 검사를 적용한다. 검색 당시 출발·도착 장소 순서까지 같아야 하며 뒤집힌 방향은422다. 새 journey_plans 스냅샷을 연결하고 status=active로 복구, 일반 이름/일정 변경은 기존 상태와 경로를 보존한다. version 불일치409, 타인/없는 루틴404, 오류 시 부분 변경 없음. 200은 기존 상세 형태로 version+1·updated_at을 반환한다.
+- DELETE /api/v1/routines/routine_id(인증+CSRF): 본인 루틴만 동기 삭제204(본문 없음·no-store), 없는/타인/반복 삭제404. 생성 멱등 키는 routine_id=null 표시로24시간 재생성을 차단한다. 다른 루틴이 공유하는 경로 스냅샷은 유지하고 참조 없는 스냅샷은 삭제한다. 실제 이동 기록은 아직 미구현이며 향후 당시 스냅샷 보존 계약은 유지한다.
+- 홈의 루틴 선택은 현재 화면 세션에서 관리하며 새로고침/재로그인 시 본인 목록 첫 항목을 기본 선택한다. 출발 안내는 F07 후속이라 저장 경로의 공급자 예상 시간만 표시하고 가상 차량 도착/권장 출발 숫자를 표시하지 않는다. 삭제한 장소는 확인 필요와 경로 다시 선택 행동으로 표시한다.
+- 인증/목록 로딩·빈 상태·실패/재시도·페이지 추가 조회·삭제 확인/취소·버전 충돌 재조회·세션 만료를 제공한다. 로그인/로그아웃 시 이전 목록과 선택을 폐기하고 해당 세션으로 다시 조회한다. 일반 로그에 루틴 이름·장소·후보 원문·좌표를 넣지 않는다.
+- 기존 POST/상세/일정 PATCH 응답을 유지하는 추가 계약이다. 기존 일정 PATCH 클라이언트는 그대로 동작한다. 기존 DB0008 스키마를 재사용한다.
+### 5.3.2 루틴 등록 중 장소 저장·선택(F06-03a)
+- 구현·검증 <mention-date start="2026-10-08"/>: codex/routine-inline-places. 프론트16파일134개(인라인 통합6개 포함)·Vite 빌드 통과. 장소0개 검증 계정으로 실제 브라우저에서 루틴 추가→출발지 선택→빈 저장 목록에서 새 장소 검색/명시 저장201→origin-validations200 자동 선택→도착지 새 장소201/검증200→카카오15후보 조회→루틴POST201→홈 목록 확인까지 설정 화면 이동 없이 완료했다. PostgreSQL에서 장소2개/루틴1개 확인. PC1440×1000·모바일390×844 폼/선택·반대쪽 유지·가로 넘침0·콘솔error0 확인. 생성 실패 동일 키 재시도, 저장 후 검증 실패 재선택(추가 생성 없음), 생성 중 취소/방식 전환 차단, 취소 미저장, 세션 만료는 통합 테스트로 검증했다. 백엔드 코드/DDL은 변경하지 않았으며 실기기GPS·새 장소 생성 모드의 지도 핀 시각 검증은 이번 범위에서 재실행하지 않았다. 검증 데이터는 전용 계정만 정리하고 기존 사용자 데이터를 보존한다. 근거는 `development_log.md`.
+- 사용자 요구 <mention-date start="2026-10-08"/>: 처음 사용하는 사람이 내 설정으로 이동하지 않고 루틴의 출발·도착 장소 선택 화면에서 새 장소를 검색·저장·선택할 수 있게 한다. 구현·검증 완료.
+- 출발지/도착지 선택기에 장소 저장 행동을 추가한다. 주소/장소명 검색 → 후보 직접 선택 → 이름(기본 출발지 또는 도착지)·선택적 출입구/지도 핀 확인 → 사용자의 저장 확정 순서다. 기존 PlacesCard 생성 폼과 POST /place-searches·POST /places를 재사용한다. 검색만 하거나 취소하면 장소를 생성하지 않는다.
+- 장소201 저장 후 응답의 본인 place_id/location_version으로 기존 POST /origin-validations를 호출한다. 성공하면 해당 출발 또는 도착 선택에 즉시 반영하고 반대쪽 선택은 유지한다. 검증 실패 시 장소는 저장돼 있으며 저장 장소 목록에서 다시 선택하도록 오류/재시도를 제공한다. 루틴은 별도 후보 선택·저장 확인 전에는 생성하지 않는다.
+- 저장 장소가 없는 빈 목록에서도 새 장소 저장 행동을 제공한다. 지도/현재 위치 조회 후 루틴 저장 조건 안내에서도 출발/도착 장소 저장 폼을 같은 화면에서 연다. 장소 선택 변경 시 기존 검색 후보는 폐기하고 새 저장 장소 기준으로 경로를 재조회한다. 좌표를 근처 장소로 자동 연결하거나 GPS를 자동 저장하지 않는다.
+- 생성 폼에서 처리 중 중복 저장/방식 전환/취소를 차단한다. 실패·검색 무결과·10분 만료·로그인 필요·취소를 기존 장소 저장 규칙대로 처리한다. 명시 저장201 이후 검증만 재시도하며 장소를 다시 생성하지 않는다.
+- API 경로·필드·인증·소유권·CSRF·멱등24시간·장소/검색 보관·시간/계산 정책·DB 스키마는 유지한다. 화면 흐름 확장이며 기존 설정 장소 관리와 루틴 클라이언트 호환성 영향 없음.
+### 5.6 도보 결과
 `GET /api/v1/walking-estimates/estimate_demo_01`의 data 예시:
 ```json
 {
@@ -429,7 +552,7 @@ origin/destination은 saved_place 또는 좌표 출발 객체다. 권한 거절 
 }
 ```
 `source`는 산정 방식이고 `reused`는 이번 조회에서 저장값을 사용했는지를 뜻한다. source는 ai_estimate 또는 profile_recalculation이다. reused=true여도 실시간 교통 정보까지 저장값이라는 뜻은 아니다.
-### 5.4 출발·여유 안내
+### 5.7 출발·여유 안내
 `POST /api/v1/guidance-queries`
 ```json
 {
@@ -464,7 +587,7 @@ departure_basis=now라면 selected_departure_at은 현재 시각이고 같은 �
 status는 ready/insufficient_data/no_feasible_journey/stale. 부족하거나 만료된 정보에 slack_seconds를 임의로 채우지 않고 null과 사유를 반환한다. 정상적인 ‘경로 없음’은 200 상태 결과이며 공급자 장애로 처리를 못한 경우는 503이다.
 origin_override에는 현재 위치 또는 지도 핀 객체를 전달한다. 이동 중 trip_id가 있으면 남은 경로를 산정해야 하며 전체 도보 시간을 다시 빼지 않는다.
 transfers의 각 항목은 leg_id, estimated_alighting_at, transfer_walk_seconds, transfer_buffer_seconds, next_boarding_at, feasibility, time_source를 포함한다. 실시간 근거가 없는 연결은 estimated 또는 unknown으로 표시한다.
-### 5.5 실제 이동 이벤트
+### 5.8 실제 이동 이벤트
 `POST /api/v1/trips/trip_demo_01/events`
 ```json
 {
@@ -583,7 +706,7 @@ type은 departed/approach_arrived/boarded/alighted. 각 이벤트가 가리키�
 4. 루틴 저장, 여유 5분과 환승 연결 계산.
 5. 이동 이벤트, 중복 방지, 관측 품질 판정, 개인화와 과거 버전 추적.
 6. 기록 삭제·탈퇴·내보내기·모바일 화면 및 지인 테스트.
-- GET /health·공통 HTTP 오류/request_id·React 서버 연결, 17절 기본 회원 인증 및5.1.1절 F03-01 장소 검색/저장/본인 목록·상세는 구현됨. 장소 위치/출입구 수정과 map-config/위치 확인은5.1.2절 구현. 장소 라벨 수정/삭제·현재 위치·경로/AI/약속 API는 미구현이다.
+- GET /health·공통 HTTP 오류/request_id·React 서버 연결, 17절 기본 회원 인증 및5.1.1절 F03-01 장소 검색/저장/본인 목록·상세는 구현됨. 장소 위치/출입구 수정과 map-config/위치 확인은5.1.2절 구현. 이름 수정/삭제는5.1.3절 구현, 현재 위치/지도/저장 장소 선택 및 POST /origin-validations는5.2.1절 구현. 위치 수동 확인은5.2.2절 구현, GPS 수치/자동 일치 판정은 보류. depart_now 경로 후보/본인 작업 조회는5.2.3절 구현, AI/실시간/목표 도착·비교 화면/약속 API는 미구현이다.
 - [ ] 실제 OpenAPI 스키마와 요청·응답 계약 비교는 구현 후 수행한다.
 - [ ] 자동화 검증은 계산 경계값·소유권·이벤트 중복·개인화·공급자 실패를 우선한다.
 ## 10. 결정해야 할 사항
@@ -635,7 +758,7 @@ type은 departed/approach_arrived/boarded/alighted. 각 이벤트가 가리키�
 장소 삭제 시 루틴을 needs_attention으로 바꾸고 과거 안내 맥락은 기존 정책대로 유지한다. 개인 이동/회원 삭제는 관측·계수·근거·캐시·내보내기 등 파생 사본 정리를 포함한다. 약속 공동 기록의 탈퇴·삭제/보관은 16절/20절의 30일 및 개인 삭제 규칙을 따른다. 무조건 CASCADE하거나 영구 보관하지 않는다.
 ### 적용 범위
 기존 API 경로·입출력·오류 계약은 변경하지 않는다. 기존 leg_id는 경로 구간 ID로 유지하고 서버가 이동에 연결된 안내 구간을 검증한다. 현재 guidance 요청의 routine_id 필수 조건도 유지한다. 약속은 16절의 별도 안내 API 및 meeting_journey 연결 초안을 따른다. DB 설계에는 재전송 이벤트·일회용 티켓 테이블과 약속 안내 FK를 추가할 예정이며 DDL은 미적용이다.
-테이블 설계와 Alembic 기반(F00-05b)을 완료했다. 개발 DB 현재 head는0004_place_map_pin(2026-10-07)이며0002_member_auth의 회원 인증5개 테이블 및 saved_places/place_searches/place_creation_keys가 적용됐고 saved_places 핀/설명 컬럼 및 place_location_confirmations를 추가했다. 기존 장소 보존·0003↔0004 왕복을 추가 검증했다. 임시 스키마에서 head 적용·중복 적용·되돌리기·재적용, 회원/장소 소유권·만료·멱등 검증을 수행했다. 나머지 경로/루틴/관측/약속 테이블은 미생성이며 관련 FK/삭제/보관 검증은 해당 기능에서 진행한다.
+테이블 설계와 Alembic 기반(F00-05b)을 완료했다. 개발 DB 현재 head는0005_place_management(2026-10-07)이며0002_member_auth의 회원 인증5개 테이블 및 saved_places/place_searches/place_creation_keys가 적용됐고 saved_places 핀/설명 컬럼 및 place_location_confirmations를 추가했다. 기존 장소 보존·0003↔0004 왕복을 추가 검증했다. 임시 스키마에서 head 적용·중복 적용·되돌리기·재적용, 회원/장소 소유권·만료·멱등 검증을 수행했다. 나머지 경로/루틴/관측/약속 테이블은 미생성이며 관련 FK/삭제/보관 검증은 해당 기능에서 진행한다. F03-03에서 location_version 초기화·장소 삭제 및 생성 재시도 키의NULL 삭제 표시를 추가했다.
 ## 15. 마이그레이션 실행 기반
 2026-10-02: Alembic 1.20.0과 SQLAlchemy 2.1.1 설치 및 버전 고정. 루트 alembic.ini와 backend/migrations에서 명시적 변경 파일을 관리하고 backend/[migrate.py](http://migrate.py)로 실행한다. DB 접속 설정은 기존 비공개 .env/프로세스 설정을 재사용하며 앱 시작 시 자동 변경하지 않는다. 초기 0001_baseline은 업무 DDL이 없는 기준점이다. 상세 명령·한계는 로컬 [migrations.md](http://migrations.md)에 기록했다. 업무 테이블과 인증 방식은 별도 단계에서 확정한다.
 ## 16. 친구 약속·채팅 상세 API
@@ -1251,7 +1374,7 @@ F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프�
 - 장소검색 결과10분·여정검색 결과5분. 여정의 차량 근거는 별도120초 유효 및 선택 시 재검사. 작업 성공/실패 결과는 종료후24시간, 내보내기 파일24시간·본인 인증 다운로드 링크10분. 만료 결과 조회404 RESOURCE_NOT_FOUND. 계정 삭제 영수증24시간 유지.
 - 목록 기본20/최대100·멱등 결과24시간·자연어 입력1\~1000자/서명 컨텍스트 최초발급10분 확정. 기존 소유권/참여 권한·버전·날짜 검증 유지. 첫 회원 인증/세션/요청 제한은17절, 메일 인증/발송 준비는 후순위다.
 - 실행 로그14일, 개인 이동/품질 이력90일, 장소/루틴/현재 프로필은 삭제/탈퇴까지 유지. 원문/키/상세 위치 일반 로그 제외. 표본/관측/산정 연결 이력은 함께 청소하고 과거 예측을 덮어쓰지 않는다.
-- 만료 사용/노출 즉시 차단·기간 청소 매일. 명시 삭제/탈퇴는 즉시 접근 차단 및 기존202 작업으로 사본 정리, 완료 목표24시간·실패 재시도/failed 표시. 향후 백업 최대7일 순환·복원 시 삭제 기록 재적용. 실제 청소/백업 실행은 미구현이다.
+- 만료 사용/노출 즉시 차단·기간 청소 매일. 명시 삭제/탈퇴는 즉시 접근 차단 및 기존202 작업으로 사본 정리, 완료 목표24시간·실패 재시도/failed 표시. 향후 백업 최대7일 순환·복원 시 삭제 기록 재적용. 실제 청소/백업 실행은 미구현이다. F03-03 현재 장소 단건 삭제는 현 저장소에서 트랜잭션 내 물리 삭제204로 완료한다. 독립10분 검색/확인은 기존 만료 정책, 삭제된 생성 키는24시간 최소 해시/키만 유지한다.
 ### D04 첫 출시 알림
 - 첫 출시는 반응형 모바일 웹의 활성 화면 출발 카드/카운트다운/상태 안내. 백그라운드 푸시/예약 알림·GPS/센서 자동 출발 감지는 첫 출시 제외하고 후속 검토. 새로운 푸시 등록/발송 API 없음, 수신 보장 표현 없음. 사용자 수동 출발/탑승 확인과 약속의 열린 화면 REST/WS 갱신 유지.
 ### D05 약속 확장
@@ -1261,8 +1384,20 @@ F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프�
 - 공동 약속/채팅은 completed/cancelled 후30일. draft 마지막 사용자 변경후30일 미사용 삭제. confirmed 목표시각6시간 후 completed 자동 정리하되 실제 참석/도착 판정 아님. 재전송 이력24시간. 본인 약속탈퇴 시 개인 입력/공유 종료·정리, 기존 공동 메시지는 탈퇴한 참여자로 표시. 계정탈퇴는 본인 메시지 본문도 삭제, 주최자 탈퇴는 취소 후 다른 활성 참여자30일 열람. 개인 trip은 연결해제후90일 정책.
 ### 계약 영향·완료 기준
 - 기존 경로/응답 객체 유지, 설정 상한·만료·공유 ETA120초·자동 종료/삭제·출시 알림 범위가 변경/확정됐다. 아직 서비스가 미구현이므로 배포된 클라이언트 마이그레이션 없음. 422/404/409 등 기존 오류 사용, 소유권·동시 수락·기한 경계·삭제 사본 검증은 구현 시 수행한다.
-- 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회/위치 수정 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. 사용자 검토 후 codex/place-map-pin 브랜치 MR/병합, F03-01\~02 완료, 다음 F03-03 라벨 수정/삭제 및 연결 데이터 처리.
+- 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회/수정/삭제 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. F03-04 main0402d67·R01 mainca8cd93 병합 확인, F03-01\~04 구현/검증 완료. F03-05a 수동 확인은main8b4b40b에 병합 완료다. GPS 수치/자동 일치 판정은 보류한다. F04-01은 main0402d67에서codex/journey-search로 시작해최신main8b4b40b를통합한뒤구현/검증, F04-01은main9670281에병합완료, F04-02는main63674ac에병합완료. F04-03은main4f94af1에병합완료, F04-04는사용자요청으로보류. F04-05는codex/journey-unavailable에서F04-03을통합해구현/검증했다. 사용자MR/병합 후 다음F05-01 도보근거수집이며 미확인물리근거를확정값으로채우지않는다.
 ## 변경 이력
+- <mention-date start="2026-10-08"/> v0.48: 원하는 이동 방법의 후보를 첫 카드부터 확인하는 F04-03a 흐름 추가 및 구현·검증 완료. 기존 비교 기준·나머지 후보 유지, 방식별 무결과 안내. API/DB 변경 및 호환성 영향 없음. 프론트138개/빌드·합성 PC/모바일 확인.
+- <mention-date start="2026-10-08"/> v0.47: 사용자 요청으로 루틴 등록 중 출발/도착 선택기의 장소 검색·명시 저장·저장 후 선택 반영 흐름을 추가했다(5.3.2, F06-03a). 기존 장소/출발지 검증/루틴 API를 재사용하며 경로·필드·인증·보관·계산·스키마 및 기존 클라이언트 호환성 유지. 구현·검증 완료.
+- <mention-date start="2026-10-08"/> v0.46: F06-03 본인 목록(cursor/limit), 이름·경로 교체 PATCH, DELETE204·참조 없는 스냅샷 정리와 삭제 멱등 표시 계약을 확정했다. 저장 후 목록 누락과 가상 루틴 문제를 해결하기 위한 홈/내 루틴 실제 조회·로그인 상태 전환·수정/삭제 흐름이며 구현·검증 완료. 기존 일정 PATCH/저장 응답 호환 유지.
+- 2026-10-07 v0.45: F06-02 루틴 요일·목표 도착 저장 계약을 추가하고 구현으로 표시했다. POST /routines에 weekdays(ISO 1\~7 필수)·target_arrival_local_time(HH:mm 선택) 입력을 추가하고 응답에 weekdays·target_arrival_local_time·timezone(Asia/Seoul 고정)을 포함했다. PATCH /routines/\{routine_id\}를 expected_version 기반 요일·목표 도착 일정 변경으로 F06-02 구현 표기했고 이름·경로 변경은 F06-03으로 유지했다. 기존 클라이언트 영향: POST /routines는 weekdays가 필수가 되어 weekdays 없는 기존 본문은 422다.
+- 2026-10-07 v0.44: F06-01 POST/GET /routines 저장·상세 계약을 구체화하고 구현으로 표시했다. 검색 후보 journey_plans 스냅샷, 멱등·소유권·location_version 검증, 장소 삭제 시 루틴 needs_attention 연동을 추가했다. weekdays·목표 도착은 F06-02, 목록·수정·삭제는 F06-03으로 단계 표기했다. 3절 루틴 표와 장소 삭제 규칙을 갱신하고 5.3에 F06-01 계약을 신설, 기존 예시 절을 5.6\~5.8로 재번호했다. 기존 클라이언트 계약 변화는 없다.
+- 2026-10-07 v0.43: 사용자 요청으로 F04-04 보류/F04-05 우선. 무경로·지점 연결 불가·환승 제한·지원 지역 밖·구간 정보 부족 구분과 복구 행동 추가, 환승 제외에 NO_ROUTE 중복 사유 제거. 기존 모델/권한/보관/기한 유지.
+- 2026-10-07 v0.42: F04-03 출발/도착 직접 선택·접수/조회/중지/재시도/만료·후보비교/상세/미확인근거 화면흐름 추가. 기존API모델/권한/보관/입력비저장 유지, Retry-After 클라이언트노출 추가. AI/실시간·루틴/출발안내는 후속.
+2026-10-07 v0.41: F04-02 journey.v1 공통 구간/도보 역할·승하차/정류장 순서·차량 세부분류·환승 연결/시간 분해 추가. 이전 후보는 조회 시 보강, 기존 필드/권한/작업/기한/입력 비저장 유지. 실시간/물리 방향·출입구/플랫폼·AI/화면은 후속.
+2026-10-07 v0.40: F04-01 카카오 후보 조회의 비동기 상태/권한/멱등/만료/재시작 실패·최소 후보·GPS 입력 비저장 계약 구체화. depart_now부터 구현하고 AI/실시간/목표 도착은 후속 유지. 신규 API로 기존auth/장소/F03 계약 유지.
+2026-10-07 v0.39: 사용자 결정에 따라GPS 경과시간/정확도/미래허용수치 및자동일치판정은보류. F03-05 수동확인부분으로current_location.location_confirmed/quality/place_match·user_confirmed 상태 추가, 기존false/pending·지도/장소/auth 호환 유지. 사용자의 확인과위치품질 보증·실제경로계산을구분한다.
+- 2026-10-07 v0.38: F03-04 POST /origin-validations·단발GPS/거절·지도/본인 저장 장소 선택·600초 메모리 선택 추가. 현재 위치를근처저장장소로추정하지 않으며 실제 예시 안내와 분리. 시각/정확도 형식은전달하고 품질/일치 판정은F03-05 후속, 기존 장소/auth/경로 객체 호환 유지.
+- 2026-10-07 v0.37: F03-03 label 수정/DELETE204·24시간 삭제된 저장 키 재생성 방지·location_version 구체화. 이름 변경은 위치/도보 근거를 유지, 기존 일반version 충돌 검사 유지. 미구현 루틴/산정 삭제 연결은 F04\~06 후속, 현 장소 삭제만 동기 완료.
 - 2026-10-07 v0.36: F03-02 지도 설정/위치 확인·본인 장소 PATCH·사용자 출입구 설명·장소 버전 동시성 계약 구체화. 서울/경기 확인600초·원래 주소와 핀 법정동 구분. 기존 생성 선택 필드/응답 필드 추가로 F03-01 호환 유지. 실제 산정 무효화는 F04/F05 후속.
 - 2026-10-07 v0.35: F03-01 검색 후보/소유권/10분 만료·생성 멱등/24시간·주소/키워드 및 지원지역·오류·목록 계약 구체화. 미구현 장소 생성에 검색/후보 ID 필수, 이름/주소 응답 추가. 기존 인증/health 호환성 영향 없음. 구현/검증 상태는 [todo.md](http://todo.md) 및5.1.1절을 따른다.
 - 2026-10-07 v0.34: 사용자 요청으로 계정 오류 화면의 문의용 요청 ID를 숨긴다. 가입 입력 안내와 재시도 유지. API 경로·응답·서버 로그 및 기존 클라이언트 호환성 영향 없음.

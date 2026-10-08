@@ -1,7 +1,7 @@
 # 마이그레이션 사용 안내
 
 2026-10-02 / F00-05b 완료. Alembic 1.20.0, SQLAlchemy 2.1.1.
-현재 개발 DB revision은 `0002_member_auth`다(2026-10-06). 회원·자격정보·프로필·서버 세션·요청 제한 테이블5개가 존재하며 이동/장소/약속 테이블은 아직 없다. 임시 스키마의 upgrade/downgrade 왕복 검증 후 개발 DB에 적용했다. 기존 public 데이터 삭제/초기화는 하지 않았다.
+현재 개발 DB revision은 `0006_journey_searches`다(2026-10-07). 회원·장소 및 경로 검색/작업·멱등 테이블이 적용됐다. 임시 스키마의 upgrade/downgrade 왕복·기존 장소 보존 검증 후 개발 DB에는 upgrade만 적용했다. 기존 public 데이터 삭제/초기화는 하지 않았다.
 
 ## 실행
 
@@ -39,6 +39,8 @@ current는 DB 적용 위치, history는 파일의 변경 순서다. upgrade head
 테스트는 고유 migration_test_* 스키마만 생성하고 마지막에 제거한다. public은 수정하지 않는다. 현재 head의 테이블/이력·upgrade 재실행·downgrade 및 반복 왕복을 검증한다. 개발 public에서 downgrade base를 실행하면 회원 데이터가 삭제되므로 왕복 검증은 임시 스키마에서만 수행한다. 새 마이그레이션에는 기대 테이블·head도 함께 갱신한다.
 
 ## 파일과 로그
+
+- 2026-10-07 최신 head:0005_place_management. location_version=현재version 초기화, place_creation_keys.place_id nullable/FK ON DELETE SET NULL. 기존 버전4 장소의 좌표/버전 및location_version4 유지, 중복upgrade/왕복 검증. downgrade는NULL 삭제 키 표시를 제거하며 삭제 장소를 복원하지 않는다. 개발 public에서는 upgrade만 적용했다.
 
 - 2026-10-07 최신 head:0004_place_map_pin. 장소 핀 출처·법정동 명칭·출입구 설명 컬럼과10분 위치 확인 테이블/만료 인덱스 추가. 기존 장소가 있는0003에서 upgrade·downgrade0003·재upgrade 시 좌표/버전 보존, 기본값 search/null/null 확인. 개발 DB는 upgrade만 적용, public downgrade 없음.
 

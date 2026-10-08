@@ -1,12 +1,16 @@
 # 백엔드 실행 환경
 
+F04-02(2026-10-07): journey_models.py의 journey.v1 구간/후보 모델과 GET 결과 OpenAPI 스키마를 제공한다. WALKING 접근/환승/마지막 역할, 교통 승하차·공급자 순서·차량 종류, 환승 연결과 시간 분해·누락 근거를 정리하며 기존 JSONB 후보는 조회 시 보강한다. DB head0006 유지·마이그레이션 추가 없음, [journey_api.md](../journey_api.md)·Notion v0.41 참고.
+
+F04-01(2026-10-07): POST /journey-searches202·본인 GET 결과/GET /jobs 구현. 실행 전 `backend/.venv/Scripts/python.exe backend/migrate.py upgrade head`로0006_journey_searches를 적용한다. 현재는 depart_now 공급자 후보 조회이며 AI/실시간/목표 도착/비교 화면은 후속이다. GPS/지도 입력 좌표 비저장 및 상태/권한/멱등/만료는 [journey_api.md](../journey_api.md)를 따른다.
+
 개발 앱은 http://localhost:5173 또는 http://127.0.0.1:5173으로 열 수 있다. AUTH_PUBLIC_ORIGIN의 같은 포트에서만 두 loopback 주소를 허용하며 운영은 설정한 HTTPS origin과 정확히 일치해야 한다. CSRF 토큰/세션 쿠키 검증은 양쪽 모두 적용한다.
 
 F00-01~04 및 기본 회원 인증 구현 완료. 상태 API·요청 ID·공통 HTTP 오류·JSON 요청 로그와 React 연결을 제공한다. 경로/현재 위치/약속 API는 미구현이다. PostgreSQL은 health 요청과 분리하며 [DB 안내](../database.md)를 참고한다.
 
 F03-01(2026-10-07): POST /place-searches, POST /places, GET /places 및 GET /places/{place_id} 구현. 실행 전 `backend/.venv/Scripts/python.exe backend/migrate.py upgrade head`로0003_saved_places 적용. KAKAO_REST_API_KEY는 서버 .env에만 저장한다. [place_api.md](../place_api.md)의 후보/만료/멱등·오류 계약을 따른다. 장소 수정/삭제·지도 핀·현재 위치·경로/약속 API는 후속이다.
 
-2026-10-06 기본 회원 인증 구현: GET /auth/csrf, POST /auth/register·login·logout, GET /me. 이메일 중복만 확인하며 메일 인증/복구는 후순위다. 실행 전에 DB와0004_place_map_pin 마이그레이션을 준비한다. `.env.example`의 AUTH_ENV/AUTH_PUBLIC_ORIGIN 및32자 이상 독립 난수 AUTH_RATE_LIMIT_SECRET을 로컬 `.env`에 설정한다(기존 .env 덮어쓰기 금지). 운영은 HTTPS origin·Secure 쿠키를 사용한다. health는 DB/인증 설정 없이 계속 동작한다. 장소 API는 아래 F03-01 범위를 따른다.
+2026-10-06 기본 회원 인증 구현: GET /auth/csrf, POST /auth/register·login·logout, GET /me. 이메일 중복만 확인하며 메일 인증/복구는 후순위다. 실행 전에 DB와0005_place_management 마이그레이션을 준비한다. `.env.example`의 AUTH_ENV/AUTH_PUBLIC_ORIGIN 및32자 이상 독립 난수 AUTH_RATE_LIMIT_SECRET을 로컬 `.env`에 설정한다(기존 .env 덮어쓰기 금지). 운영은 HTTPS origin·Secure 쿠키를 사용한다. health는 DB/인증 설정 없이 계속 동작한다. 장소 API는 아래 F03-01 범위를 따른다.
 Python 3.13.1에서 FastAPI 0.142.2 / Uvicorn 0.54.0을 설치했고 전체 의존성 버전을 requirements.txt에 고정했다.
 
 프로젝트 루트에서 PowerShell로 실행한다. 가상환경 활성화 없이 전용 Python 경로를 직접 사용한다.
@@ -28,9 +32,11 @@ python -m venv backend/.venv
 
 프론트는 별도 터미널에서 `cd C:\projects\timeisnow\frontend` 후 `npm run dev`로 실행한다. 기존 npm 잠금 파일을 유지한다. 앱 진입점 실행에는 DB 접속이 필수가 아니며 DB 검증은 check_db.py로 별도 실행한다.
 
-DB 변경은 [마이그레이션 안내](../migrations.md)의 migrate.py로 실행한다. 현재는0004_place_map_pin까지 적용했다.
+DB 변경은 [마이그레이션 안내](../migrations.md)의 migrate.py로 실행한다. 현재는0005_place_management까지 적용했다.
 
 ## 환경 변수와 로그 확인
+
+F03-03: PATCH /places/{place_id} label 수정·DELETE204 추가. 최신 head0005_place_management, 기존 장소 보존/location_version 초기화. 삭제된 생성 키는place_id=NULL로24시간 최소 표시를 유지하며 같은 저장 키/본문 재시도404. 일반version 수정 충돌 및location_version 위치 근거를 구분한다. 실제 루틴/산정 연결은 후속. [place_api.md](../place_api.md)와 Notion v0.37 기준.
 
 F03-02: GET /map-config, POST /place-location-confirmations 및 PATCH /places/{place_id} 추가. 최신 head는0004_place_map_pin, 기존 장소 보존. KAKAO_JAVASCRIPT_KEY는 등록 도메인 제한용 공개 SDK 키이며 로그인된 /map-config로 전달한다. KAKAO_REST_API_KEY는 서버에서만 사용한다. 카카오 앱에서 지도 API 활성화/localhost:5173 및127.0.0.1:5173 SDK 도메인 등록 필요. 지도 핀·소유권/600초/버전409 계약은 [place_api.md](../place_api.md). 서버 코드를 바꾼 후 개발 백엔드를 재시작해야 새 API가 적용된다.
 
@@ -59,3 +65,7 @@ curl.exe -i http://127.0.0.1:8000/api/v1/does-not-exist
 ```
 
 현재는 stdout만 제공하며 로그 파일이나 원격 수집기를 만들지 않는다. 14일 보관/회전은 배포 설정(F11)에서 적용한다. 명령/오류 로그에 실제 키·주소를 붙여 공유하지 않는다.
+F03-04(2026-10-07): POST /origin-validations 구현. 단발GPS/지도 서울·경기 확인 및 본인 저장 장소/location_version 검증, 로그인·Origin/CSRF·no-store·사용자10회/분(실패 포함). 좌표를 새 DB/로그에 저장하지 않으며 현재GPS quality_status=pending,600초 선택·실제 경로 계산 후속. DB head0005 유지, 서버 재시작 후 적용. [origin_api.md](../origin_api.md)·Notion v0.38.
+
+## F06-03 루틴 관리 (2026-10-08)
+GET /routines(limit/cursor), PATCH /routines/{id}(이름/일정·전체 경로 참조 교체), DELETE /routines/{id}204를 제공한다. 본인 목록과 버전/CSRF/삭제 멱등 표시는 [routine_api.md](../routine_api.md)를 따른다. 최신 마이그레이션은0008_routine_schedule이며 추가 DDL은 없다. 코드 반영 후 서버를 재시작한다. 개발 서버의 네트워크 제한과 DB 상태는 별개이며 카카오 API에 접근 가능한 실행 환경이 필요하다.

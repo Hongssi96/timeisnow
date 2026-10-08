@@ -1,5 +1,7 @@
 # PostgreSQL 개발 DB
 
+- 현재 적용(2026-10-07):0006_journey_searches. 기존 회원/장소를 유지하며 짧은 경로 후보/작업/멱등 테이블 추가. 아래 baseline/미적용 안내는 초기 구축 이력이며 최신 실행 기준은 [migrations.md](./migrations.md).
+
 - 확정일: 2026-10-02. 로컬 개발용이며 운영 배포 구성은 별도 결정한다.
 - Docker Compose 프로젝트: timeisnow / 서비스: db / 컨테이너: timeisnow-db-1.
 - 이미지: postgres:17 (이번 실행 버전 17.11). 메이저 버전을 고정하며 pull 시 패치 버전은 바뀔 수 있다.

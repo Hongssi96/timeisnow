@@ -1,0 +1,313 @@
+{
+  "direct": {
+    "candidate_id": "5d82f199-0434-4975-9204-47fd5f01ec2d",
+    "type": "BUS",
+    "validity": "insufficient_data",
+    "ordered_legs": [
+      {
+        "leg_id": "d1c11181-5089-464c-af10-bacd3b54b23d",
+        "sequence": 0,
+        "type": "WALKING",
+        "seconds": 100,
+        "distance_meters": 100,
+        "stops": [],
+        "vehicles": [],
+        "time_source": "provider_estimate",
+        "walking_role": "access",
+        "boarding": null,
+        "alighting": null,
+        "direction": {
+          "source": "unknown",
+          "from_stop_name": null,
+          "to_stop_name": null,
+          "public_direction_id": null
+        },
+        "vehicle_options": []
+      },
+      {
+        "leg_id": "6dbfa51c-2b93-4e2f-8d5a-25ec2cac55bc",
+        "sequence": 1,
+        "type": "BUS",
+        "seconds": 500,
+        "distance_meters": 100,
+        "stops": [
+          "합성 승차 0",
+          "합성 하차 0"
+        ],
+        "vehicles": [
+          "합성 차량 0"
+        ],
+        "time_source": "provider_estimate",
+        "walking_role": null,
+        "boarding": {
+          "name": "합성 승차 0",
+          "public_id": null,
+          "entrance_ref": null,
+          "platform_ref": null
+        },
+        "alighting": {
+          "name": "합성 하차 0",
+          "public_id": null,
+          "entrance_ref": null,
+          "platform_ref": null
+        },
+        "direction": {
+          "source": "provider_stop_order",
+          "from_stop_name": "합성 승차 0",
+          "to_stop_name": "합성 하차 0",
+          "public_direction_id": null
+        },
+        "vehicle_options": [
+          {
+            "name": "합성 차량 0",
+            "provider_type": "새로운 분류"
+          }
+        ]
+      },
+      {
+        "leg_id": "b2dce220-a615-410e-b779-1cc1153c8347",
+        "sequence": 2,
+        "type": "WALKING",
+        "seconds": 50,
+        "distance_meters": 100,
+        "stops": [],
+        "vehicles": [],
+        "time_source": "provider_estimate",
+        "walking_role": "egress",
+        "boarding": null,
+        "alighting": null,
+        "direction": {
+          "source": "unknown",
+          "from_stop_name": null,
+          "to_stop_name": null,
+          "public_direction_id": null
+        },
+        "vehicle_options": []
+      }
+    ],
+    "transfer_count": 0,
+    "total_seconds": 650,
+    "total_distance_meters": 300,
+    "walking_seconds": 150,
+    "estimated_arrival_at": null,
+    "time_sources": [
+      "provider_estimate"
+    ],
+    "missing_segments": [
+      "LIVE_ARRIVALS_PENDING",
+      "AI_WALK_PENDING",
+      "ENTRANCE_PLATFORM_UNCONFIRMED",
+      "REGION_PATH_UNVERIFIED",
+      "PUBLIC_DIRECTION_UNVERIFIED"
+    ],
+    "model_version": "journey.v1",
+    "transfer_count_computed": 0,
+    "connections": [],
+    "timing_breakdown": {
+      "walking_seconds": 150,
+      "in_vehicle_seconds": 500,
+      "legs_total_seconds": 650,
+      "provider_total_seconds": 650,
+      "unallocated_seconds": 0,
+      "status": "consistent"
+    }
+  },
+  "mixed": {
+    "candidate_id": "7a78e657-ad1d-41c7-95d0-373562486d11",
+    "type": "BUS_AND_SUBWAY",
+    "validity": "insufficient_data",
+    "ordered_legs": [
+      {
+        "leg_id": "43ae97b2-140b-4272-964c-f4f10aac4f7b",
+        "sequence": 0,
+        "type": "WALKING",
+        "seconds": 100,
+        "distance_meters": 100,
+        "stops": [],
+        "vehicles": [],
+        "time_source": "provider_estimate",
+        "walking_role": "access",
+        "boarding": null,
+        "alighting": null,
+        "direction": {
+          "source": "unknown",
+          "from_stop_name": null,
+          "to_stop_name": null,
+          "public_direction_id": null
+        },
+        "vehicle_options": []
+      },
+      {
+        "leg_id": "5899dcec-05cd-42e2-bcdd-8b28266a2cc2",
+        "sequence": 1,
+        "type": "BUS",
+        "seconds": 500,
+        "distance_meters": 100,
+        "stops": [
+          "합성 승차 0",
+          "합성 하차 0"
+        ],
+        "vehicles": [
+          "합성 차량 0"
+        ],
+        "time_source": "provider_estimate",
+        "walking_role": null,
+        "boarding": {
+          "name": "합성 승차 0",
+          "public_id": null,
+          "entrance_ref": null,
+          "platform_ref": null
+        },
+        "alighting": {
+          "name": "합성 하차 0",
+          "public_id": null,
+          "entrance_ref": null,
+          "platform_ref": null
+        },
+        "direction": {
+          "source": "provider_stop_order",
+          "from_stop_name": "합성 승차 0",
+          "to_stop_name": "합성 하차 0",
+          "public_direction_id": null
+        },
+        "vehicle_options": [
+          {
+            "name": "합성 차량 0",
+            "provider_type": "새로운 분류"
+          }
+        ]
+      },
+      {
+        "leg_id": "0a9eed03-570a-4354-b372-8d0ea06679bf",
+        "sequence": 2,
+        "type": "WALKING",
+        "seconds": 40,
+        "distance_meters": 100,
+        "stops": [],
+        "vehicles": [],
+        "time_source": "provider_estimate",
+        "walking_role": "transfer",
+        "boarding": null,
+        "alighting": null,
+        "direction": {
+          "source": "unknown",
+          "from_stop_name": null,
+          "to_stop_name": null,
+          "public_direction_id": null
+        },
+        "vehicle_options": []
+      },
+      {
+        "leg_id": "940432e4-9c7c-4f17-9034-89865d6f844e",
+        "sequence": 3,
+        "type": "SUBWAY",
+        "seconds": 500,
+        "distance_meters": 100,
+        "stops": [
+          "합성 승차 1",
+          "합성 하차 1"
+        ],
+        "vehicles": [
+          "합성 차량 1"
+        ],
+        "time_source": "provider_estimate",
+        "walking_role": null,
+        "boarding": {
+          "name": "합성 승차 1",
+          "public_id": null,
+          "entrance_ref": null,
+          "platform_ref": null
+        },
+        "alighting": {
+          "name": "합성 하차 1",
+          "public_id": null,
+          "entrance_ref": null,
+          "platform_ref": null
+        },
+        "direction": {
+          "source": "provider_stop_order",
+          "from_stop_name": "합성 승차 1",
+          "to_stop_name": "합성 하차 1",
+          "public_direction_id": null
+        },
+        "vehicle_options": [
+          {
+            "name": "합성 차량 1",
+            "provider_type": "새로운 분류"
+          }
+        ]
+      },
+      {
+        "leg_id": "2d3edf15-4aba-420a-855f-99899e936ea1",
+        "sequence": 4,
+        "type": "WALKING",
+        "seconds": 50,
+        "distance_meters": 100,
+        "stops": [],
+        "vehicles": [],
+        "time_source": "provider_estimate",
+        "walking_role": "egress",
+        "boarding": null,
+        "alighting": null,
+        "direction": {
+          "source": "unknown",
+          "from_stop_name": null,
+          "to_stop_name": null,
+          "public_direction_id": null
+        },
+        "vehicle_options": []
+      }
+    ],
+    "transfer_count": 1,
+    "total_seconds": 1190,
+    "total_distance_meters": 500,
+    "walking_seconds": 190,
+    "estimated_arrival_at": null,
+    "time_sources": [
+      "provider_estimate"
+    ],
+    "missing_segments": [
+      "LIVE_ARRIVALS_PENDING",
+      "AI_WALK_PENDING",
+      "ENTRANCE_PLATFORM_UNCONFIRMED",
+      "REGION_PATH_UNVERIFIED",
+      "PUBLIC_DIRECTION_UNVERIFIED"
+    ],
+    "model_version": "journey.v1",
+    "transfer_count_computed": 1,
+    "connections": [
+      {
+        "connection_id": "59cf2030-8d43-5991-94d1-71fd737e2d88",
+        "from_leg_id": "5899dcec-05cd-42e2-bcdd-8b28266a2cc2",
+        "to_leg_id": "940432e4-9c7c-4f17-9034-89865d6f844e",
+        "from_stop": {
+          "name": "합성 하차 0",
+          "public_id": null,
+          "entrance_ref": null,
+          "platform_ref": null
+        },
+        "to_stop": {
+          "name": "합성 승차 1",
+          "public_id": null,
+          "entrance_ref": null,
+          "platform_ref": null
+        },
+        "walking_leg_ids": [
+          "0a9eed03-570a-4354-b372-8d0ea06679bf"
+        ],
+        "walking_seconds": 40,
+        "feasibility": "unknown",
+        "time_source": "provider_estimate",
+        "physical_stop_match": "unconfirmed"
+      }
+    ],
+    "timing_breakdown": {
+      "walking_seconds": 190,
+      "in_vehicle_seconds": 1000,
+      "legs_total_seconds": 1190,
+      "provider_total_seconds": 1190,
+      "unallocated_seconds": 0,
+      "status": "consistent"
+    }
+  }
+}
