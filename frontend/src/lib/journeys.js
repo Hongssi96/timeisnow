@@ -75,9 +75,11 @@ export function readJourney(response, accepted) {
 
 export const formatJourneyTime = seconds => seconds===null?'확인 필요':seconds===0?'0분':seconds<60?'1분 미만':`${Math.ceil(seconds/60)}분`;
 export const missingWalk = c => ['ACCESS_WALK_MISSING','TRANSFER_WALK_MISSING','EGRESS_WALK_MISSING'].some(reason=>c.missing_segments.includes(reason));
-export function sortCandidates(candidates, preference) {
+export function sortCandidates(candidates, preference, method = 'all') {
+  const prioritized=['BUS','BUS_AND_SUBWAY','SUBWAY'].includes(method);
+  const priority=c=>prioritized&&c.type!==method?1:0;
   const first=c=>preference==='fewer_transfers'?c.transfer_count:preference==='less_walking'?c.walking_seconds:c.total_seconds;
-  return [...candidates].sort((a,b)=>first(a)-first(b)||a.total_seconds-b.total_seconds||a.transfer_count-b.transfer_count||a.walking_seconds-b.walking_seconds);
+  return [...candidates].sort((a,b)=>priority(a)-priority(b)||first(a)-first(b)||a.total_seconds-b.total_seconds||a.transfer_count-b.transfer_count||a.walking_seconds-b.walking_seconds);
 }
 
 export function journeyError(error) {

@@ -52,3 +52,4 @@
 .routine-save-help .button-row{flex-wrap:wrap}.routine-save-help p{margin:0 0 12px}
 
 .origin-place-create .places-card{margin-top:16px}.origin-place-create>.info-box{font-size:14px;color:var(--ink)}.origin-place-create .place-form{margin-top:10px}
+.journey-methods{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 10px}.journey-methods button{min-height:44px;padding:10px 16px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);font:inherit}.journey-methods button[aria-pressed=true]{background:var(--green);border-color:var(--green);color:white}

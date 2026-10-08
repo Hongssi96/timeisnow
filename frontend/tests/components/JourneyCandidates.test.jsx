@@ -53,7 +53,7 @@ it('saves a candidate as a named routine with idempotency key',async()=>{
 it('defaults weekdays to Monday to Friday and sends the toggled schedule',async()=>{
   mockApi();const user=await open();await search(user);
   await user.click(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})[0]);
-  const pressed=()=>screen.getAllByRole('button',{pressed:true}).map(node=>node.textContent);
+  const pressed=()=>within(screen.getByRole('group',{name:'반복 요일'})).getAllByRole('button',{pressed:true}).map(node=>node.textContent);
   expect(pressed()).toEqual(['월','화','수','목','금']);
   await user.click(screen.getByRole('button',{name:'금'}));
   await user.click(screen.getByRole('button',{name:'토'}));
@@ -67,7 +67,7 @@ it('saving stays blocked while no weekday is selected',async()=>{
   mockApi();const user=await open();await search(user);
   await user.click(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})[0]);
   for(const day of ['월','화','수','목','금'])await user.click(screen.getByRole('button',{name:day}));
-  expect(screen.queryAllByRole('button',{pressed:true})).toHaveLength(0);
+  expect(within(screen.getByRole('group',{name:'반복 요일'})).queryAllByRole('button',{pressed:true})).toHaveLength(0);
   const submit=screen.getByRole('button',{name:'루틴 저장'});
   expect(submit.disabled).toBe(true);
   await user.click(submit);
@@ -200,7 +200,7 @@ it('replaces the selected routine route using PATCH and preserves its schedule',
   });
   const onRoutineSaved=vi.fn();const user=await open({routineToReplace:existing,onRoutineSaved});await search(user);
   await user.click(screen.getAllByRole('button',{name:'이 경로로 루틴 변경'})[0]);
-  expect(screen.getAllByRole('button',{pressed:true}).map(node=>node.textContent)).toEqual(['화','목']);
+  expect(within(screen.getByRole('group',{name:'반복 요일'})).getAllByRole('button',{pressed:true}).map(node=>node.textContent)).toEqual(['화','목']);
   expect(screen.getByLabelText(/목표 도착 시각/).value).toBe('09:10');
   await user.click(screen.getByRole('button',{name:'루틴 저장'}));
   const request=apiRequest.mock.calls.find(([path])=>path==='/api/v1/routines/'+existing.routine_id);

@@ -13,14 +13,18 @@ const vehicleNames=leg=>[...new Set(leg.vehicles)].slice(0,3).join(' / ');
 const vehicleDetails=leg=>[...new Set(leg.vehicle_options.map(v=>v.name+(v.provider_type?' ('+v.provider_type+')':'')))].slice(0,3).join(' / ');
 const icon=kind=>kind==='BUS'?BusFront:kind==='SUBWAY'?TrainFront:Footprints;
 const WEEKDAYS=[['월',1],['화',2],['수',3],['목',4],['금',5],['토',6],['일',7]];
+const METHODS=[['all','전체'],['BUS','버스'],['BUS_AND_SUBWAY','버스 + 지하철'],['SUBWAY','지하철']];
 
 export default function JourneyCandidates({ candidates, preference, onRecheck, onSavedLocations, onSaved, defaultRoutineName, defaultWeekdays, defaultTarget, replacing = false }) {
   const [expanded,setExpanded]=useState(null);
   const [naming,setNaming]=useState(null);
+  const [method,setMethod]=useState('all');
   const eligible = !!onSaved && !!onSavedLocations && typeof defaultRoutineName==='string' && defaultRoutineName.length>=1;
   return <div className="journey-candidates"><div className="section-heading"><h2>경로 후보 {candidates.length}개</h2><button className="text-button" onClick={onRecheck}>결과 다시 확인</button></div>
     <div className="info-box">카카오 예상 시간으로 비교해요. 운행 시간과 지금 이용 가능 여부는 확인이 필요해요. 실시간 도착·개인 도보 시간·출입구와 승강장 정보는 확인 중이에요.</div>
-    <div className="candidate-grid">{sortCandidates(candidates,preference).map((c,index)=>{
+    <div className="journey-methods" role="group" aria-label="우선 볼 이동 방법">{METHODS.map(([value,label])=><button key={value} className={method===value?'selected':''} aria-pressed={method===value} onClick={()=>setMethod(value)}>{label}</button>)}</div>
+    <p className="candidate-note" role="status">{method!=='all'&&!candidates.some(c=>c.type===method)?`${METHODS.find(([value])=>value===method)[1]} 경로가 이번 검색 결과에 없어요. 다른 경로를 확인해주세요.`:'선택한 이동 방법의 경로를 먼저 보여드려요.'}</p>
+    <div className="candidate-grid">{sortCandidates(candidates,preference,method).map((c,index)=>{
       const open=expanded===c.candidate_id,TitleIcon=c.type==='SUBWAY'?TrainFront:BusFront;
       const saveState = eligible ? (onSavedLocations(c.candidate_id) ?? 'idle') : null;
       const namingThis = naming?.id===c.candidate_id && saveState!=='saved';
