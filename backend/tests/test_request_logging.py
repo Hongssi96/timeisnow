@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.main import app
-from app.request_logging import logger, RequestJsonFormatter, RequestEventFilter, configure_request_logger
+from app.common.request_logging import logger, RequestJsonFormatter, RequestEventFilter, configure_request_logger
 from test_api_contract import request
 
 

@@ -1,7 +1,7 @@
 """Use the same private DB configuration as the application."""
 from alembic import context
 from sqlalchemy import create_engine, pool
-from app.database import connect_db
+from app.common.database import connect_db
 
 config = context.config
 # No business models yet. Explicit revisions only; autogenerate is unavailable.

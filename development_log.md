@@ -791,3 +791,29 @@
 - 배운 개념: 위치 근거 버전과 화면 편집 버전을 분리하면 이름 변경으로 경로를 불필요하게 무효화하지 않는다. 상태/버전 변경은 장소 쓰기와 한 트랜잭션으로 묶어야 오래된 후보 저장을 막을 수 있다. 복구는 최신 후보로 기존 루틴을 PATCH하며 진입/취소만으로 자동 저장하지 않는다.
 - 범위/남은 일: F06-04 완료. 실제 카카오 재호출/실제 브라우저 DB 복구는 이번 작업에서 재실행하지 않았다. 실제 운행 변경 자동 감지·실시간/AI 출발 안내는 후속, 과거 active 스냅샷의 위치 일치는 근거 없이 추정/백필하지 않았다. 사용자 MR/병합 후 다음 F05-01 도보 근거 수집.
 - 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+## 2026-10-08 — 백엔드 3계층 구조 리팩터링 (Spring 스타일, 사용자 요청)
+
+- 목표/이유: Java/Spring 경험자인 사용자가 FastAPI 백엔드의 내부 구조를 Spring 친화적 3계층(Controller/Service/Repository)으로 재구성하도록 요청했다. 기존 라우터 파일(auth.py 등 9개)은 Pydantic DTO·SQL·비즈니스 로직·라우트가 한 파일에 섞인 fat router 상태였다.
+- 범위 결정: Python→Java 재작성이 아니라 FastAPI 유지 + 계층 재배치로 확정했다. API 계약 변경이 전혀 없으므로 AGENTS.md 3절에 따라 Notion 명세(v0.49 확인)를 수정하지 않는다. 순수 내부 구조 재편이다.
+- 기준: 최신 main c51d0b7(사용자가 codex/routine-recovery 병합 완료 확인)에서 helpycode/three-tier-refactor 생성. 착수 전 Notion v0.49·todo.md를 확인했고 리팩터링 전 백엔드 전체 테스트 130개 OK를 기준선으로 기록했다.
+- 새 구조: app/common/(errors·timeutil·database·response·http·request_logging), app/auth/(dto·repository·security·service·router), app/places/(dto·provider·repository·service·router), app/origins/(dto·repository·service·router), app/journeys/(dto·models·provider·repository·service·router), app/routines/(dto·repository·service·router), app/main.py는 라우터 조립·미들웨어·전역 예외만 남긴다. router는 요청 파싱/응답 봉투만, service는 비즈니스 규칙(멱등·버전 충돌·만료·할당량), repository는 SQL 전담, provider는 카카오 클라이언트, auth/security.py는 세션/CSRF/레이트리밋/인증 공통(Spring Security 역할)이다.
+- 이전 원칙: SQL 문자열·오류 코드/메시지·상태 전이·트랜잭션 경계·잠금 순서(routine-write·journey-admission advisory lock)를 한 글자도 바꾸지 않고 이동했다. 응답 봉투 {data,meta}·{error,meta}·X-Request-ID·Cache-Control·ISO UTC 시각 표현 유지로 프론트 무수정 호환을 보장한다.
+- 테스트 이전: 9개 테스트 파일의 import를 새 계층 경로로 수정했다. DB 격리 패치 대상을 auth.connect_db→app.common.database.connect_db로, 패치 대상 places.provider_search→app.places.provider로 옮겼다. 테스트 시나리오·단언은 변경하지 않았다.
+- 확인된 계약 유지: migrations/env.py·check_db.py의 connect_db 경로만 갱신, Alembic 0001~0008·DB 스키마·Docker 구성 무변경. backend/README.md의 구조 설명을 새 계층에 맞춰 갱신했다.
+- 실제 검증: 리팩터링 후 unittest discover 전체 130개 OK(기준선과 동일, 약 52초, 실제 PostgreSQL 격리 스키마/ASGI). OpenAPI 17경로·22엔드포인트 동일 확인. app import 스모크 및 uvicorn 진입 모듈 로드 확인. API 계약 테스트(test_api_contract) 포함 전 계약 응답 동등. Notion 명세 영향 없음(읽기만 수행, v0.49).
+- 중간 수정 기록: 분리 과정에서 datetime import 누락(timezone) 2건(routines/service.py·origins/dto.py)을 테스트 실패로 발견해 수정했다. 로그에서 exception_type=NameError만 확인 가능한 프라이버시 설계 때문에 격리 스키마 재현 스크립트로 직접 트레이스백을 확인해 원인을 좁혔다.
+- 배운 개념: Spring 3계층은 Controller(요청/응답)·Service(규칙)·Repository(영속성)로 책임을 나눈다. Python에서는 패키지당 router/service/repository 파일로 같은 관심사 분리가 가능하다. 계약 테스트가 남아 있으면 구조 리팩터링의 안전망이 되고, 예외 메시지를 로그에 남기지 않는 설계에서는 재현 스크립트가 디버깅 도구가 된다.
+- 남은 일/다음: 사용자 MR/병합 검토 대상. 기능 순서는 기존대로 F05-01 도보 근거 수집이 다음이다. F04-04(환승·출입구·플랫폼)·GPS 자동 판정·메일 인증/복구는 기존 보류 유지.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.49, 변경 없음)
+## 2026-10-08 — R02 서버 재시작 및 독립 재검토
+
+- 요청: 사용자가 3티어 리팩터링 후 실제 서버를 껐다 켜고 잘못된 부분을 확인하도록 요청했다. 검토 대상은 helpycode/three-tier-refactor의461825d이며 코드 변경 없이 점검했다. 최신 Notion v0.49·TODO·R02 일지·README와 router/service/repository·인증/DB 경로를 확인했다.
+- 서버 실행: 기존 프로젝트 uvicorn 프로세스3296의 실행 경로를 확인 후 종료하고 같은 프로젝트 가상환경/진입점으로 숨김 재시작했다. 새 서버17664의 시작 완료 로그와 localhost8000 health200을 확인했다. frontend5173은 기존 실행을 유지했다. 사용자 입력/개인 DB 데이터는 수정하지 않았다.
+- 실제 검증: check_db.py에서 PostgreSQL17.11 연결 성공. 백엔드 전체130개 테스트 OK(실제 DB 격리 스키마/ASGI), 프론트17파일142개 OK, Vite1902모듈 빌드 성공. 실제 HTTP health200·me/places/routines 비로그인401 AUTH_REQUIRED·origin-validations GET405를 확인했고 일반 API의 응답 meta/X-Request-ID 일치 확인. OpenAPI200·17경로23동작 확인. 기존 브라우저 홈은 로그인 안내 상태로 정상 표시. 테스트 로그의 /_test/broken500/ValueError는 의도된 오류 처리 검증이며 실제 서버 장애가 아니다.
+- 검토 발견: backend/app/journeys/service.py:30(check_refs),39(resolve)에 connection.execute SQL2개가 남아 있다. 런타임 동작 오류는 아니지만 README/R02 완료 근거의 'repository가 SQL 전담'과 다르다. 각 SELECT와 FOR SHARE 잠금을 그대로 repository 함수로 옮겨 service가 호출하도록 마무리할 필요가 있다. 실제 계층 완료 기준이 남아 있으므로 TODO/feature_breakdown의 R02 체크를 해제하고 부분 완료로 기록했다. 이번 요청은 재시작·검토이므로 코드 수정은 수행하지 않았다.
+- 명세 영향: API/DDL/인증/계산/보관 계약 변경 없음. 최신 Notion v0.49는 확인만 했으며 갱신하지 않았다. 외부 공급자 실제 경로 재호출/로그인한 브라우저의 전체 저장 흐름은 이번 검증에서 재실행하지 않았다. 기존 회원/장소/루틴을 정리하거나 재생성하지 않았다.
+- 배운 개념/다음: 계약 회귀 테스트 통과는 실행 호환성의 근거이며 계층 책임 분리 완성의 증거와 별개다. SQL 경계의 정적 검사로 누락을 찾을 수 있다. R02 SQL2곳 위임 후 관련 회귀·완료 체크 복원, 그다음 기존 F05-01 순서를 유지한다.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+- OpenAPI 추가 대조: 이전 main c51d0b7도17경로23동작으로 현재와 같다. R02 최초 일지의22엔드포인트는 집계 오류다. SearchInput의 패키지 경로 변경으로 schema 참조 이름2종은 달라졌지만 참조를 펼친 실제 경로/입력/응답 계약은 동일함을 비교했다.

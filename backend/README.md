@@ -1,6 +1,6 @@
 # 백엔드 실행 환경
 
-F04-02(2026-10-07): journey_models.py의 journey.v1 구간/후보 모델과 GET 결과 OpenAPI 스키마를 제공한다. WALKING 접근/환승/마지막 역할, 교통 승하차·공급자 순서·차량 종류, 환승 연결과 시간 분해·누락 근거를 정리하며 기존 JSONB 후보는 조회 시 보강한다. DB head0006 유지·마이그레이션 추가 없음, [journey_api.md](../journey_api.md)·Notion v0.41 참고.
+F04-02(2026-10-07): app/journeys/models.py(당시 journey_models.py)의 journey.v1 구간/후보 모델과 GET 결과 OpenAPI 스키마를 제공한다. WALKING 접근/환승/마지막 역할, 교통 승하차·공급자 순서·차량 종류, 환승 연결과 시간 분해·누락 근거를 정리하며 기존 JSONB 후보는 조회 시 보강한다. DB head0006 유지·마이그레이션 추가 없음, [journey_api.md](../journey_api.md)·Notion v0.41 참고.
 
 F04-01(2026-10-07): POST /journey-searches202·본인 GET 결과/GET /jobs 구현. 실행 전 `backend/.venv/Scripts/python.exe backend/migrate.py upgrade head`로0006_journey_searches를 적용한다. 현재는 depart_now 공급자 후보 조회이며 AI/실시간/목표 도착/비교 화면은 후속이다. GPS/지도 입력 좌표 비저장 및 상태/권한/멱등/만료는 [journey_api.md](../journey_api.md)를 따른다.
 
@@ -24,8 +24,9 @@ python -m venv backend/.venv
 
 `http://127.0.0.1:8000/docs`에서 GET `/api/v1/health`를 확인할 수 있다. health는200 data/meta, 미존재 경로404 및 잘못된 방식405 등은 error/meta와 X-Request-ID로 응답한다. 입력/예외 원문은 반환하지 않는다. 프론트 설정의 서버 연결 카드에서 로딩·성공·실패/재시도와 요청 ID를 확인한다. Ctrl+C로 종료한다. DB 상태/교통/AI 연결 검사는 health와 별개다.
 
-- app/main.py: FastAPI 앱 진입점.
-- app/request_logging.py: 허용된 요청 메타데이터만 JSON 한 줄 stdout으로 출력. INFO 완료1회, 예상 밖 예외는 같은 ID의 ERROR 실패1회 추가. 처리시간은 응답 생성까지의 서버 처리시간이다.
+- app/main.py: FastAPI 앱 진입점. 라우터 조립·미들웨어·전역 예외만 담당한다.
+- app/common/: 공통 계층(errors·timeutil·database·response·http·request_logging). 도메인 로직을 담지 않는다. request_logging은 허용된 요청 메타데이터만 JSON 한 줄 stdout으로 출력하며 INFO 완료1회, 예상 밖 예외는 같은 ID의 ERROR 실패1회 추가. 처리시간은 응답 생성까지의 서버 처리시간이다.
+- app/auth/, app/places/, app/origins/, app/journeys/, app/routines/: 도메인별 3계층 패키지. router(엔드포인트)→service(비즈니스 규칙)→repository(SQL) 순으로만 의존하고, DTO는 dto.py, 외부 API 클라이언트는 provider.py에 둔다. auth는 security.py에 세션/CSRF/레이트리밋 공통 인증을 제공하며 journeys/models.py는 공통 구간 모델이다.
 - requirements.txt: 같은 라이브러리 버전으로 다시 설치하기 위한 목록.
 - .venv/: 이 프로젝트의 Python과 라이브러리. Git 제외.
 - 시작/종료 로그는 Uvicorn 기본 로그다. 실행 명령의 --no-access-log를 유지해 원문 URL 접근 로그를 끄고 앱의 안전한 JSON 요청 로그를 확인한다. route는 템플릿, 미존재 경로는 unmatched로 기록한다. 본문/쿼리/헤더/쿠키/키/IP·실제 경로·예외 메시지/스택은 출력하지 않는다.

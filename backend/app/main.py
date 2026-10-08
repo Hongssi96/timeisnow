@@ -2,19 +2,20 @@
 
 import uuid
 import re
-from datetime import datetime, timezone
 from time import perf_counter
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
-from app.request_logging import record_request
-from app.auth import router as auth_router, AuthError
-from app.places import router as places_router
-from app.origins import router as origins_router
-from app.journeys import router as journeys_router
-from app.routines import router as routines_router
+from app.common.errors import AuthError
+from app.common.request_logging import record_request
+from app.common.timeutil import utc_now_iso
+from app.auth.router import router as auth_router
+from app.places.router import router as places_router
+from app.origins.router import router as origins_router
+from app.journeys.router import router as journeys_router
+from app.routines.router import router as routines_router
 
 app = FastAPI(title="지금이니? API", version="0.1.0")
 app.include_router(auth_router)
@@ -22,10 +23,6 @@ app.include_router(places_router)
 app.include_router(origins_router)
 app.include_router(journeys_router)
 app.include_router(routines_router)
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def error_response(request, status, code, message, details=None, headers=None):

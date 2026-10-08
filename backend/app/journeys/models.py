@@ -3,7 +3,8 @@ from typing import Annotated, Literal
 from datetime import datetime
 from uuid import UUID, uuid5
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError, model_validator
-from app import auth
+
+from app.common.errors import AuthError
 
 Seconds = Annotated[int, Field(strict=True, ge=0)]
 Name = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=200)]
@@ -205,4 +206,4 @@ def common_candidate(value, vehicle_options=None):
             connections=[connection(old.candidate_id,legs,before,after) for before,after in zip(transit,transit[1:])],
             timing_breakdown=timing).model_dump(mode='json')
     except (ValidationError, ValueError, TypeError, KeyError, AttributeError, IndexError):
-        raise auth.AuthError(502,'PROVIDER_RESPONSE_INVALID','경로 구간을 확인할 수 없어요.') from None
+        raise AuthError(502,'PROVIDER_RESPONSE_INVALID','경로 구간을 확인할 수 없어요.') from None

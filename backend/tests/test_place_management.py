@@ -7,7 +7,9 @@ from uuid import uuid4
 from unittest.mock import patch
 
 import test_place_map_pin
-from app import auth, places
+from app.auth import security as auth
+from app.common.database import database
+from app.places import provider as places_provider
 from test_api_contract import request
 
 
@@ -32,7 +34,7 @@ class ManagementTests(unittest.IsolatedAsyncioTestCase):
     async def test_rename_keeps_location_basis_and_same_name_is_noop(self):
         await self.signup_login();_, saved=await self.saved()
         original=saved[2]['data'];place_id=original['place_id']
-        with patch.object(places,'region_for_location') as provider:
+        with patch.object(places_provider,'region_for_location') as provider:
             changed=await self.update(place_id,{'expected_version':1,'label':' 새 집 '})
             provider.assert_not_called()
         self.assertEqual(changed[0],200)
@@ -71,26 +73,26 @@ class ManagementTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.call('/places/' + place_id))[0],404)
         self.assertEqual((await self.update(place_id,{'expected_version':1,'label':'집2'}))[0],404)
         self.assertEqual((await self.delete(place_id))[0],404)
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM saved_places').fetchone()['n'],0)
 
     async def test_deleted_create_key_does_not_resurrect_place(self):
         await self.signup_login();body,saved=await self.saved(key='saved-key');await self.delete(saved[2]['data']['place_id'])
         self.assertEqual((await self.create(body,'saved-key'))[0],404)
         self.assertEqual((await self.create({**body,'label':'회사'},'saved-key'))[0],409)
-        with auth.database() as connection:
+        with database() as connection:
             key=connection.execute('SELECT * FROM place_creation_keys').fetchone()
             self.assertIsNone(key['place_id']);self.assertEqual(key['key'],'saved-key')
         self.assertEqual((await self.create(body,'new-explicit-key'))[0],201)
 
     async def test_delete_cannot_change_other_user_places_or_keys(self):
         await self.signup_login();_,saved=await self.saved(key='saved-key');place_id=saved[2]['data']['place_id']
-        with auth.database() as connection:
+        with database() as connection:
             other=uuid4();connection.execute('INSERT INTO users(id,display_name) VALUES(%s,%s)',(other,'다른 합성 회원'))
             connection.execute('UPDATE auth_sessions SET user_id=%s WHERE token_hash=%s',(other,auth.digest(self.cookie.split('=')[1])))
         self.assertEqual((await self.delete(place_id))[0],404)
         self.assertEqual((await self.update(place_id,{'expected_version':1,'label':'다른 집'}))[0],404)
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT label FROM saved_places').fetchone()['label'],'집')
             self.assertIsNotNone(connection.execute('SELECT place_id FROM place_creation_keys').fetchone()['place_id'])
 
@@ -112,12 +114,12 @@ class ManagementTests(unittest.IsolatedAsyncioTestCase):
         await self.signup_login();_,first=await self.saved(key='first-key');_,second=await self.saved(key='second-key')
         await self.confirmation();await self.delete(first[2]['data']['place_id'])
         self.assertEqual((await self.call('/places'))[2]['data']['items'],[second[2]['data']])
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM place_searches').fetchone()['n'],2)
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM place_location_confirmations').fetchone()['n'],1)
 
     async def test_rename_delete_logs_have_no_private_data(self):
-        from app.request_logging import logger,RequestJsonFormatter,RequestEventFilter
+        from app.common.request_logging import logger,RequestJsonFormatter,RequestEventFilter
         await self.signup_login();_,saved=await self.saved()
         output=io.StringIO();handler=logging.StreamHandler(output)
         handler.setFormatter(RequestJsonFormatter());handler.addFilter(RequestEventFilter())

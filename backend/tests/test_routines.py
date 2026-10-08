@@ -11,7 +11,8 @@ import test_auth
 import test_journeys
 import test_places
 from test_api_contract import request
-from app import auth
+from app.auth import security as auth
+from app.common.database import database
 
 
 class RoutineTests(unittest.IsolatedAsyncioTestCase):
@@ -73,7 +74,7 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail[0], 200)
         self.assertEqual(detail[1][b'cache-control'], b'no-store')
         self.assertEqual(detail[2]['data'], data)
-        with auth.database() as connection:
+        with database() as connection:
             plan = connection.execute('SELECT * FROM journey_plans').fetchone()
             self.assertEqual(plan['model_version'], 'journey.v1')
             self.assertEqual(plan['candidate']['candidate_id'], candidate['candidate_id'])
@@ -118,12 +119,12 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         pin_search_id = pin_result[2]['data']['search_id']
         pin_candidate = pin_result[2]['data']['candidates'][0]['candidate_id']
         self.assertEqual((await self.save({**body, 'search_id': pin_search_id, 'candidate_id': pin_candidate}))[0], 422)
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute("UPDATE journey_searches SET expires_at=now()-interval '1 hour' WHERE id=%s", (search_id,))
         self.assertEqual((await self.save(body))[0], 404)
         # A moved place no longer matches the search that referenced it.
         home2, work2, fresh_id, fresh_candidate = await self.saved_search()
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute('UPDATE saved_places SET location_version=location_version+1 WHERE id=%s', (home2['place_id'],))
         moved = self.routine_body(home2, work2, fresh_id, fresh_candidate)
         conflict = await self.save(moved)
@@ -154,7 +155,7 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(conflict[0], 409)
         self.assertEqual(conflict[2]['error']['code'], 'IDEMPOTENCY_CONFLICT')
         # The same button retried from two sessions creates exactly one routine.
-        with auth.database() as connection:
+        with database() as connection:
             user_id = connection.execute('SELECT id FROM users WHERE display_name=%s', ('테스트 회원',)).fetchone()['id']
             raw, csrf, _ = auth.create_session(connection, user_id)
         headers = [(b'origin', b'http://127.0.0.1:5173'), (b'cookie', ('timeisnow_dev_session=' + raw).encode()),
@@ -164,10 +165,10 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
             request('/api/v1/routines', 'POST', headers=headers, body=payload))
         self.assertEqual((left[0], right[0]), (201, 201))
         self.assertEqual(left[2]['data']['routine_id'], right[2]['data']['routine_id'])
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute("SELECT count(*) AS n FROM routines WHERE name='여유 등교'").fetchone()['n'], 1)
         # Deleting the routine keeps the 24h retry marker, so the same key cannot recreate it.
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute('DELETE FROM routines')
         self.assertEqual((await self.save({**body, 'name': '여유 등교'}, key='concurrent-key'))[0], 404)
 
@@ -179,7 +180,7 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((first[0], second[0]), (201, 201))
         self.assertNotEqual(first[2]['data']['routine_id'], second[2]['data']['routine_id'])
         self.assertEqual(first[2]['data']['route']['journey_plan_id'], second[2]['data']['route']['journey_plan_id'])
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM journey_plans').fetchone()['n'], 1)
 
     async def test_place_deletion_detaches_routine_refs(self):
@@ -207,7 +208,7 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(after['origin_place'])
 
     async def test_logs_exclude_names_and_references(self):
-        from app.request_logging import logger, RequestJsonFormatter, RequestEventFilter
+        from app.common.request_logging import logger, RequestJsonFormatter, RequestEventFilter
         home, work, search_id, candidate = await self.ready()
         output = io.StringIO()
         handler = logging.StreamHandler(output)
@@ -347,7 +348,7 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(changed[0], 200)
         self.assertEqual(changed[2]['data']['version'], 3)
         self.assertNotEqual(changed[2]['data']['route']['journey_plan_id'], saved['route']['journey_plan_id'])
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM journey_plans').fetchone()['n'], 1)
 
     async def test_delete_confirmation_contract_shared_plan_and_retry_marker(self):
@@ -362,10 +363,10 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.remove(first['routine_id']))[0], 404)
         self.assertEqual((await self.save(body, key='delete-key'))[0], 404)
         self.assertEqual((await self.call('/routines/' + second['routine_id']))[0], 200)
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM journey_plans').fetchone()['n'], 1)
         self.assertEqual((await self.remove(second['routine_id']))[0], 204)
-        with auth.database() as connection:
+        with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM journey_plans').fetchone()['n'], 0)
         self.assertEqual((await self.call('/routines'))[2]['data']['items'], [])
 
@@ -382,7 +383,7 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         recovered = await self.schedule(path, fresh)
         self.assertEqual(recovered[0], 200)
         self.assertEqual(recovered[2]['data']['status'], 'active')
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute("UPDATE journey_searches SET expires_at=now()-interval '1 hour' WHERE id=%s", (fresh_id,))
         self.assertEqual((await self.schedule(path, {**fresh, 'expected_version': 4}))[0], 404)
         self.assertEqual((await self.call('/routines/' + data['routine_id']))[2]['data']['version'], 4)

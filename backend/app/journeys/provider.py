@@ -6,38 +6,42 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from uuid import uuid4
+
 from dotenv import dotenv_values
-from app import auth, places
-from app.journey_models import common_candidate
+
+from app.common.database import ROOT
+from app.common.errors import AuthError
+from app.common.http import NoRedirect
+from app.journeys.models import common_candidate
 
 
 def invalid():
-    raise auth.AuthError(502, 'PROVIDER_RESPONSE_INVALID', '경로 응답을 확인할 수 없어요.')
+    raise AuthError(502, 'PROVIDER_RESPONSE_INVALID', '경로 응답을 확인할 수 없어요.')
 
 
 def fetch_routes(origin, destination):
-    key = {**dotenv_values(auth.ROOT / '.env'), **os.environ}.get('KAKAO_REST_API_KEY')
+    key = {**dotenv_values(ROOT / '.env'), **os.environ}.get('KAKAO_REST_API_KEY')
     if not key:
-        raise auth.AuthError(503, 'PROVIDER_UNAVAILABLE', '경로 서비스에 연결할 수 없어요.')
+        raise AuthError(503, 'PROVIDER_UNAVAILABLE', '경로 서비스에 연결할 수 없어요.')
     params = {'start_x':origin.longitude,'start_y':origin.latitude,
               'end_x':destination.longitude,'end_y':destination.latitude,
               'input_coord':'WGS84','output_coord':'WGS84'}
     request = urllib.request.Request('https://dapi.kakao.com/v2/routing/publictraffic?' + urllib.parse.urlencode(params),
         headers={'Authorization':'KakaoAK ' + key})
     try:
-        with urllib.request.build_opener(places.NoRedirect).open(request, timeout=10) as response:
+        with urllib.request.build_opener(NoRedirect).open(request, timeout=10) as response:
             raw = response.read(2097153)
             if len(raw) > 2097152:
                 invalid()
             return json.loads(raw)
     except urllib.error.HTTPError:
-        raise auth.AuthError(503, 'PROVIDER_UNAVAILABLE', '경로 서비스에 연결할 수 없어요.') from None
+        raise AuthError(503, 'PROVIDER_UNAVAILABLE', '경로 서비스에 연결할 수 없어요.') from None
     except (TimeoutError, urllib.error.URLError) as error:
         timed_out = isinstance(error, TimeoutError) or isinstance(getattr(error, 'reason', None), TimeoutError)
-        raise auth.AuthError(504 if timed_out else 503, 'PROVIDER_TIMEOUT' if timed_out else 'PROVIDER_UNAVAILABLE',
+        raise AuthError(504 if timed_out else 503, 'PROVIDER_TIMEOUT' if timed_out else 'PROVIDER_UNAVAILABLE',
                              '경로 서비스 응답을 기다릴 수 없어요.') from None
     except OSError:
-        raise auth.AuthError(503, 'PROVIDER_UNAVAILABLE', '경로 서비스에 연결할 수 없어요.') from None
+        raise AuthError(503, 'PROVIDER_UNAVAILABLE', '경로 서비스에 연결할 수 없어요.') from None
     except (ValueError, TypeError, UnicodeError):
         invalid()
 

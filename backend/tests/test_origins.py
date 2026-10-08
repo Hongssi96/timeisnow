@@ -1,12 +1,15 @@
 """Temporary origin validation with real auth/DB, synthetic coordinates only."""
 import io
 import logging
+import os
 from datetime import datetime
 from unittest.mock import patch
 from uuid import uuid4
 import unittest
 import test_places
-from app import auth, places
+from app.auth import security as auth
+from app.common.database import database
+from app.places import provider as places_provider
 
 
 class OriginTests(unittest.IsolatedAsyncioTestCase):
@@ -20,7 +23,7 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
     create = test_places.PlaceTests.create
 
     async def validate(self, selection, **options):
-        with patch.object(places, 'region_for_location', return_value='서울특별시 합성동') as provider:
+        with patch.object(places_provider, 'region_for_location', return_value='서울특별시 합성동') as provider:
             result = await self.call('/origin-validations', {'origin':selection}, **options)
         return result, provider
 
@@ -28,7 +31,7 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
         await self.signup_login()
         origin = {'type':'current_location','latitude':37.51,'longitude':127.01,
                   'accuracy_meters':14.5,'captured_at':'2026-10-07T10:00:00+09:00'}
-        from app.request_logging import logger, RequestJsonFormatter, RequestEventFilter
+        from app.common.request_logging import logger, RequestJsonFormatter, RequestEventFilter
         output = io.StringIO()
         handler = logging.StreamHandler(output)
         handler.setFormatter(RequestJsonFormatter()); handler.addFilter(RequestEventFilter())
@@ -78,7 +81,7 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
         _, created = await self.saved()
         place = created[2]['data']
         origin = {'type':'saved_place','place_id':place['place_id'],'location_version':1}
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute('UPDATE saved_places SET label=%s,version=version+1 WHERE id=%s',('새 이름',place['place_id']))
         result, provider = await self.validate(origin)
         self.assertEqual(result[0],200); provider.assert_not_called()
@@ -96,7 +99,7 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
         self.cookie=logged[1][b'set-cookie'].decode().split(';')[0];self.csrf=logged[2]['data']['csrf_token']
         self.assertEqual((await self.validate(origin))[0][0],404)
         self.cookie,self.csrf=old_cookie,old_csrf
-        with auth.database() as connection:
+        with database() as connection:
             connection.execute('DELETE FROM saved_places WHERE id=%s',(place['place_id'],))
         self.assertEqual((await self.validate(origin))[0][0],404)
 
@@ -116,7 +119,7 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
             result, provider=await self.validate(invalid)
             self.assertEqual(result[0],422);provider.assert_not_called()
         for status,code in [(422,'UNSUPPORTED_REGION'),(503,'PROVIDER_UNAVAILABLE'),(502,'PROVIDER_RESPONSE_INVALID')]:
-            with patch.object(places,'region_for_location',side_effect=auth.AuthError(status,code,'synthetic')):
+            with patch.object(places_provider,'region_for_location',side_effect=auth.AuthError(status,code,'synthetic')):
                 result=await self.call('/origin-validations',{'origin':origin})
             self.assertEqual(result[0],status)
         result,_=await self.validate(origin)
@@ -125,7 +128,7 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
     async def test_limit_includes_failed_provider_calls(self):
         await self.signup_login()
         origin={'type':'map_pin','latitude':37.5,'longitude':127}
-        with patch.object(places,'region_for_location',side_effect=auth.AuthError(503,'PROVIDER_UNAVAILABLE','synthetic')) as provider:
+        with patch.object(places_provider,'region_for_location',side_effect=auth.AuthError(503,'PROVIDER_UNAVAILABLE','synthetic')) as provider:
             for _ in range(10):
                 self.assertEqual((await self.call('/origin-validations',{'origin':origin}))[0],503)
             result=await self.call('/origin-validations',{'origin':origin})
