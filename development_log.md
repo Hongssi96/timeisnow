@@ -817,3 +817,11 @@
 - 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
 
 - OpenAPI 추가 대조: 이전 main c51d0b7도17경로23동작으로 현재와 같다. R02 최초 일지의22엔드포인트는 집계 오류다. SearchInput의 패키지 경로 변경으로 schema 참조 이름2종은 달라졌지만 참조를 펼친 실제 경로/입력/응답 계약은 동일함을 비교했다.
+## 2026-10-08 — R02 SQL 계층 분리 마무리
+
+- 요청/기준: 사용자가 남은 SQL2곳을 새 브랜치에서 수정·커밋·푸시하도록 요청했다. 작업 시작 시 TODO·기획/루틴 문서·R02 README/일지와 최신 Notion v0.49를 확인했다. 리팩터링/재검토가 main9945068에 병합돼 최신 origin/main에서 codex/journey-repository-boundary를 생성했다.
+- 변경 파일/이유: backend/app/journeys/repository.py에 find_place_version_for_share·find_owned_place_for_share를 추가하고 service.py의 check_refs/resolve에서 호출한다. saved_places의 본인 user_id 조건·place_id 파싱·SELECT 열·FOR SHARE 잠금·fetchone·기존 connection 전달을 유지했다. 트랜잭션/404·409 판단은 기존 service에 남긴다. API 경로/입출력/권한/오류/상태/시간/보관/DDL 변경 없음.
+- 실제 검증: unittest discover 전체130개 통과(실제 PostgreSQL 격리 스키마/ASGI, 경로 버전·소유권·만료·루틴 복구 회귀 포함). AST 정적 검사에서 router/service/dto/security의 execute/executemany 직접 호출0건 확인. 이전 HEAD와 변경 파일의 SQL 문자열 전체를 비교해 동일함을 확인했다. 기존 프로젝트 uvicorn을 식별 후 숨김 재시작하고 실제 health200/status=ok·meta/X-Request-ID 일치 확인. 프론트/UI 변경이 없어 프론트 테스트와 시각 검증은 이번 작업에서 반복하지 않았다. 실제 카카오 추가 호출/사용자 DB 자료 변경 없음.
+- 문서/완료: 개발 일지와 TODO/feature_breakdown의 R02 완료 체크를 복원했다. 최신 Notion v0.49를 게시 전 재확인하며 내부 책임 분리이므로 명세 갱신이 불필요하다. 기존 R02 재검토 기록은 당시 발견 근거로 유지한다.
+- 배운 개념/다음: 같은 connection을 repository에 전달하면 SQL 책임만 옮기면서 기존 트랜잭션/잠금 수명을 유지할 수 있다. 서비스가 조회 결과의 업무 규칙을 판단하고 repository는 저장소 접근을 담당한다. 사용자 MR/병합 후 다음 F05-01 도보 근거 수집, 이번 SQL 분리의 미완료 항목 없음.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.49, 계약 변경 없음)
