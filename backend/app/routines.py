@@ -1,5 +1,5 @@
 """Named commute routines saved from owned journey searches. Never log names or references."""
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 import hashlib
 import json
 import re
@@ -8,11 +8,15 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Request
 from psycopg.types.json import Jsonb
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, StrictInt, model_validator
 
 from app import auth, journey_models, places
 
 router = APIRouter(prefix='/api/v1')
+
+# ISO-8601 weekday numbers: 1=Monday ... 7=Sunday, Asia/Seoul.
+WEEKDAY_LIMITS = range(1, 8)
+ARRIVAL_TIME = re.compile(r'([01]\d|2[0-3]):([0-5]\d)$')
 
 
 class RoutineInput(BaseModel):
@@ -22,12 +26,67 @@ class RoutineInput(BaseModel):
     destination_place_id: UUID
     search_id: UUID
     candidate_id: UUID
+    weekdays: list[StrictInt]
+    target_arrival_local_time: str | None = None
 
     @model_validator(mode='after')
     def distinct_places(self):
         if self.origin_place_id == self.destination_place_id:
             raise ValueError('Same origin and destination place')
         return self
+
+    @model_validator(mode='after')
+    def repeat_weekdays(self):
+        checked_weekdays(self.weekdays)
+        return self
+
+    @model_validator(mode='after')
+    def valid_target(self):
+        target_time_value(self.target_arrival_local_time)
+        return self
+
+
+class RoutineScheduleInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    expected_version: StrictInt
+    weekdays: list[StrictInt] | None = None
+    target_arrival_local_time: str | None = None
+
+    @model_validator(mode='after')
+    def repeat_weekdays(self):
+        if self.weekdays is not None:
+            checked_weekdays(self.weekdays)
+        return self
+
+    @model_validator(mode='after')
+    def valid_target(self):
+        target_time_value(self.target_arrival_local_time)
+        return self
+
+    @model_validator(mode='after')
+    def positive_version(self):
+        if self.expected_version < 1:
+            raise ValueError('Expected version must be positive')
+        return self
+
+
+def checked_weekdays(values):
+    if not values or len(values) > 7 or len(set(values)) != len(values) \
+            or any(value not in WEEKDAY_LIMITS for value in values):
+        raise auth.AuthError(422, 'VALIDATION_ERROR', '요일은 월(1)부터 일(7)까지 숫자로 중복 없이 1개 이상 보내주세요.')
+
+
+def target_time_value(value):
+    if value is None:
+        return None
+    match = ARRIVAL_TIME.fullmatch(value)
+    if not match:
+        raise auth.AuthError(422, 'VALIDATION_ERROR', '목표 도착 시각은 HH:MM 형식으로 보내주세요.')
+    return time(int(match.group(1)), int(match.group(2)))
+
+
+def arrival_text(value):
+    return None if value is None else f'{value:%H:%M}'
 
 
 def missing_search():
@@ -65,6 +124,8 @@ def response_data(connection, row):
             'origin_place': place_summary(origin), 'destination_place': place_summary(destination),
             'route': {'journey_plan_id': str(plan['id']), 'type': plan['candidate']['type'],
                       'total_seconds': plan['total_seconds'], 'transfer_count': plan['transfer_count']},
+            'weekdays': list(row['weekdays']), 'target_arrival_local_time': arrival_text(row['target_arrival_local_time']),
+            'timezone': row['timezone'],
             'status': row['status'], 'version': row['version'],
             'created_at': auth.iso(row['created_at']), 'updated_at': auth.iso(row['updated_at'])}
 
@@ -131,9 +192,11 @@ def create(request: Request, body: RoutineInput):
              snapshot['total_seconds'], snapshot['transfer_count'], snapshot['model_version']))
         plan = connection.execute('SELECT * FROM journey_plans WHERE user_id=%s AND search_id=%s AND candidate_id=%s',
                                   (user_id, body.search_id, body.candidate_id)).fetchone()
-        row = connection.execute('''INSERT INTO routines(id,user_id,name,origin_place_id,destination_place_id,journey_plan_id)
-            VALUES(%s,%s,%s,%s,%s,%s) RETURNING *''',
-            (uuid4(), user_id, body.name, origin['id'], destination['id'], plan['id'])).fetchone()
+        row = connection.execute('''INSERT INTO routines(id,user_id,name,origin_place_id,destination_place_id,journey_plan_id,
+            weekdays,target_arrival_local_time)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *''',
+            (uuid4(), user_id, body.name, origin['id'], destination['id'], plan['id'],
+             body.weekdays, target_time_value(body.target_arrival_local_time))).fetchone()
         if key:
             connection.execute("INSERT INTO routine_creation_keys VALUES(%s,%s,%s,%s,now()+interval '24 hours')",
                                (user_id, key, fingerprint, row['id']))
@@ -150,4 +213,25 @@ def detail(request: Request, routine_id: str):
         if not row:
             raise missing_routine()
         data = response_data(connection, row)
+    return auth.answer(request, data)
+
+
+@router.patch('/routines/{routine_id}')
+def update_schedule(request: Request, routine_id: str, body: RoutineScheduleInput):
+    with auth.database() as connection:
+        user_id = places.authenticated(connection, request, True)
+        row = connection.execute('SELECT * FROM routines WHERE id=%s AND user_id=%s FOR UPDATE',
+                                 (places.parsed_id(routine_id), user_id)).fetchone()
+        if not row:
+            raise missing_routine()
+        if body.expected_version != row['version']:
+            raise auth.AuthError(409, 'VERSION_CONFLICT', '루틴이 다른 화면에서 변경됐어요. 새로 확인해주세요.')
+        weekdays = row['weekdays'] if body.weekdays is None else list(body.weekdays)
+        target = row['target_arrival_local_time']
+        if 'target_arrival_local_time' in body.model_fields_set:
+            target = target_time_value(body.target_arrival_local_time)
+        updated = connection.execute('''UPDATE routines SET weekdays=%s, target_arrival_local_time=%s,
+            version=version+1, updated_at=now() WHERE id=%s RETURNING *''',
+            (weekdays, target, row['id'])).fetchone()
+        data = response_data(connection, updated)
     return auth.answer(request, data)

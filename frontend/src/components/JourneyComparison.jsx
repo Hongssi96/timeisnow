@@ -20,6 +20,14 @@ function selection(value) {
     && (origin.type==='map_pin' || origin.location_confirmed===true);
 }
 
+// ISO weekdays 1(Mon)..7(Sun) and an optional HH:MM target arrival.
+const ISO_WEEKDAYS=new Set([1,2,3,4,5,6,7]);
+function validSchedule(weekdays,target) {
+  return Array.isArray(weekdays)&&weekdays.length>=1&&weekdays.length<=7&&new Set(weekdays).size===weekdays.length
+    &&weekdays.every(day=>ISO_WEEKDAYS.has(day))
+    &&(target===null||/^([01]\d|2[0-3]):[0-5]\d$/.test(target));
+}
+
 export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAuthError, onRoutineSaved }) {
   const [origin,setOrigin]=useState(()=>selection(initialOrigin)&&initialOrigin.deadline>Date.now()?initialOrigin:null);
   const [destination,setDestination]=useState(null);
@@ -110,9 +118,10 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
     if(!selection(value)||value.deadline<=Date.now()){failure(new ApiError('INVALID_RESPONSE'));return;}
     reset();resetSaves();if(editing==='origin')setOrigin(value);else setDestination(value);setEditing(null);
   }
-  async function saveRoutine(candidateId,name){
+  async function saveRoutine(candidateId,name,weekdays,targetArrival){
     if(saver.current)return;
     if(saves[candidateId]==='saved')return;
+    if(!validSchedule(weekdays,targetArrival))return;
     const refs=[placeRef(origin),placeRef(destination)];
     if(!refs[0]||!refs[1]){failure(new ApiError('SEARCH_EXPIRED'));return;}
     if(!state.candidates?.some(c=>c.candidate_id===candidateId)){failure(new ApiError('INVALID_RESPONSE'));return;}
@@ -124,7 +133,8 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
       if(typeof csrf.data?.csrf_token!=='string')throw new ApiError('INVALID_RESPONSE');
       const response=await apiRequest('/api/v1/routines',{method:'POST',
         body:{name,origin_place_id:refs[0].place_id,destination_place_id:refs[1].place_id,
-              search_id:snapshot.current.accepted.search_id,candidate_id:candidateId},
+              search_id:snapshot.current.accepted.search_id,candidate_id:candidateId,
+              weekdays,target_arrival_local_time:targetArrival},
         signal:controller.signal,headers:{'X-CSRF-Token':csrf.data.csrf_token,'Idempotency-Key':key}});
       if(controller.signal.aborted)return;
       const data=response.data;
@@ -133,7 +143,8 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
         ||!Number.isSafeInteger(data.route.total_seconds)||data.route.total_seconds<0
         ||!Number.isSafeInteger(data.route.transfer_count)||data.route.transfer_count<0||data.route.transfer_count>2
         ||!['active','needs_attention'].includes(data.status)||!Number.isInteger(data.version)||data.version<1
-        ||typeof data.origin_place?.label!=='string'||typeof data.destination_place?.label!=='string')throw new ApiError('INVALID_RESPONSE');
+        ||typeof data.origin_place?.label!=='string'||typeof data.destination_place?.label!=='string'
+        ||!validSchedule(data.weekdays,data.target_arrival_local_time)||data.timezone!=='Asia/Seoul')throw new ApiError('INVALID_RESPONSE');
       state.saveKeys={...state.saveKeys,[candidateId]:key};
       setSaves(previous=>({...previous,[candidateId]:'saved'}));
       onRoutineSaved?.(data);
