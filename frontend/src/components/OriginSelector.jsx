@@ -4,13 +4,14 @@ import { getCurrentOrigin } from '../lib/currentOrigin';
 import MapPinPicker from './MapPinPicker';
 import OriginReview from './OriginReview';
 import PlacesCard from './PlacesCard';
+import PinPlaceSave from './PinPlaceSave';
 
 const validLocation = value => Number.isFinite(value?.latitude) && Math.abs(value.latitude) <= 90
   && Number.isFinite(value?.longitude) && Math.abs(value.longitude) <= 180;
 const validPlace = value => typeof value?.place_id === 'string' && typeof value.label === 'string'
   && validLocation(value.location) && Number.isInteger(value.location_version) && value.location_version >= 1;
 
-export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyChange, purpose = 'origin', initialMode = 'current' }) {
+export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyChange, purpose = 'origin', initialMode = 'current', initialLocation = null }) {
   const noun = purpose === 'destination' ? '도착' : '출발';
   const [mode, setMode] = useState(initialMode);
   const [phase, setPhase] = useState('loading');
@@ -22,6 +23,8 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyC
   const [draft, setDraft] = useState(null);
   const [expired, setExpired] = useState(false);
   const [creatingBusy, setCreatingBusy] = useState(false);
+  const [pinSaving, setPinSaving] = useState(false);
+  const [newPin, setNewPin] = useState(() => validLocation(initialLocation) ? initialLocation : null);
   useEffect(() => {
     setExpired(false);
     if (!draft) return;
@@ -36,6 +39,7 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyC
   useEffect(() => { onBusyChange?.(creatingBusy); }, [creatingBusy, onBusyChange]);
   useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
   function authError(error) {
+    setPinSaving(false); setNewPin(null);
     pending.current?.abort(); setDraft(null); setItems([]); setCursor(null); setTouched(false);
     setLocation({ latitude: 37.5665, longitude: 126.9780 }); setMode('current');
     setPhase('anonymous'); setMessage(error.message); onAuthError?.();
@@ -67,6 +71,8 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyC
   }
   useEffect(() => { load(); return () => { pending.current?.abort(); pending.current = null; }; }, []);
   function changeMode(next) {
+    if (next === 'new' && mode === 'map' && touched) setNewPin({ ...location });
+    setPinSaving(false);
     setDraft(null);
     pending.current?.abort(); pending.current = null; setMode(next); setTouched(false); setMessage('');
     setPhase(previous => previous === 'anonymous' ? previous : 'ready');
@@ -124,7 +130,12 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyC
         <button className="secondary" key={key} aria-pressed={mode === key} disabled={phase === 'loading' || creatingBusy} onClick={() => changeMode(key)}>{label}</button>)}</div>
       {message && <p className="info-box" role="alert">{message}</p>}
       {busy && <p role="status">{phase === 'locating' ? '기기 위치 권한을 확인하고 있어요. 최대 15초 기다려요.' : phase === 'validating' ? `${noun}지를 확인하고 있어요.` : '내 장소를 확인하고 있어요.'}</p>}
-      {mode === 'new' && <div className="origin-place-create"><p className="info-box">이 화면에서 장소를 저장하면 바로 {noun}지로 선택해요.</p><PlacesCard creationOnly initialLabel={`${noun}지`} title={`${noun} 장소 저장`} onLogin={onLogin} onAuthError={authError} onCreated={created} onBusyChange={setCreatingBusy}/><button className="secondary wide" disabled={creatingBusy} onClick={() => changeMode('saved')}>장소 저장 취소</button></div>}
+      {mode === 'new' && <div className="origin-place-create"><p className="info-box">이 화면에서 장소를 저장하면 바로 {noun}지로 선택해요.</p>{newPin ? <>
+        <MapPinPicker location={newPin} mapLabel={`${noun}지 저장 지도`} disabled={creatingBusy}
+          onAuthError={authError} onChange={setNewPin} description="앞에서 선택한 지도 위치를 그대로 가져왔어요. 필요하면 핀을 옮겨주세요."/>
+        <PinPlaceSave key={`${newPin.latitude}:${newPin.longitude}`} location={newPin} initialLabel={`${noun}지`}
+          onCreated={created} onAuthError={authError} onBusyChange={setCreatingBusy} onCancel={() => changeMode('saved')}/>
+      </> : <><PlacesCard creationOnly initialLabel={`${noun}지`} title={`${noun} 장소 저장`} onLogin={onLogin} onAuthError={authError} onCreated={created} onBusyChange={setCreatingBusy}/><button className="secondary wide" disabled={creatingBusy} onClick={() => changeMode('saved')}>장소 저장 취소</button></>}</div>}
       {mode === 'current' && <><p className="small muted">버튼을 누르면 기기 위치를 한 번 요청해요. 선택 좌표는 서울·경기 확인을 위해 카카오로 전달돼요. 위치 추적이나 자동 저장은 하지 않아요.</p>
         <p className="small muted">GPS 수치 기준은 보류 중이에요. 측정 후 지도에서 실제 {noun} 위치를 직접 확인해주세요. 저장 장소는 직접 선택해요.</p>
         <button className="secondary wide" disabled={busy} onClick={current}>{draft ? '현재 위치 다시 측정' : '현재 위치 확인'}</button>
@@ -134,8 +145,11 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyC
             run(signal => validate({ ...draft.origin, location_confirmed: true }, signal), 'validating'); }}/>}</>}
       {mode === 'map' && <><MapPinPicker location={location} mapLabel={`${noun}지 선택 지도`}
         description={`시작 핀은 현재 위치가 아니에요. 지도를 누르거나 핀을 옮겨 ${noun}지를 직접 선택해주세요. 선택 위치가 카카오 지도에 표시돼요.`}
-        disabled={busy} onAuthError={authError} onChange={point => { setLocation(point); setTouched(true); setMessage(''); }}/>
-        <button className="primary wide" disabled={busy || !touched} onClick={() => run(signal => validate({ type: 'map_pin', ...location }, signal), 'validating')}>{purpose === 'destination' ? '이 위치로 도착' : '이 위치에서 출발'}</button></>}
+        disabled={busy || creatingBusy || pinSaving} onAuthError={authError} onChange={point => { setLocation(point); setTouched(true); setMessage(''); }}/>
+        {pinSaving ? <PinPlaceSave location={location} initialLabel={`${noun}지`} onCreated={created}
+          onCancel={() => setPinSaving(false)} onAuthError={authError} onBusyChange={setCreatingBusy}/> : <>
+          <button className="primary wide" disabled={busy || !touched} onClick={() => setPinSaving(true)}>이 위치 저장하고 사용</button>
+          <button className="secondary wide" disabled={busy || !touched} onClick={() => run(signal => validate({ type: 'map_pin', ...location }, signal), 'validating')}>{purpose === 'destination' ? '이 위치로 도착' : '이 위치에서 출발'}</button></>}</>}
       {mode === 'saved' && <><div className="origin-places">{items.map(item => <button className="secondary" key={item.place_id} disabled={busy}
         onClick={() => run(signal => validate({ type: 'saved_place', place_id: item.place_id, location_version: item.location_version }, signal), 'validating')}>
         <strong>{item.label}</strong><span>{item.location_address || item.address}</span></button>)}</div>

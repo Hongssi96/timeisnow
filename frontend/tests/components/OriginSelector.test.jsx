@@ -11,6 +11,21 @@ vi.mock('../../src/components/MapPinPicker',()=>({default:({onChange,disabled,on
 afterEach(()=>{vi.resetAllMocks();vi.useRealTimers();});
 const reply=data=>({data,meta:{server_time:new Date().toISOString()}});
 const place={place_id:'p_test',label:'검증 집',location:{latitude:37.5,longitude:127},location_version:1,address:'서울 합성 주소'};
+it('uses a previously chosen pin for new-place saving and selects the saved place without searching',async()=>{
+  const selected=vi.fn(); const location={latitude:37.6,longitude:127};
+  apiRequest.mockResolvedValueOnce(reply({items:[],next_cursor:null}));
+  render(<OriginSelector purpose="destination" initialMode="new" initialLocation={location} onSelect={selected}/>);
+  await screen.findByRole('textbox',{name:'장소 이름'});
+  expect(screen.queryByRole('textbox',{name:'주소 또는 장소 이름'})).toBeNull();
+  apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf'})).mockResolvedValueOnce(reply({confirmation_id:'pin',location,location_address:'서울 합성동',expires_at:new Date(Date.now()+599000).toISOString()}))
+    .mockResolvedValueOnce({...reply({...place,label:'도착지',location,location_source:'map_pin'}),status:201})
+    .mockResolvedValueOnce(reply({csrf_token:'csrf'})).mockResolvedValueOnce(result({type:'saved_place',place_id:place.place_id,location_version:1}));
+  await userEvent.click(screen.getByRole('button',{name:'저장하고 사용'}));
+  await waitFor(()=>expect(selected).toHaveBeenCalledOnce());
+  expect(selected.mock.calls[0][0].origin.type).toBe('saved_place');
+  expect(apiRequest.mock.calls.find(([path,options])=>path==='/api/v1/places'&&options?.method==='POST')[1].body.location).toEqual(location);
+  expect(apiRequest.mock.calls.some(([path])=>path==='/api/v1/place-searches')).toBe(false);
+});
 it('opens saved-place recovery directly without requesting GPS',async()=>{
   const selected=vi.fn();
   apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));

@@ -174,3 +174,7 @@ OriginSelector의 장소 저장 탭은 기존 PlacesCard의 creationOnly 모드�
 ### F06-04 복구 안내 (2026-10-08)
 
 기존 info-box/primary/secondary/text-button·루틴 카드·비교 화면을 재사용한다. .routine-recovery-notice는14px와 --ink로 안내 가독성을 유지한다. 색상 외에도 제목/이유/복구 행동으로 상태를 표현하고 모바일에서 버튼을 줄바꿈한다. 기존 테마/내비게이션 유지. 합성 PC1440×1000·모바일390×844 최종 안내 카드/복구 단계·가로 넘침 없음 확인.
+
+### F03-02a 지도 핀 저장 폼 (2026-10-08)
+
+PinPlaceSave는 기존 place-form/info-box/small muted/button-row/primary/secondary와 이름 라벨·초기 포커스를 재사용한다. 지도 핀 위치를 유지하고 주소 검색 입력을 생략한다. 저장 중 이름/지도/방식/취소 비활성, 실패 안내와 동일 요청 재시도·만료 재확인 제공. 새 CSS/공통 값/테마 없음. 실제 지도+합성 저장 API PC1440×1000/모바일390×844 폼·자동 선택·가로 넘침0·콘솔error0 확인.

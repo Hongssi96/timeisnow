@@ -1,5 +1,6 @@
 """Request and response bodies for place endpoints."""
 from uuid import UUID
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -27,11 +28,21 @@ class PlaceInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     label: str
     location: Location
-    search_id: UUID
-    candidate_id: UUID
+    source: Literal['search', 'map_pin'] = 'search'
+    search_id: UUID | None = None
+    candidate_id: UUID | None = None
     entrance_ref: None = None
     entrance_note: str | None = None
     location_confirmation_id: UUID | None = None
+
+    @model_validator(mode='after')
+    def creation_source(self):
+        if self.source == 'search' and (self.search_id is None or self.candidate_id is None):
+            raise ValueError('Search requires candidate')
+        if self.source == 'map_pin' and (self.location_confirmation_id is None
+                or self.search_id is not None or self.candidate_id is not None):
+            raise ValueError('Pin requires confirmation without search candidate')
+        return self
 
     @field_validator('entrance_note')
     @classmethod
