@@ -4,6 +4,14 @@
 
 ## 실제 기록
 
+### 2026-10-08 — F04-03a main 대상 중복 체리픽 확인
+- 요청/기반: 사용자가 init에 병합된 이동 방법 우선순위 커밋을 체리픽 요청. 최신 origin/main4ddd36b에서 `codex/journey-method-priority-main` 생성 후 원본823113c를 실제 cherry-pick했다. 최신 Notion v0.50의5.2.5·TODO와 원본 변경/현재 코드·디자인/화면 문서를 확인했다.
+- 결과/이유: 동일 기능은 이미6c238cb로 codex/routine-recovery에 포함되어 main에 병합됨을 ancestry와 개발 일지로 확인. JSX/정렬/전용 테스트에 추가 변경0, 문서6개와 CSS1개의 충돌은 우선순위 설명/스타일과 후속 변경을 포함한 최신 main을 유지했다. continue 결과 빈 체리픽(nothing to commit)이며 skip으로 정상 종료했다. 오래된 Notion v0.48 복사나 TODO 후속 작업으로 되돌리지 않았다.
+- 실제 검증: 원격 main/init의 JourneyCandidates.jsx·journeys.js·JourneyMethods.test.jsx 내용 동일. `npm test -- tests/components/JourneyMethods.test.jsx` 전용4개 통과(2.41초). 최초 테스트 필터에 frontend 접두사를 중복 사용해 파일을 찾지 못했으며 올바른 frontend 상대 경로로 재실행했다. 기능/UI/API/DB 변경 없음, 전체 테스트/빌드/시각 검증은 이번 작업에서 재실행하지 않았다.
+- 변경/명세: development_log.md와 todo.md에 확인 이력만 추가. Notion 계약 변경 없음(v0.50 재확인). 신규 기능 커밋이나 MR/병합은 만들지 않으며 검증 기록만 기능 브랜치에 커밋/푸시한다.
+- 배운 개념/다음: 원본 SHA가 main에 없어도 다른 SHA로 체리픽된 변경은 이미 반영될 수 있다. 이때 패치를 반복 적용하면 문서 충돌만 생기며 결과는 빈 변경이다. 우선순위 기능의 추가 병합은 필요 없음. F05-01 codex/walking-evidence 사용자 검토/병합 후 F05-02, 화면 미표시는 로컬 실행 브랜치/프론트 상태를 별도로 확인한다.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.50, 계약 영향 없음)
+
 ### 2026-10-07 — F04-03 실제 경로 후보 비교 화면
 - 목표/기반: 사용자 진행 요청에 따라 F04-02 main63674ac 병합을 fetch로 확인, 최신 main에서 codex/journey-comparison 생성. 기존 미색/초록·카드/버튼·내비게이션 톤으로 실제 출발/도착 선택과 후보 비교를 연결한다. 에이전트 MR 생성/main 병합 없음.
 - 사전 확인/명세: todo/feature_breakdown F04-03·최신 Notion v0.41 5.2.3~4/20절·planning/personalization/ai_prompts/logging/development_log·design_guide/screen_plan 및 기존 App/OriginSelector/OriginReview/MapPinPicker/PlacesCard·CSS·API클라이언트/테스트를 비교했다. 구현 전에 Notion v0.42 5.2.5에 사용자 흐름·접수/조회/중지/재시도/만료·비교/상세/미확인 근거·호환성을 구체화했다. 기존 서버 API/JSON모델/권한/DB DDL/300초·600초·24시간 및GPS 수치 보류 계약 유지. 최신 재조회/전문 로컬 api_contract.md 동기화 확인. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa

@@ -1,6 +1,6 @@
 # 지금이니? — TODO
 
-- 마지막 갱신: 2026-10-08 (R02 SQL 계층 분리 완료)
+- 마지막 갱신: 2026-10-08 (F04-03a main 중복 체리픽 확인)
 - 프로젝트: `C:/projects/timeisnow`
 - 진행 현황 기준 문서: 이 파일. 상세 요구·완료 기준은 [기능 분리](./feature_breakdown.md), [기획](./planning.md), [약속 확장](./meeting_plan.md), [API 명세](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa)를 따른다.
 - 현재: 공통 요청/로그와 기본 회원 인증 완료. 가입 입력 안내 및 localhost CSRF 차단 수정(2026-10-06, development_log.md·백엔드56개/프론트27개·Notion v0.33). PostgreSQL 회원 인증 테이블5개 적용, 경로/이동/약속 업무 API는 미구현. 장소 구현 상태는 아래 F03-01 기록을 따른다.
@@ -23,7 +23,8 @@
 - 현재: main a99eea4에 인라인 장소 저장까지 병합 확인. F04-03a 이동 방법 우선 보기 완료(2026-10-08, development_log.md·Notion v0.48·프론트138개/빌드·합성 PC/모바일). codex/journey-method-priority에서 구현했다.
 - 현재: F06-04 장소 변경/삭제 후 루틴 복구 안내 완료(2026-10-08, development_log.md·Notion v0.49·백엔드130개/프론트142개/빌드·합성 PC/모바일). codex/routine-recovery는 최신 main a99eea4에서 생성하고 미병합 F04-03a를 포함했다.
 - 현재: R02 남은 경로 서비스 SQL2곳 repository 위임 완료. codex/journey-repository-boundary·백엔드130개 통과·정적 검사 SQL 직접 실행0건·개발 일지 R02 SQL 계층 분리 마무리 근거.
-- 다음 작업: 사용자 검토 후 codex/journey-repository-boundary MR/병합, 이후 F05-01 도보 근거 수집. F07 출발 안내, GPS 자동 판정·메일 인증/복구는 후속이다.
+- 현재 확인: F04-03a 원본823113c는6c238cb로 이미 main에 반영됨. codex/journey-method-priority-main에서 체리픽 시도 후 빈 변경으로 skip, 전용4개 테스트 통과. development_log.md 중복 체리픽 확인 근거, 기능/API 추가 변경 없음.
+- 다음 작업: F05-01 codex/walking-evidence는 구현·검증·푸시 완료이며 사용자 검토/병합 후 F05-02 프롬프트 블록·버전 로딩. F07 출발 안내, GPS 자동 판정·메일 인증/복구는 후속이다.
 
 ## 개발 구조 정리
 
