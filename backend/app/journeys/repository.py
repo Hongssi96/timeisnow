@@ -2,6 +2,16 @@
 from psycopg.types.json import Jsonb
 
 
+def find_place_version_for_share(connection, place_id, user_id):
+    return connection.execute('SELECT location_version FROM saved_places WHERE id=%s AND user_id=%s FOR SHARE',
+                              (place_id, user_id)).fetchone()
+
+
+def find_owned_place_for_share(connection, place_id, user_id):
+    return connection.execute('SELECT * FROM saved_places WHERE id=%s AND user_id=%s FOR SHARE',
+                              (place_id, user_id)).fetchone()
+
+
 def admission_lock(connection):
     connection.execute("SELECT pg_advisory_xact_lock(hashtext('journey-admission'))")
 

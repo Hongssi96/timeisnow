@@ -27,8 +27,7 @@ def missing():
 
 def check_refs(connection, user_id, refs):
     for ref in refs:
-        row = connection.execute('SELECT location_version FROM saved_places WHERE id=%s AND user_id=%s FOR SHARE',
-                                 (place_parsed_id(ref['place_id']), user_id)).fetchone()
+        row = repository.find_place_version_for_share(connection, place_parsed_id(ref['place_id']), user_id)
         if not row: missing()
         if row['location_version'] != ref['location_version']:
             raise AuthError(409, 'VERSION_CONFLICT', '장소 위치가 변경됐어요. 다시 검색해주세요.')
@@ -36,8 +35,7 @@ def check_refs(connection, user_id, refs):
 
 def resolve(connection, user_id, endpoint, refs):
     if isinstance(endpoint, SavedOrigin):
-        row = connection.execute('SELECT * FROM saved_places WHERE id=%s AND user_id=%s FOR SHARE',
-                                 (place_parsed_id(endpoint.place_id), user_id)).fetchone()
+        row = repository.find_owned_place_for_share(connection, place_parsed_id(endpoint.place_id), user_id)
         if not row: missing()
         if endpoint.location_version is not None and row['location_version'] != endpoint.location_version:
             raise AuthError(409, 'VERSION_CONFLICT', '장소 위치가 변경됐어요. 다시 검색해주세요.')
