@@ -3,15 +3,16 @@ import { apiRequest, ApiError, isServerTime } from '../lib/api';
 import { getCurrentOrigin } from '../lib/currentOrigin';
 import MapPinPicker from './MapPinPicker';
 import OriginReview from './OriginReview';
+import PlacesCard from './PlacesCard';
 
 const validLocation = value => Number.isFinite(value?.latitude) && Math.abs(value.latitude) <= 90
   && Number.isFinite(value?.longitude) && Math.abs(value.longitude) <= 180;
 const validPlace = value => typeof value?.place_id === 'string' && typeof value.label === 'string'
   && validLocation(value.location) && Number.isInteger(value.location_version) && value.location_version >= 1;
 
-export default function OriginSelector({ onSelect, onLogin, onAuthError, purpose = 'origin' }) {
+export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyChange, purpose = 'origin', initialMode = 'current' }) {
   const noun = purpose === 'destination' ? '도착' : '출발';
-  const [mode, setMode] = useState('current');
+  const [mode, setMode] = useState(initialMode);
   const [phase, setPhase] = useState('loading');
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -20,6 +21,7 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, purpose
   const [touched, setTouched] = useState(false);
   const [draft, setDraft] = useState(null);
   const [expired, setExpired] = useState(false);
+  const [creatingBusy, setCreatingBusy] = useState(false);
   useEffect(() => {
     setExpired(false);
     if (!draft) return;
@@ -31,12 +33,14 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, purpose
   }, [draft]);
   const pending = useRef(null);
   const busy = ['loading', 'locating', 'validating'].includes(phase);
+  useEffect(() => { onBusyChange?.(creatingBusy); }, [creatingBusy, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
   function authError(error) {
     pending.current?.abort(); setDraft(null); setItems([]); setCursor(null); setTouched(false);
     setLocation({ latitude: 37.5665, longitude: 126.9780 }); setMode('current');
     setPhase('anonymous'); setMessage(error.message); onAuthError?.();
   }
-  async function run(operation, nextPhase) {
+  async function run(operation, nextPhase, failurePrefix = '') {
     if (pending.current) return;
     const controller = new AbortController(); pending.current = controller;
     setPhase(nextPhase); setMessage('');
@@ -46,7 +50,7 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, purpose
       if (['AUTH_REQUIRED', 'SESSION_EXPIRED'].includes(error.code)) { authError(error); return; }
       if (error.code?.startsWith('GEO_')) { setMode('map'); setTouched(false); }
       if (['VERSION_CONFLICT', 'RESOURCE_NOT_FOUND'].includes(error.code)) { setItems([]); setCursor(null); }
-      setMessage(error.message || '다시 시도해주세요.'); setPhase('error');
+      setMessage(failurePrefix + (error.message || '다시 시도해주세요.')); setPhase('error');
     } finally { if (pending.current === controller) pending.current = null; }
   }
   function load(more = false) {
@@ -66,6 +70,14 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, purpose
     setDraft(null);
     pending.current?.abort(); pending.current = null; setMode(next); setTouched(false); setMessage('');
     setPhase(previous => previous === 'anonymous' ? previous : 'ready');
+  }
+  function created(place) {
+    changeMode('saved');
+    if (!validPlace(place)) {
+      setPhase('error'); setMessage('장소는 저장됐어요. 목록 다시 확인을 눌러 선택해주세요.'); return;
+    }
+    setItems(previous => [place, ...previous.filter(item => item.place_id !== place.place_id)]);
+    run(signal => validate({ type: 'saved_place', place_id: place.place_id, location_version: place.location_version }, signal), 'validating', '장소는 저장됐어요. 선택을 다시 확인해주세요. ');
   }
   async function validate(origin, signal) {
     const csrf = await apiRequest('/api/v1/auth/csrf', { signal });
@@ -108,10 +120,11 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, purpose
   return <div className="origin-selector" aria-busy={busy}>
     <p className="muted">{noun}지를 선택해주세요. 출발 시간 안내는 준비 중이에요.</p>
     {phase === 'anonymous' ? <><p role="alert">{message}</p><button className="primary wide" onClick={onLogin}>로그인하기</button></> : <>
-      <div className="origin-methods" role="group" aria-label={`${noun}지 선택 방법`}>{[['current','현재 위치'],['map','지도 선택'],['saved','저장 장소']].map(([key,label]) =>
-        <button className="secondary" key={key} aria-pressed={mode === key} disabled={phase === 'loading'} onClick={() => changeMode(key)}>{label}</button>)}</div>
+      <div className="origin-methods" role="group" aria-label={`${noun}지 선택 방법`}>{[['current','현재 위치'],['map','지도 선택'],['saved','저장 장소'],['new','장소 저장']].map(([key,label]) =>
+        <button className="secondary" key={key} aria-pressed={mode === key} disabled={phase === 'loading' || creatingBusy} onClick={() => changeMode(key)}>{label}</button>)}</div>
       {message && <p className="info-box" role="alert">{message}</p>}
       {busy && <p role="status">{phase === 'locating' ? '기기 위치 권한을 확인하고 있어요. 최대 15초 기다려요.' : phase === 'validating' ? `${noun}지를 확인하고 있어요.` : '내 장소를 확인하고 있어요.'}</p>}
+      {mode === 'new' && <div className="origin-place-create"><p className="info-box">이 화면에서 장소를 저장하면 바로 {noun}지로 선택해요.</p><PlacesCard creationOnly initialLabel={`${noun}지`} title={`${noun} 장소 저장`} onLogin={onLogin} onAuthError={authError} onCreated={created} onBusyChange={setCreatingBusy}/><button className="secondary wide" disabled={creatingBusy} onClick={() => changeMode('saved')}>장소 저장 취소</button></div>}
       {mode === 'current' && <><p className="small muted">버튼을 누르면 기기 위치를 한 번 요청해요. 선택 좌표는 서울·경기 확인을 위해 카카오로 전달돼요. 위치 추적이나 자동 저장은 하지 않아요.</p>
         <p className="small muted">GPS 수치 기준은 보류 중이에요. 측정 후 지도에서 실제 {noun} 위치를 직접 확인해주세요. 저장 장소는 직접 선택해요.</p>
         <button className="secondary wide" disabled={busy} onClick={current}>{draft ? '현재 위치 다시 측정' : '현재 위치 확인'}</button>
@@ -126,7 +139,8 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, purpose
       {mode === 'saved' && <><div className="origin-places">{items.map(item => <button className="secondary" key={item.place_id} disabled={busy}
         onClick={() => run(signal => validate({ type: 'saved_place', place_id: item.place_id, location_version: item.location_version }, signal), 'validating')}>
         <strong>{item.label}</strong><span>{item.location_address || item.address}</span></button>)}</div>
-        {!busy && !items.length && <p>저장한 장소가 없어요. 내 설정에서 장소를 저장하거나 지도를 선택해주세요.</p>}
+        {!busy && !items.length && <p>저장한 장소가 없어요. 여기에서 새 장소를 저장하고 선택할 수 있어요.</p>}
+        <button className="secondary wide" disabled={busy} onClick={() => changeMode('new')}>새 장소 저장하고 선택</button>
         {cursor && <button className="secondary wide" disabled={busy} onClick={() => load(true)}>장소 더 보기</button>}</>}
       {phase === 'error' && <button className="text-button" disabled={busy} onClick={() => load()}>목록 다시 확인</button>}
     </>}

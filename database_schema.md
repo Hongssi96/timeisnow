@@ -91,7 +91,9 @@ D01 변경(2026-10-06): 이메일 중복 확인·비밀번호 로그인, 메일 
 
 검색 후보의 candidate_id는 journey_plans.id에 매핑한다. 저장 요청에서는 search_id와 candidate_id의 조합·소유권·유효기간을 확인한다. 루틴 저장 시 경로 구조와 방향은 유지하되 검색 당시 차량 도착 시각을 다음 출발의 근거로 사용하지 않는다. 경로 변경은 새 plan을 만들며 이미 사용된 plan/leg를 덮어쓰지 않는다.
 
-F06-01 적용(2026-10-07, 0007_routines): journey_plans를 id, user_id, search_id, candidate_id, candidate jsonb, total_seconds, transfer_count, model_version, created_at으로 우선 만들었다. candidate는 검색 후보를 journey.v1으로 보강한 전체 스냅샷이며 좌표 등 위치값은 넣지 않고 요약 API만 응답한다. UNIQUE(user_id,search_id,candidate_id)로 같은 후보 재저장 시 스냅샷을 재사용한다. purpose·origin_snapshot/destination_snapshot·valid_until과 journey_legs 분해는 후속(AI 도보·출발 안내)에서 확정한다. routines는 id, user_id, name, origin_place_id, destination_place_id, journey_plan_id, status(active|needs_attention), version, created_at, updated_at이며 name은 1~30자 공백제거 CHECK, 장소 FK ON DELETE SET NULL, plan FK ON DELETE CASCADE다. weekdays·target_arrival_local_time·timezone은 F06-02에서 추가한다. routine_creation_keys(user_id+key PK, body_hash, routine_id FK ON DELETE SET NULL, expires_at)로 24시간 멱등을 보장하며 루틴 삭제 후 동일 키 재시도는 404로 막는다. 장소 삭제 시 참조 루틴의 해당 FK를 NULL로 하고 status=needs_attention, version+1로 바꾼다.
+F06-01 적용(2026-10-07, 0007_routines): journey_plans를 id, user_id, search_id, candidate_id, candidate jsonb, total_seconds, transfer_count, model_version, created_at으로 우선 만들었다. candidate는 검색 후보를 journey.v1으로 보강한 전체 스냅샷이며 좌표 등 위치값은 넣지 않고 요약 API만 응답한다. UNIQUE(user_id,search_id,candidate_id)로 같은 후보 재저장 시 스냅샷을 재사용한다. purpose·origin_snapshot/destination_snapshot·valid_until과 journey_legs 분해는 후속(AI 도보·출발 안내)에서 확정한다. routines는 id, user_id, name, origin_place_id, destination_place_id, journey_plan_id, status(active|needs_attention), version, created_at, updated_at이며 name은 1~30자 공백제거 CHECK, 장소 FK ON DELETE SET NULL, plan FK ON DELETE CASCADE다. routine_creation_keys(user_id+key PK, body_hash, routine_id FK ON DELETE SET NULL, expires_at)로 24시간 멱등을 보장하며 루틴 삭제 후 동일 키 재시도는 404로 막는다. 장소 삭제 시 참조 루틴의 해당 FK를 NULL로 하고 status=needs_attention, version+1로 바꾼다.
+
+F06-02 적용(2026-10-07, 0008_routine_schedule): routines에 weekdays smallint[] NOT NULL DEFAULT '{1,2,3,4,5}'(CHECK cardinality 1~7, 값 1~7), target_arrival_local_time time NULL, timezone text NOT NULL DEFAULT 'Asia/Seoul'(CHECK =Asia/Seoul)을 추가했다. weekdays는 ISO 1(월)~7(일)이고 저장 API가 중복 없는 1~7개를 검증하며, 목표 도착은 HH:mm 형식만 받는다. 기존 루틴은 기본값(월~금, 목표 없음)으로 채워진다.
 
 ### C. AI 도보 산정·재사용
 
@@ -277,3 +279,6 @@ CASCADE는 부모와 수명이 같은 자식(예: 삭제 대상 이벤트의 정
 ## D03·D05 후속 결정 — 2026-10-06
 
 [policy_decisions.md](./policy_decisions.md)·Notion v0.26 참조. 약속 최대2명·draft 미사용30일 삭제·confirmed 목표시각6시간후 자동종결·종결후 공동30일·개인90일·재전송24시간·공유ETA120초. 주최자 탈퇴/비주최자 탈퇴/메시지 본문 삭제·개인trip 연결해제 규칙은 meeting_api.md 확정 계약을 적용한다. 기존 논리 테이블을 통한 시간/상태/만료 정책이며 신규 DDL/물리 삭제 실행 없음.
+
+### F06-03 루틴 관리 (2026-10-08)
+추가 DDL 없이0008을 재사용한다. 본인 목록은created_at DESC,id DESC 키셋 조회, cursor행의created_at을 소유권 확인 후 경계로 사용한다. 수정은routines version을 잠그고 검증한 후보 스냅샷을 연결한다. 루틴 쓰기는회원별 advisory transaction lock과 공유 plan행 잠금으로 직렬화한다. 삭제 및 경로 교체 후 다른 루틴 참조가 없는journey_plans만 삭제하며routine_creation_keys의삭제 표시는FK SET NULL로 유지한다. 실제trip 이력이 생길 때 스냅샷 보존 관계를 확장해야 한다.

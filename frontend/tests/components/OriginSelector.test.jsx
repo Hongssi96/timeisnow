@@ -11,6 +11,19 @@ vi.mock('../../src/components/MapPinPicker',()=>({default:({onChange,disabled,on
 afterEach(()=>{vi.resetAllMocks();vi.useRealTimers();});
 const reply=data=>({data,meta:{server_time:new Date().toISOString()}});
 const place={place_id:'p_test',label:'검증 집',location:{latitude:37.5,longitude:127},location_version:1,address:'서울 합성 주소'};
+it('opens saved-place recovery directly without requesting GPS',async()=>{
+  const selected=vi.fn();
+  apiRequest.mockResolvedValueOnce(reply({items:[place],next_cursor:null}));
+  render(<OriginSelector initialMode="saved" onSelect={selected}/>);
+  const button=await screen.findByRole('button',{name:/검증 집/});
+  expect(screen.queryByRole('button',{name:'현재 위치 확인'})).toBeNull();
+  expect(screen.getByRole('button',{name:'저장 장소'}).getAttribute('aria-pressed')).toBe('true');
+  apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf_test'})).mockResolvedValueOnce(result({type:'saved_place',place_id:place.place_id,location_version:1}));
+  await userEvent.click(button);
+  await waitFor(()=>expect(selected).toHaveBeenCalledOnce());
+  expect(selected.mock.calls[0][0].origin.type).toBe('saved_place');
+  expect(getCurrentOrigin).not.toHaveBeenCalled();
+});
 const current={type:'current_location',latitude:37.51,longitude:127.01,accuracy_meters:12,captured_at:'2026-10-07T01:00:00.000Z'};
 function result(origin){const current=origin.type==='current_location';return reply({origin:current?{...origin,location_confirmed:Boolean(origin.location_confirmed)}:origin,label:'검증 출발',location:{latitude:37.51,longitude:127.01},location_address:'서울 합성동',quality_status:current?(origin.location_confirmed?'user_confirmed':'pending'):'not_applicable',quality:{assessment:current?'unassessed':'user_selected',confirmation:current?(origin.location_confirmed?'reported':'required'):'not_applicable',numeric_policy:'deferred',time_relation:current?'past_or_present':'not_applicable'},place_match:{status:origin.type==='saved_place'?'selected_by_user':'unconfirmed'},expires_at:new Date(Date.now()+599000).toISOString()});}
 async function open(props={}) {

@@ -160,3 +160,11 @@ F03-04(2026-10-07): 출발지 방법 선택은 기존 secondary 버튼·선택 �
 
 ### F04-05 상태 안내 (2026-10-07)
 JourneyUnavailable은 기존 card/empty-state/button-row/secondary를 재사용한다. 비교 화면에 한정해 빈 상태 본문은 --ink/14px/1.8 줄간격, 버튼 행은 줄바꿈, text-button도 최소44px를 적용한다. 미확인 후보는 ‘구간 정보 확인 필요’와 상세 사유를 표시한다. 전체 테마/내비게이션 유지. 합성 상태 PC/390×844와 실제 홈/비교 입력 화면 회귀 확인.
+
+### F06-03 루틴 화면 재사용 (2026-10-08)
+RoutinesPanel/RoutineSummary/RoutineStatus는 기존 card/routine-card/routine-grid/day-list/primary/secondary/info-box/place-delete-confirm과 lucide를 재사용한다. 이름/장소는 줄바꿈하고 버튼은44px 이상, 편집 입력에는 라벨·초기 포커스, 삭제 확인은 취소에 초기 포커스, pending 중 중복 행동을 차단한다. 홈의 저장 경로 요약은 기존 카드 톤으로 표시하며 미구현 출발 안내의 예시 숫자는 제거한다. .routine-actions 줄바꿈·.routine-toolbar .tabs 줄바꿈·14px 상태 본문을 적용했다. 새 팔레트/폰트/내비게이션 없음. 데스크톱1440×1000 및 모바일390×844 실제 DB 목록/수정/선택과 삭제 취소를 확인했다.
+
+F06-03 저장 조건 안내(2026-10-08): 기존 comparison-form/info-box/secondary/text-button을 사용한다. .routine-save-help의 버튼 행은 좁은 화면에서 줄바꿈하고 안내 본문14px/기존 색을 유지한다. PC1440×1000·모바일390×844에서 안내/버튼/저장 패널과 가로 넘침0을 확인했다. 새 팔레트·내비게이션 없음.
+
+### F06-03a 선택기 안의 장소 생성 폼 (2026-10-08)
+OriginSelector의 장소 저장 탭은 기존 PlacesCard의 creationOnly 모드를 재사용한다. 기존 카드/검색 결과/입력/연두 안내/44px 버튼/지도 확인을 유지하고 검색 입력에 초기 포커스를 준다. 이름 기본값은 출발지/도착지, 제목은 출발/도착 장소 저장이다. 선택기 내 .origin-place-create는 기존 여백16px와 .place-form 간격10px만 사용하며 새 팔레트·폰트·내비게이션은 없다. 처리 중 취소·방식 전환을 차단하되 기존 GPS 측정 취소 동작은 유지한다. PC1440×1000·모바일390×844 실제 주소 검색/생성 폼과 자동 선택/루틴 저장을 확인했고 가로 넘침0·콘솔error0이다.

@@ -35,3 +35,8 @@ npm --prefix frontend run build
 새 UI는 src/components, 공유 통신/SDK 코드는 src/lib에 추가하고 테스트는 대응하는 tests 하위 폴더에 둡니다. 테스트 파일명은 `*.test.js` 또는 `*.test.jsx`를 사용합니다. 테스트 import와 vi.mock은 같은 실제 소스 경로를 가리켜야 합니다. 테스트 공통 설정은 tests/setup.js에서 관리합니다.
 
 F03-04와 폴더 정리는 main0402d67에 포함됐습니다. OriginSelector/OriginReview는 src/components, currentOrigin은 src/lib, 관련 테스트는 tests/app·components·lib에 위치합니다. F03-05a 수동 확인은 codex/origin-quality에서 전체79개 테스트와 빌드를 확인했습니다. GPS 수치/자동 일치 판정은 보류하며 사용자 검토 후 main에 병합합니다.
+
+## F06-03 실제 루틴 관리
+홈·내 루틴은 GET /api/v1/routines를 조회하며 가상 루틴을 사용하지 않는다. 추가는 경로 비교 후 POST 저장, 수정은 이름/요일/목표 시각 PATCH, 경로 교체는 후보 선택 후 PATCH, 삭제는 확인 후 DELETE204다. 로그인/계정 변경 후 목록을 다시 불러온다. 실제 출발 안내·이동 기록은 후속이며 저장 경로에 가상 시각을 표시하지 않는다.
+
+F06-03a: 출발·도착 선택기의 장소 저장 탭에서 기존 PlacesCard 생성 폼을 사용할 수 있다. 새 장소 저장 후 해당 지점으로 검증/선택돼 경로 조회를 이어간다. 기존 설정의 장소 목록/수정/삭제는 그대로 제공한다.

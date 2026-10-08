@@ -671,3 +671,100 @@
 - 배운 개념: 검색 결과 자원은 만료 정리 대상이라 참조가 필요한 데이터는 저장 시점에 별도 스냅샷 자원으로 복사해야 한다. 응답 조립에 추가 질의가 필요하면 트랜잭션 안에서 수행해야 한다.
 - 남은 일: F06-02 요일·목표 도착 저장, F06-03 목록·선택·수정·삭제, F06-04 복구 안내. 사용자가 helpycode/routine-save를 검토 후 MR 생성·병합한다. Notion 5절의 5.6~5.8 재번호는 예시 절 이동이며 참조 문구는 없음을 확인했다. 2026-10-07 사용자 결정: 홈·내 루틴의 가상 루틴(initialRoutines '평일 출근'·'학교 가는 길')은 지금 유지하고 F06-03에서 실제 API 목록으로 교체하면서 제거한다(사용자 선택).
 - 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+## 2026-10-07 F06-02 루틴 요일·목표 도착 시각 저장(helpycode/routine-schedule)
+
+- 목표: F06-01로 저장한 루틴에 반복 요일(ISO 1~7)과 선택적 목표 도착 시각(HH:mm, Asia/Seoul)을 저장하고, 저장 후 요일·목표 도착만 바꾸는 일정 PATCH를 제공한다. 이전 세션에서 백엔드·마이그레이션·저장 패널 일부까지 구현된 상태로 터미널이 종료돼 이어서 마무리했다.
+- 변경: backend/migrations/versions/0008_routine_schedule.py 신규(routines에 weekdays smallint[] NOT NULL 기본 월~금·CHECK, target_arrival_local_time time, timezone 기본 Asia/Seoul·CHECK), backend/app/routines.py(저장 입력 weekdays 필수·목표 도착 HH:mm 선택 검증, 응답에 weekdays·target_arrival_local_time·timezone 포함, PATCH /routines/{routine_id} 일정 부분: expected_version 불일치 409, 미전송 필드 유지·명시적 null로 목표 삭제, version+1·updated_at 갱신), backend/tests/test_routines.py(요일 빈값/중복/범위/문자열·HH:mm 오류·timezone 입력 차단과 저장·PATCH 테스트 추가, 만료 보정 UPDATE를 과거 시각으로 명시), backend/tests/test_migrations.py(기대 head 0008), frontend/src/components/JourneyCandidates.jsx(저장 패널 반복 요일 토글 기본 월~금·목표 도착 time 입력·요일 0개면 저장 비활성·안내 문구 갱신), frontend/src/components/JourneyComparison.jsx(validSchedule 헬퍼로 POST 본문에 weekdays·target_arrival_local_time 전송, 응답의 요일·목표·timezone 검증 추가), frontend/src/styles/styles.css(routine-days·day-list 스타일 추가 — 기존 tabs/nav 활성 팔레트 재사용), frontend/tests/components/JourneyCandidates.test.jsx(요일 기본·토글·전체 해제 차단·목표 전달·일정 누락 응답 거부 등 신규 5개 포함).
+- 계약: Notion v0.45로 갱신(헤더·상태 줄, 2절 POST/PATCH 행, 5.3 제목·입력·스냅샷·201 응답·PATCH 계약·F06-02 구현/검증 문단, 변경 이력) 후 재조회로 저장 확인(작성 오타 Aisa→Asia 정정 포함). api_contract.md를 Notion 본문과 바이트 일치 방식으로 전문 동기화했다. database_schema.md B절에 0008 적용 기록. POST weekdays 필수 전환은 weekdays 없는 기존 본문이 422가 되는 호환성 변경으로 변경 이력에 명시했다. PATCH는 요일·목표 도착만이며 이름·경로 변경은 F06-03 확장임을 명세에 표기했다.
+- 발견/수정: 기존 api_contract.md 사본이 Notion 이스케이프(\~, \{)를 부분적으로 풀어 쓰고 F06-01 프론트 검증 수치가 109개로 개발 일지·Notion(110개)과 달랐다. 이번부터 Notion 원문 본문을 그대로 저장하는 동기화 방식으로 바꿔 다음 대조가 기계적으로 가능하게 했고 todo.md·feature_breakdown.md의 F06-01 수치를 110개로 정정했다. 프론트 테스트에서 getAllByRole은 0개 기대에 예외를 던지므로 queryAllByRole로 바로잡았다.
+- 실제 검증: 백엔드 unittest 125개(43.4초) 통과 — 요일·시각·timezone 422 케이스, 저장 응답 weekdays·target·timezone, PATCH 401/403/422/409·미전송 유지·null 삭제·version 증가·타인 404, 마이그레이션 up/down roundtrip(기대 head 0008). 프론트 테스트 114개·Vite 프로덕션 빌드 통과. 로컬 DB에 0008 적용 확인(migrate.py current = 0008_routine_schedule head).
+- 시각 검증: tests fixture를 렌더링한 임시 QA 페이지를 Vite+Playwright(Chromium)로 PC1440×1000·모바일390×844에서 확인 — 요일 버튼 7개·기본 월~금 aria-pressed, 금 해제·토 선택 반영, 요일 전부 해제 시 저장 비활성, 목표 도착 08:30 입력 시 저장 전달값 weekdays [1,2,3,4,6]·target '08:30', 기본 저장은 target null, 가로넘침 0px, 콘솔 오류 0, 미색 배경·흰 카드·녹색 강조 기존 톤 유지(스크린샷 확인). 임시 qa_f0602 html/jsx는 삭제했다.
+- 검증 한계: 실제 카카오 저장 흐름 재호출은 하지 않았다(공급자·화면 흐름은 F06-01에서 실호출 검증, 이번 변경은 전달 필드 추가). 화면 시각 검증은 합성 fixture 기준이며 실기기는 미확인. 내 루틴 화면 연동·요일 표기는 F06-03에서 실제 API 목록으로 교체하며 검증한다.
+- 실행 반영: 시각 검증을 위해 Vite 개발 서버를 임시 실행 후 종료했다. 백엔드는 테스트가 ASGI 레벨에서 검증하며 uvicorn 재시작은 사용자 확인 시점에 맞춰 진행한다.
+- 배운 개념: 일정 PATCH에서 '보내지 않으면 유지, 명시적 null이면 삭제'를 구현하려면 Pydantic model_fields_set으로 전송 여부를 구분해야 한다. 부분 수정 계약을 단계(F06-02)로 나눠 도입할 때는 나머지 필드(이름·경로)의 소속 단계를 문서에 명시해 계약이 흐려지지 않게 한다.
+- 남은 일: F06-03 루틴 목록·선택·수정·삭제(App.jsx 가상 루틴 '평일 출근'·'학교 가는 길'을 실제 API 목록으로 교체), F06-04 복구 안내. 커밋은 사용자 화면 확인 후 helpycode/routine-schedule에 진행하고 MR 생성·병합은 사용자가 한다.
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+## 2026-10-07 F06-02 후속: 계정 모달이 경로 비교 화면을 지우던 문제 수정
+
+- 목표: 사용자 확인 중 보고된 "경로 후보 비교에 들어가면 출발지·도착지를 다시 선택해야 하고 그 상태에서 루틴 추가가 안 된다" 문제의 원인 규명과 최소 수정.
+- 원인 진단(근거: App.jsx·JourneyComparison.jsx·OriginSelector.jsx 코드와 17:41~17:42 성공한 검색 3건·저장 0건 DB 대조): 1) App.jsx가 `modal==='account'`일 때 JourneyComparison을 언마운트해 도착지·검색 결과·편집 상태가 사라졌고, 출발지는 홈 위치 모달에서만 App 레벨로 저장돼 비교 화면 안에서 고른 출발지는 보존되지 않았다. 2) 출발지 선택은 서버 TTL 최대 10분(origin-validations expires_at)이라 로그인에 시간을 쓰면 만료됐다. 3) 경로 검색 결과 만료(5분)는 재조회로 같은 출발지·도착지로 복구되므로 재선택 원인이 아니었다. 백엔드 저장 API 자체는 정상(아래 실증).
+- 서버 원인 별건: 사용자가 사용하던 8000 포트를 이전 세션의 낡은 백엔드(F06-01 코드, 시스템 Python, 15:33 시작)가 점유하고 있어 새 프론트가 보낸 weekdays를 모르는 필드로 거부했다. 낡은 프로세스를 종료하고 venv로 새 백엔드를 교체(17:10)했고 PATCH /routines/... 422로 새 계약 서빙을 확인했다. 백그라운드 작업 중단 표시는 포트 충돌 때문이었다.
+- 실제 저장 실증(사용자 확인용): 실제 카카오 공급자로 가입→로그인→강남역/서울역 장소 저장→경로 검색(후보 15)→루틴 저장 201→상세 200까지 성공. DB에 'E2E 저장확인'(weekdays [1,2,3,4,5], 목표도착 08:30, Asia/Seoul, 17:16:56) 기록 확인. 사용자의 마지막 저장 시도가 이 시점 이후 없음을 확인.
+- 수정: App.jsx 93행의 `modal!=='account'` 조건 제거. 계정 모달이 열려 있어도 비교 화면(출발지·도착지·검색 결과·저장 패널)이 유지되고, 로그인 후 조회 버튼으로 이어서 진행한다. 익명 감지는 조회 시 401(AUTH_REQUIRED)로 이뤄지므로 별도 복구 로직이 필요 없었다. API 계약 영향 없음(명세 변경 없음).
+- 테스트: App.test.jsx에 "계정 모달을 열었다 닫아도 출발지·도착지 선택이 유지된다" 추가(OriginSelector 목킹, /me 401 스텁). 프론트 115개 통과. vi.mock은 모듈 최상위에 있어야 한다는 점, <dialog>에 접근 가능한 이름이 없어 이름 미지정 조회로 바로잡았다.
+- 시각 검증: Playwright(Chromium) 실제 화면으로 PC1440×1000(사이드바 프로필→모달)과 모바일390×844(출발지 선택 편집기의 로그인하기→모달)에서 모달 뒤 '경로 후보 조회' 버튼 유지·닫은 뒤에도 유지·가로넘침 0px·콘솔 오류 0 확인. 모바일 스크린샷으로 미색/녹색 톤·잘림 없음 확인. 모바일은 사이드바가 숨겨져(.sidebar display:none) 비교 화면 위 모달 진입은 편집기/조회 실패 경로만 존재한다(기존 설계 유지).
+- 배운 개념: 조건부 렌더링으로 모달을 "화면 대체"로 쓰면 모달을 여는 순간 화면 상태가 사라진다. 모달은 오버레이(dialog)로 두고 화면은 살려두는 것이 상태 보존의 기본이다. 백엔드 교체 후에는 실제 포트 점유자(프로세스 시작 시간·신규 라우트 응답)로 코드 버전을 확인해야 했다.
+- 남은 일: F06-03 루틴 목록·수정·삭제(내 루틴 화면 실제 API 연결 — "저장했는데 내 루틴에 안 보인다" 체감의 근본 해소), F06-04 복구 안내. 출발지 10분 만료와 페이지 이동 시 상태 초기화는 이번 범위 밖(사용자 승인 시 후속).
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+
+## 2026-10-08 F06-03 DB·루틴 저장 진단
+
+- 목표: 사용자가 F06-03 진행 중 실제 DB 연결 여부와 경로 후보를 루틴에 추가해도 반영되지 않는 원인 확인을 요청했다. 이번 작업은 연결·저장 진단이며 F06-03 전체 구현 완료를 의미하지 않는다.
+- 작업 상태: 현재 helpycode/routine-schedule, HEAD 및 최신 origin/main 모두2248346. 기존 미커밋 F06-02 코드/문서/0008 마이그레이션이 존재하며 그대로 보존했다. 기능 코드 변경·새 기능 브랜치·기존 변경 커밋/푸시·MR 생성/병합은 하지 않았다. 변경 파일은 이번 진단을 추가한 todo.md 및 development_log.md다.
+- 명세: Notion API 명세 v0.45(마지막 편집2026-10-07T08:05:00.054Z)를 연결 도구로 읽고5.3 및 루틴 API 목록과 로컬 planning.md·feature_breakdown.md·관련 개발 일지/화면/개인화/프롬프트/로깅 문서를 확인했다. POST 저장 및 GET 상세/PATCH 일정은 구현, GET 목록/이름·경로 수정/DELETE는 F06-03 후속이라는 명세와 실제 코드가 일치한다. 진단·실행 환경 복구만 수행했으므로 계약 변경 및 Notion 수정 없음.
+- 실제 DB 확인: backend/.venv/Scripts/python.exe backend/check_db.py 성공, PostgreSQL17.11. migrate.py current는0008_routine_schedule(head). 읽기전용 SQL로 routines8건·journey_plans8건·journey_searches15건 확인. 최신 기존 저장은2026-10-07 17:16:56 KST이며 weekdays 월~금·목표 도착 있음·active다. 이름/계정/주소/연결 비밀은 출력·기록하지 않았다.
+- 원인1: App.jsx initialRoutines와 useState(initialRoutines)가 홈/내 루틴의 가상2개를 사용한다. JourneyComparison.saveRoutine은 POST /api/v1/routines를 호출하지만 App.jsx onRoutineSaved는 토스트/로그만 처리하며 setRoutines 또는 목록 재조회가 없다. DB 저장 성공과 화면 목록 반영이 분리돼 있어 저장해도 목록에 나타나지 않는다.
+- 원인2: 내 루틴의 추가/수정 RoutineForm은 setRoutines로 브라우저 메모리만 바꾼다. 경로 후보 저장 API와 다른 데모 흐름이고 새로고침하면 사라진다. 목록 API GET /api/v1/routines 자체가 없으며 실행 서버 요청은405 METHOD_NOT_ALLOWED다.
+- 실행 상태: 점검 시127.0.0.1:8000 및 localhost:5173 HTTP 접속 모두 실패했다. DB 자체는 실행 중이므로 DB 설정/데이터/마이그레이션을 변경하지 않았다. 프로젝트 venv로 최신 uvicorn을8000에, 현재 Vite를5173에 숨김 창으로 실행했다. 이후 backend health200, frontend HTML200, Vite 프록시 /api/v1/health200 확인. OpenAPI에서 POST /routines 및 GET/PATCH /routines/{id}, RoutineInput의 weekdays/target_arrival_local_time 제공 확인. runtime-check stdout/stderr 로그는 기존 *.log 무시 규칙으로 Git 제외된다.
+- 실제 검증: 백엔드 test_routines.py8개(9.438초) 통과. 실제 PostgreSQL의 테스트 전용 격리 스키마에 합성 공급자 경로를 저장해 POST201·GET200·재로그인 조회·멱등·소유권·장소 삭제 연동·일정 PATCH 검증. 프론트 tests/components/JourneyCandidates.test.jsx13개 통과(저장 본문·요일/목표 시각·성공/실패/만료 등). 실제 카카오/사용자 계정 저장 재현 또는 브라우저 시각 검증은 이번에 수행하지 않았다. 사용자 특정 저장 시도의 HTTP 오류는 캡처하지 않았으므로 모든 실패를 목록 문제로 단정하지 않는다.
+- 배운 개념: DB 연결 성공, 저장 API 성공, 화면 목록 동기화는 각각 확인해야 한다. 저장201을 받더라도 목록이 데모 상태이거나 성공 후 재조회가 없으면 화면에 반영되지 않는다. health200만으로 DB 연결 정상이라고 판단하지 않는다.
+- 남은 일/다음 작업: F06-03은 [ ] 유지. 기존 F06-02 변경 검토·게시 후 본인 GET /routines(명세의 cursor/limit), 홈·내 루틴 실제 목록·저장 후 갱신, 추가/수정/삭제 API 연결 및 빈 상태/인증 만료/오류를 구현하고 검증해야 한다. 확인된 현재 저장 조건은 출발·도착 모두 본인 저장 장소, 검색5분 이내, 검색 당시 location_version 유지다. 실제 사용자 저장 오류는 해당 요청 상태/오류 코드로 별도 구분한다.
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+
+## 2026-10-08 F06-03 실제 루틴 목록·선택·수정·삭제 (codex/routine-management)
+
+- 목표: 경로를 저장해도 내 루틴에 보이지 않던 문제를 해결하고, 목록·선택·이름/요일/목표 도착 수정·경로 교체·삭제를 실제 계정 DB에 연결한다.
+- Git 기반: 최신 origin/main 2248346을 확인했다. 기존 미커밋 F06-02 변경과 사전 진단 문서를 백엔드125개·프론트115개/빌드로 검증하고 helpycode/routine-schedule의2a51611로 보존했다. 최신 main에서 codex/routine-management를 만들고 선행 커밋을 반영(f1431d1)했다. main에 F06-02가 아직 없어 이 브랜치에 포함된다. MR 생성/병합은 사용자가 수행한다.
+- 백엔드 변경: backend/app/routines.py에 본인 GET 목록(limit 기본20/최대100, cursor 소유권, created_at DESC/id DESC), 이름·경로 참조4개를 받는 PATCH, DELETE204를 추가했다. 이름/요일 null·일부 경로 참조·검색 방향 불일치를 차단하고 기존 후보/5분 만료/location_version/expected_version 검사를 유지했다. 실패는 트랜잭션 전체를 취소한다. selected_plan으로 저장 로직을 재사용하며 회원별 트랜잭션 잠금과 공유 plan 잠금으로 여러 세션의 쓰기를 직렬화한다. 삭제·교체 후 참조 없는 plan만 지우고 생성 키의 삭제 표시는24시간 유지한다. DB0008을 재사용해 추가 DDL은 없다.
+- 프론트 변경: frontend/src/lib/routines.js(목록/페이지/응답 검증/중단), components/RoutinesPanel.jsx(목록·요약·선택·수정·삭제 확인/취소), app/App.jsx(실제 목록과 저장 후 갱신·가상 initialRoutines/RoutineForm 제거), AccountForm.jsx(로그인/로그아웃 콜백), JourneyComparison.jsx(경로 교체 PATCH·기존 일정 기본값·실패 재시도 키 유지), JourneyCandidates.jsx(교체 버튼/일정 기본값), styles.css(기존 카드·팔레트·줄바꿈/44px 행동)를 변경했다. 홈에는 실제 저장 후보의 예상 시간/반복 일정과 출발 안내 준비 상태를 표시하며 가상 버스 도착·출발 숫자·이동 시작은 제거했다. 내비게이션과 설정 톤은 유지한다.
+- 테스트 변경: backend/tests/test_routines.py에4개를 추가(총12개)해 목록/페이지/입력/소유권·이름/방향/원자적 교체/버전·삭제/공유 plan/생성키·삭제 장소 복구/만료를 검증했다. frontend/tests/app/App.routines.test.jsx 신규9개와 JourneyCandidates.test.jsx 신규2개로 실제 목록·선택·새로고침·추가 후 갱신·수정/삭제/계정 전환·충돌·추가 페이지·needs_attention·요청 키 재시도·교체 PATCH를 검증했다. App.test.jsx/App.origin.test.jsx의 제거된 가상 이동 테스트는 실제 빈 상태/개인 위치/계정 모달/서버 확인으로 정리했다.
+- 최종 실행 결과: 백엔드 unittest129개(50.585초), 프론트15파일121개(9.44초), Vite 프로덕션 빌드1902모듈 통과. git diff --check 통과. PostgreSQL17.11/head0008은 사전 진단으로 확인했고 실제 HTTP 저장에서도 DB 연결을 확인했다.
+- 발견/수정: cursor에 장소 공통 헬퍼를 쓰면 잘못된 형식도404라 명세422와 달랐다. UUID 검증과 소유권404를 분리했다. UUID4 내림차순은 생성순이 아니므로 신규 저장이 첫 페이지에 보이도록 created_at/id 최신순으로 명세·코드·테스트를 맞췄다. 저장 키가 성공 후에만 남아 응답 유실 재시도에서 중복 저장 가능성이 있어 호출 전에 본문/키를 보관하도록 수정했다.
+- 기존 회귀 테스트: 첫 전체 검증에서 test_expiry_restart_and_late_worker_cannot_resurrect가404 기대/200으로 실패했다(앞선 F06-01 일지에 동일 간헐 실패 기록). DB now()를 앱 UTC와 즉시 비교하면 시계 차이 때문에 만료가 확실하지 않다. backend/tests/test_journeys.py의 합성 expires_at/worker_deadline/job_expires_at을 now()-1hour로 바꿔 명확한 과거를 검증했고 최종129개 통과했다. 서비스 코드와 만료 정책은 유지했다.
+- 실제 DB/HTTP 검증: 전용 example.invalid 검증 계정에 공개 역 좌표의 테스트 장소와 합성 검색 후보로2루틴을 준비했다. POST201·GET목록200 후 실제 브라우저에서 로그인·목록·선택·이름/요일 PATCH·키보드 시간 수정09:30·새로고침 유지를 확인했다. 실제 카카오 강남역~서울역15후보 중 기존 루틴을2번째 지하철 후보로 PATCH200하고 목표08:30/화·목 유지·환승1/약36분을 홈에서 확인했다. 실제 후보로 신규 POST201·목록3개/신규 첫 항목도 확인했다. 검증용3루틴만 HTTP DELETE204로 지워 빈 목록과 브라우저 빈 상태를 확인했다. 생성 계정 ID와 검증 이메일을 대조해 해당 데이터만 정리했고 기존 사용자 루틴8건은 유지됐다.
+- 시각/회귀 검증: PC1440×1000·모바일390×844에서 목록/수정 폼·요일·삭제 확인/취소(취소 초기 포커스)·선택/홈·교체 패널을 확인했다. 모바일 가로 넘침0·콘솔error0, 기존 미색/녹색/흰 카드/선형 아이콘을 유지한다. 설정의 장소/여유/계정 화면도 두 크기로 확인했다. 로그아웃 후 이전 목록 제거와 로그인 안내를 확인하고 viewport를 원복했다. 스크린샷은 visualizations의 f0603-routines-desktop.png와 f0603-home-mobile.png에 보관한다. 실제 브라우저의 삭제 최종 버튼은 누르지 않았으며 UI 확인/취소·실제HTTP204·프론트 확인 테스트로 검증했다.
+- 실행 반영: 이전 프로젝트 uvicorn의 명령행/경로/자식PID를 확인 후 교체했다. 제한 환경 서버에서는 카카오 연결이 실패했지만 네트워크 가능한 최소 호출에서OK/15후보여서 같은 인증 설정·localhost8000으로 실행 환경을 교체했고 브라우저 조회가 성공했다. 현재 프로젝트 venv launcher15148·Vite5173 유지. 키/쿠키/사용자 이메일은 일지에 기록하지 않았다.
+- 명세/문서: 착수 전 Notion 최신v0.45와 관련 로컬 문서를 확인했다. 구현 전 v0.46의5.3.1 계약·변경 이력을 추가하고 최신 생성순/방향 검증을 보완했다. 최종 API 목록·입력 예시·공통 구현 상태·검증·변경 이력을 갱신한 후 재조회해 저장을 확인했다. api_contract.md는 최종 Notion 본문과 기계 비교해 동기화했다. routine_api.md 신규, planning.md/screen_plan.md/design_guide.md/database_schema.md/README/TODO/feature_breakdown.md 동기화. 기존 POST/상세/일정 PATCH 응답은 유지하며 선택적 이름/경로 필드와 목록/DELETE를 추가했다.
+- 배운 개념: 저장 성공과 목록 갱신은 별개다. UUID 정렬은 생성순이 아니므로 생성 시각과ID를 함께 페이지 경계로 써야 한다. 이름/일정과 경로 교체는 같은 버전 검사·원자적 트랜잭션으로 다루고 공유 스냅샷은 마지막 참조가 사라질 때 정리한다. 응답 유실은 저장 실패와 다르므로 생성 키를 요청 전에 보관한다.
+- 남은 일: F06-04 장소/경로 변경 시 복구 안내 확장, F05 도보/AI와 F07 실시간 출발 안내·이동 기록·실기기GPS는 후속이다. 선택은 화면 세션에서 유지하고 새로고침 시 첫 항목이 기본이다. 사용자 검토/MR·병합 후 다음 기능을 최신 main에서 시작한다.
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+
+## 2026-10-08 F06-03 후속: 저장 클릭 시 요청 없이 후보가 사라지는 문제
+
+- 사용자 보고: 이 경로를 루틴에 저장 → 루틴 저장을 눌러도 백엔드 호출 없이 경로 후보가 사라졌다.
+- 화면에서 해결하는 순서: 새로고침 → 출발지/도착지의 저장 장소 선택 → 서로 다른 본인 저장 장소2개 선택 → 경로 후보 재조회 → 이 경로를 루틴에 저장 → 이름/요일/목표 시각 확인 → 루틴 저장. 저장한 장소가 없으면 내 설정의 장소 관리에서 먼저 등록한다.
+- 원인: JourneyCandidates의 저장 버튼은 이름/콜백 존재만 검사하고, JourneyComparison.saveRoutine은 지도 핀/현재 위치의 placeRef가 없으면 SEARCH_EXPIRED를 호출했다. 따라서 프론트가 요청 전에 검색을 만료 처리했다. 양 끝이 저장 장소인 검증은 통과했지만 이전의 '저장 장소 없으면 저장 차단' 테스트는 후보가 없는 초기 화면만 검사해 이 조합을 놓쳤다.
+- 재현 근거: 수정 전 회귀 재현 테스트에서 지도 출발→저장 도착의 실제 후보를 띄우고 저장 버튼을 클릭하자 API 호출 수 증가0·후보 제거·만료 안내를 확인했다. 이후 기대 동작 테스트5조합(지도/저장, 현재/저장, 저장/지도, 저장/현재, 지도/지도)과 저장 장소 복구 테스트가 수정 전6개 실패하는 것을 확인한 뒤 구현했다.
+- 변경 파일: frontend/src/components/JourneyComparison.jsx(저장 가능 조건·후보 버튼 연결·저장 전 오류 안내·저장 장소 바로 선택·내 장소 관리), OriginSelector.jsx(initialMode로 저장 장소 탭 시작), app/App.jsx(내 설정 이동 연결), styles.css(안내 버튼 줄바꿈), tests/components/JourneyCandidates.test.jsx(혼합 입력5개와 실제 POST 복구1개), OriginSelector.test.jsx(저장 탭 직접 시작/GPS 미호출1개). 기타 문서는 TODO/기능 목록·screen_plan/design_guide/routine_api 및 이 일지다.
+- 수정 행동: 양 끝이 서로 다른 본인 저장 장소일 때만 저장 버튼을 표시한다. 지도/현재 위치의 후보는 유지하고 저장 장소 선택을 먼저 안내한다. 저장 함수의 방어 검사도 이 입력을 만료로 처리하지 않으며 잘못된 일정/같은 장소에는 구체적 안내를 남긴다. 실제 검색 만료300초 정책은 유지한다. 장소 자동 저장이나 근접 장소 추정은 도입하지 않았다.
+- 실제 검증: 프론트15파일128개(8.22초) 및 Vite1902모듈 빌드 통과, diff --check 통과. 수정 전 재현용 임시 테스트는 최종 기대 동작 회귀 테스트로 교체했다. 백엔드/API 코드는 변경하지 않아 이번에 전체 백엔드 테스트를 재실행하지 않았다(선행 F06-03의129개 통과 기록과 구분).
+- 실제 브라우저/DB 검증: 임시 QA 페이지에서 공개 역 좌표의 지도 출발점과 전용 검증 계정 저장 도착지를 선택해 실제 카카오15후보 조회를 수행했다. 후보 유지·저장 버튼0·만료 오류0을 확인했다. 안내의 출발지 저장 장소 선택을 누르면 저장 탭이 바로 열리고, 출발역을 저장 장소로 선택한 뒤 실제 후보를 재조회했다. 모바일에서 후보 저장 패널→루틴 저장을 실제 클릭해 /auth/csrf200 및 POST /api/v1/routines201 로그(req_0a976d1bb6db4a7c9e69db7253ce6815)와 DB루틴1행·월~금·active를 확인했다. 실제 App 홈에서도 저장된 루틴과 환승2/약31분이 보였다.
+- 시각 검증: 안내/선택 버튼과 기존 후보 저장 폼을 PC1440×1000·모바일390×844로 확인했다. 가로 넘침0·콘솔error0, 기존 미색/초록/흰 카드 유지. screenshot routine-save-fix-db-success.png 및 routine-save-fix-success-mobile.png는 visualizations에 보관한다. 임시 QA html/jsx와 전용 계정/데이터는 ID·검증 이메일을 대조해 정리했고 기존 루틴8건은 유지됐다. 로그아웃·임시 탭 종료·viewport 원복. 실제 기기GPS는 미검증이며 지도 출발점은 합성 입력이다.
+- 명세: 최신 Notion v0.46의5.3 저장 장소 입력 계약과 관련 로컬 문서를 착수 전 확인했다. 기존 명세/화면 기획대로 버튼 조건을 바로잡는 버그 수정으로 API/필드/인증/저장/계산 정책 변경이 없어 Notion 계약 변경 없음. 게시 전 최신 명세를 재확인한다.
+- Git: 최신 origin/main2248346에서 codex/routine-save-eligibility 생성, 미병합 F06-02·03을 fc83bcd/9875549로 반영한 뒤 수정했다. 수정 커밋9f8c401을 origin/codex/routine-save-eligibility에 푸시 완료했다. MR 생성/병합은 하지 않았다.
+- 배운 개념: 화면의 버튼 표시 조건과 저장 함수의 필수 조건을 일치시켜야 한다. 입력 종류가 다른 문제를 정보 만료로 분류하면 요청도 보내지 않고 정상 결과를 지운다. 테스트는 비어 있는 초기 화면 대신 실제 후보가 표시된 혼합 입력과 복구 경로를 검증해야 한다.
+- 남은 일: F06-04 복구 안내 확장과 F05/F07 도보·실시간 안내는 기존 후속 상태다. 현재 루틴 저장은 본인 저장 장소 간 경로만 지원한다.
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+
+## 2026-10-08 F06-03a 루틴 등록 중 장소 저장·선택 (codex/routine-inline-places)
+
+- 목표: 첫 사용자가 루틴을 추가할 때 내 설정으로 이동해 장소를 먼저 저장하는 불편을 줄인다. 같은 출발·도착 선택 화면에서 주소 검색·명시 저장·해당 지점 선택까지 이어간다.
+- Git 기반: 최신 origin/main2248346에서 codex/routine-inline-places를 만들고 미병합 codex/routine-save-eligibility를 fast-forward 반영했다(선행 F06-02·03·저장 버튼 수정·일지 포함, ee24032). 사용자 MR 생성/병합 흐름은 유지한다.
+- 변경 파일: frontend/src/components/PlacesCard.jsx에 creationOnly·initialLabel/title·onCreated/onAuthError/onBusyChange를 추가해 기존 검색/후보/이름/핀 확인 저장 폼을 재사용했다. 설정의 기본 목록·수정·삭제 동작은 유지하고 생성 전용 모드는 자동 폼 열기/검색 포커스/목록 관리 숨김으로 처리한다. OriginSelector.jsx에는 장소 저장 탭·빈 목록 생성 행동·저장201 이후 기존 origin-validations200 자동 선택·생성 중 취소/방식 전환 차단을 추가했다. JourneyComparison.jsx에는 저장 조건 안내에서 출발/도착 새 장소 저장·처리 중 선택기 닫기 차단을 연결하고 App.jsx의 설정 이동 prop을 제거했다. styles.css는 기존 카드/여백/본문 톤을 재사용하는 선택기 범위 스타일만 추가했다. tests/components/RoutineInlinePlaces.test.jsx 신규6개와 관련 문서를 추가/갱신했다.
+- 입력/저장 정책: 주소/장소명 검색 후 후보를 사용자가 선택하고 장소 이름·선택적 출입구/지도 핀을 확인해 명시 저장한다. 생성201 후 본인 place_id/location_version으로 기존 출발지 검증을 호출한다. 성공하면 해당 출발 또는 도착 선택에 반영하고 반대쪽은 보존한다. 장소가 저장됐지만 선택 검증이 실패하면 저장된 목록에서 검증만 재시도한다. 루틴은 후보 선택/저장 확인 전에는 만들지 않는다. 좌표 근접 자동 연결·GPS 자동 저장·새 API·DDL은 추가하지 않았다.
+- 통합 테스트6개: 출발/도착 모두 생성→첫 선택 유지→경로/루틴 저장; 빈 목록 생성/취소 미저장; 생성 실패 동일 멱등 키 재시도; 저장 후 선택 검증 실패·재선택·추가 생성 없음; 생성 중 취소/방식 전환/중복 쓰기 차단; 세션 만료 시 폼 폐기/로그인 안내. 실제 OriginSelector·PlacesCard·JourneyComparison을 함께 렌더링하고 API만 대체한다.
+- 발견/수정: 초기 구현에서 모든 위치 방식 전환을 busy 중 차단해 기존 GPS 측정 취소 테스트가 실패했다. 신규 장소 생성 중에만 전환을 막고 기존 GPS 방식 변경의 중단 동작은 유지하도록 좁혀 수정했다. 재검증 통과. 생성 폼의 저장 후 검증 실패는 '장소는 저장됐어요' 안내를 붙여 저장 실패와 구분한다.
+- 실제 검증: 프론트16파일134개(9.34초) 및 Vite1902모듈 프로덕션 빌드 통과. 기존 PlacesCard 설정/이름/핀/삭제 및 GPS/루틴 저장 회귀 테스트도 포함한다. diff --check 통과. 백엔드/API 코드는 변경하지 않았으며 이번에 백엔드 전체 스위트를 재실행하지 않았다.
+- 실제 첫 등록 흐름: saved_places0개 전용 검증 계정으로 실제 App의 내 루틴→추가→출발지 선택→빈 저장 목록→새 장소 저장→강남역 검색/후보 선택/이름 '처음 집'→장소POST201→origin-validations200 자동 선택을 수행했다. 같은 화면에서 도착지 장소 저장→서울역 검색/후보 선택/이름 '처음 회사'→POST201/검증200으로 도착지를 반영했다. 출발지 유지와 내 설정 미이동을 확인했다. 실제 카카오15후보 조회 후 '첫 사용 루틴 검증'을 POST /routines201(req_cca548ee40d74ff49fb96ec843fb3329)로 저장하고 홈 목록 반영·환승1/공급자 약29분을 확인했다. 실제 PostgreSQL에 본인 장소2개/루틴1개가 생성된 것을 SQL로 확인했다.
+- 시각/설정 회귀: PC1440×1000 출발 폼·모바일390×844 도착 폼/저장/자동 선택/루틴 저장을 확인했다. 가로 넘침0·콘솔error0, 기존 미색·녹색·흰 카드·얇은 선·Noto Sans KR/lucide 톤 유지. 기존 내 설정의 장소 목록에도 새2개가 표시됐다. 공개 역 주소는 검증 입력이며 실사용 경로/실시간 가능성 보장이 아니다. 인라인 생성의 지도 핀 브라우저 확인과 실기기GPS는 이번에 재실행하지 않았다(기존 재사용 컴포넌트 테스트는 통과).
+- 정리/실행: 테스트 계정 ID와 전용 example.invalid 이메일을 대조해 생성 데이터만 정리했고 전용 검증 계정 외 루틴은 건드리지 않았고 정리 후 다른 계정의 루틴9건을 확인했다. 로그아웃·임시 탭 종료·viewport 원복. 기존 Vite5173의 HMR을 사용했고 백엔드8000은 그대로 유지했다. 스크린샷은 visualizations의 routine-inline-place-desktop.png / routine-inline-place-mobile.png / routine-inline-success-mobile.png에 보관했다. 개인 키·쿠키·사용자 이메일은 일지에 기록하지 않았다.
+- 명세 동기화: 착수 전 최신 Notion v0.46 및 관련 로컬 문서를 확인했다. 사용자 흐름 확장이므로 구현 전 v0.47의5.3.2/변경 이력에 기존 장소 API 재사용·저장 후 선택·실패/취소·반대쪽 유지·호환성 정책을 추가했다. 최종 구현/검증 상태·공통 상태·변경 이력을 갱신하고 재조회로 저장 확인, api_contract.md를 Notion 최종 본문과 기계 비교해 동기화했다. planning/screen_plan/design_guide/routine_api/frontend README·TODO·feature_breakdown을 함께 갱신했다. 기존 API 경로/필드/인증/CSRF/멱등/보관/시간/계산·DB 스키마와 클라이언트 호환성은 유지한다.
+- 배운 개념: 같은 저장 로직을 생성 전용 화면으로 재사용하면 설정과 등록 흐름의 계약이 갈라지지 않는다. 장소 저장 성공과 지점 선택 검증은 별개 단계다. 저장201 이후 검증만 실패했다면 재생성 대신 같은 place_id를 다시 검증해야 중복 장소를 막을 수 있다. 새 흐름의 중복 클릭 차단 때문에 기존 GPS 취소까지 막지 않도록 범위를 좁힌다.
+- 남은 일: 사용자 검토/MR·병합 후 F06-04 복구 안내 확장 및 F05/F07 도보·실시간 출발 안내는 기존 후속 상태다. 이번 작업은 F06-03a 완료이며 장소 저장과 루틴 생성의 명시 확인을 유지한다.
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa

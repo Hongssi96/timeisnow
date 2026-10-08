@@ -117,7 +117,8 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
     async def test_expiry_restart_and_late_worker_cannot_resurrect(self):
         await self.signup_login();accepted,_,_=await self.completed(key='expiry')
         identifier=accepted[2]['data']['search_id'];job_id=accepted[2]['data']['job_id']
-        with auth.database() as c:c.execute("UPDATE journey_searches SET expires_at=now(),status='running',worker_deadline=now()-interval '1 second'")
+        # DB and application clocks can differ slightly; exercise an unambiguously expired row.
+        with auth.database() as c:c.execute("UPDATE journey_searches SET expires_at=now()-interval '1 hour',status='running',worker_deadline=now()-interval '1 hour'")
         self.assertEqual((await self.call('/journey-searches/'+identifier))[0],404)
         job=(await self.call('/jobs/'+job_id))[2]['data']
         self.assertEqual(job['error']['code'],'JOB_INTERRUPTED');self.assertTrue(job['result_expired'])
@@ -129,7 +130,7 @@ class JourneyTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(journey_provider,'fetch_routes') as provider:
             journeys.execute(identifier,user_id,None,None,'balanced')
             provider.assert_not_called()
-        with auth.database() as c:c.execute('UPDATE journey_searches SET job_expires_at=now()')
+        with auth.database() as c:c.execute("UPDATE journey_searches SET job_expires_at=now()-interval '1 hour'")
         self.assertEqual((await self.call('/jobs/'+job_id))[0],404)
 
     async def test_failed_worker_and_empty_results_are_distinct(self):
