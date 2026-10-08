@@ -163,3 +163,5 @@ JourneyUnavailable은 기존 card/empty-state/button-row/secondary를 재사용�
 
 ### F06-03 루틴 화면 재사용 (2026-10-08)
 RoutinesPanel/RoutineSummary/RoutineStatus는 기존 card/routine-card/routine-grid/day-list/primary/secondary/info-box/place-delete-confirm과 lucide를 재사용한다. 이름/장소는 줄바꿈하고 버튼은44px 이상, 편집 입력에는 라벨·초기 포커스, 삭제 확인은 취소에 초기 포커스, pending 중 중복 행동을 차단한다. 홈의 저장 경로 요약은 기존 카드 톤으로 표시하며 미구현 출발 안내의 예시 숫자는 제거한다. .routine-actions 줄바꿈·.routine-toolbar .tabs 줄바꿈·14px 상태 본문을 적용했다. 새 팔레트/폰트/내비게이션 없음. 데스크톱1440×1000 및 모바일390×844 실제 DB 목록/수정/선택과 삭제 취소를 확인했다.
+
+F06-03 저장 조건 안내(2026-10-08): 기존 comparison-form/info-box/secondary/text-button을 사용한다. .routine-save-help의 버튼 행은 좁은 화면에서 줄바꿈하고 안내 본문14px/기존 색을 유지한다. PC1440×1000·모바일390×844에서 안내/버튼/저장 패널과 가로 넘침0을 확인했다. 새 팔레트·내비게이션 없음.

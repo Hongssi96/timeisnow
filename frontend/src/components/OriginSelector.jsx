@@ -9,9 +9,9 @@ const validLocation = value => Number.isFinite(value?.latitude) && Math.abs(valu
 const validPlace = value => typeof value?.place_id === 'string' && typeof value.label === 'string'
   && validLocation(value.location) && Number.isInteger(value.location_version) && value.location_version >= 1;
 
-export default function OriginSelector({ onSelect, onLogin, onAuthError, purpose = 'origin' }) {
+export default function OriginSelector({ onSelect, onLogin, onAuthError, purpose = 'origin', initialMode = 'current' }) {
   const noun = purpose === 'destination' ? '도착' : '출발';
-  const [mode, setMode] = useState('current');
+  const [mode, setMode] = useState(initialMode);
   const [phase, setPhase] = useState('loading');
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
