@@ -10,7 +10,7 @@ afterEach(()=>{vi.resetAllMocks();vi.useRealTimers();});
 const accepted={search_id:'search_test',job_id:'job_test',status:'queued'};
 const reply=(data,status=200)=>({data,status,meta:{server_time:new Date().toISOString()}});
 const result=(candidates=[fixtures.direct,fixtures.mixed],status='succeeded')=>reply({...accepted,status,candidates:structuredClone(candidates),unavailable_reasons:[],error:status==='failed'?{code:'PROVIDER_TIMEOUT',message:'private upstream'}:null,expires_at:new Date(Date.now()+290000).toISOString()});
-const saved=(routine_id='routine_one',name='출발 검증역 → 도착 검증역 통근')=>({routine_id,name,origin_place:{place_id:'place_origin',label:'출발 검증역',name:'출발 장소',address:'서울 어딘가'},destination_place:{place_id:'place_destination',label:'도착 검증역',name:'도착 장소',address:'경기 어딘가'},route:{journey_plan_id:'11111111-1111-1111-1111-111111111111',type:'BUS',total_seconds:600,transfer_count:0},status:'active',version:1,created_at:'2026-10-07T00:00:00Z',updated_at:'2026-10-07T00:00:00Z'});
+const saved=(routine_id='routine_one',name='출발 검증역 → 도착 검증역 통근')=>({routine_id,name,origin_place:{place_id:'place_origin',label:'출발 검증역',name:'출발 장소',address:'서울 어딘가'},destination_place:{place_id:'place_destination',label:'도착 검증역',name:'도착 장소',address:'경기 어딘가'},route:{journey_plan_id:'11111111-1111-1111-1111-111111111111',type:'BUS',total_seconds:600,transfer_count:0},weekdays:[1,2,3,4,5],target_arrival_local_time:null,timezone:'Asia/Seoul',status:'active',version:1,created_at:'2026-10-07T00:00:00Z',updated_at:'2026-10-07T00:00:00Z'});
 function mockApi(get=()=>result(),post=()=>reply(accepted,202),save=()=>reply(saved(),201)){
   apiRequest.mockImplementation(path=>{
     if(path==='/api/v1/auth/csrf')return Promise.resolve(reply({csrf_token:'csrf_test'}));
@@ -36,11 +36,51 @@ it('saves a candidate as a named routine with idempotency key',async()=>{
   const [path,options]=calls[0];expect(path).toBe('/api/v1/routines');
   expect(options.method).toBe('POST');expect(options.headers['Idempotency-Key']).toBeTruthy();
   expect(options.body).toEqual({name:'출발 검증역 → 도착 검증역 통근',origin_place_id:'place_origin',
-    destination_place_id:'place_destination',search_id:'search_test',candidate_id:fixtures.direct.candidate_id});
+    destination_place_id:'place_destination',search_id:'search_test',candidate_id:fixtures.direct.candidate_id,
+    weekdays:[1,2,3,4,5],target_arrival_local_time:null});
   expect(onRoutineSaved).toHaveBeenCalledOnce();
   expect(screen.getByText('루틴에 저장했어요')).toBeTruthy();
   expect(screen.queryByLabelText('루틴 이름')).toBeNull();
   expect(apiRequest.mock.calls.filter(([path])=>path==='/api/v1/routines')).toHaveLength(1);
+});
+
+it('defaults weekdays to Monday to Friday and sends the toggled schedule',async()=>{
+  mockApi();const user=await open();await search(user);
+  await user.click(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})[0]);
+  const pressed=()=>screen.getAllByRole('button',{pressed:true}).map(node=>node.textContent);
+  expect(pressed()).toEqual(['월','화','수','목','금']);
+  await user.click(screen.getByRole('button',{name:'금'}));
+  await user.click(screen.getByRole('button',{name:'토'}));
+  expect(pressed()).toEqual(['월','화','수','목','토']);
+  await user.click(screen.getByRole('button',{name:'루틴 저장'}));
+  const saves=apiRequest.mock.calls.filter(([path])=>path==='/api/v1/routines');
+  expect(saves).toHaveLength(1);expect(saves[0][1].body.weekdays).toEqual([1,2,3,4,6]);
+});
+
+it('saving stays blocked while no weekday is selected',async()=>{
+  mockApi();const user=await open();await search(user);
+  await user.click(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})[0]);
+  for(const day of ['월','화','수','목','금'])await user.click(screen.getByRole('button',{name:day}));
+  expect(screen.queryAllByRole('button',{pressed:true})).toHaveLength(0);
+  const submit=screen.getByRole('button',{name:'루틴 저장'});
+  expect(submit.disabled).toBe(true);
+  await user.click(submit);
+  expect(apiRequest.mock.calls.filter(([path])=>path==='/api/v1/routines')).toHaveLength(0);
+});
+
+it('sends the optional target arrival time only when entered',async()=>{
+  mockApi();const user=await open();await search(user);
+  await user.click(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})[0]);
+  await act(async()=>fireEvent.change(screen.getByLabelText(/목표 도착 시각/),{target:{value:'08:30'}}));
+  await user.click(screen.getByRole('button',{name:'루틴 저장'}));
+  let saves=apiRequest.mock.calls.filter(([path])=>path==='/api/v1/routines');
+  expect(saves).toHaveLength(1);expect(saves[0][1].body.target_arrival_local_time).toBe('08:30');
+  await user.click(screen.getByRole('button',{name:'도착지 변경'}));await user.click(screen.getByRole('button',{name:'검증 위치 적용'}));
+  await search(user);
+  await user.click(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})[0]);
+  await user.click(screen.getByRole('button',{name:'루틴 저장'}));
+  saves=apiRequest.mock.calls.filter(([path])=>path==='/api/v1/routines');
+  expect(saves).toHaveLength(2);expect(saves[1][1].body.target_arrival_local_time).toBeNull();
 });
 
 it('uses the typed routine name and falls back to the default when cleared',async()=>{
@@ -80,6 +120,14 @@ it('failed save surfaces a safe message and retry reruns only the save',async()=
 
 it('malformed saved response is rejected and never shown',async()=>{
   const bad=saved();delete bad.route;mockApi(()=>result(),()=>reply(accepted,202),()=>reply(bad,201));
+  const onRoutineSaved=vi.fn();const user=await open({onRoutineSaved});await search(user);
+  await user.click(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})[0]);
+  await user.click(screen.getByRole('button',{name:'루틴 저장'}));
+  expect(onRoutineSaved).not.toHaveBeenCalled();expect(screen.getAllByRole('alert').length).toBeGreaterThanOrEqual(1);
+});
+
+it('saved response without a valid schedule is rejected',async()=>{
+  const bad=saved();delete bad.weekdays;mockApi(()=>result(),()=>reply(accepted,202),()=>reply(bad,201));
   const onRoutineSaved=vi.fn();const user=await open({onRoutineSaved});await search(user);
   await user.click(screen.getAllByRole('button',{name:'이 경로를 루틴에 저장'})[0]);
   await user.click(screen.getByRole('button',{name:'루틴 저장'}));

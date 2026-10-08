@@ -56,6 +56,29 @@ describe('화면 체험의 주요 사용자 흐름', () => {
 });
 // 장소 API는 PlacesCard.test.jsx에서 별도로 검증한다.
 vi.mock('../../src/components/PlacesCard', () => ({ default: () => <section><h2>내 장소</h2></section> }));
+vi.mock('../../src/components/OriginSelector', () => ({ default: ({ purpose, onSelect }) => <button onClick={() => onSelect({ label: purpose === 'origin' ? '출발 검증역' : '도착 검증역', location_address: '서울 공개 검증 위치', origin: { type: 'saved_place', place_id: purpose === 'origin' ? 'place_origin' : 'place_destination', location_version: 1 }, deadline: Date.now() + 600000 })}>검증 위치 적용</button> }));
+describe('경로 비교 화면의 계정 모달', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('계정 모달을 열었다 닫아도 출발지·도착지 선택이 유지된다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 401, headers: new Headers(), json: async () => ({ error: { code: 'AUTH_REQUIRED', message: '로그인이 필요해요' }, meta: { request_id: 'req_anon', server_time: '2026-10-07T00:00:00Z' } }) })));
+    render(<App/>); const u = userEvent.setup();
+    await u.click(screen.getByRole('button', { name: '경로 후보 비교' }));
+    expect(screen.getByRole('button', { name: '경로 후보 조회' })).toBeTruthy();
+    await u.click(screen.getByRole('button', { name: '출발지 선택' }));
+    await u.click(screen.getByRole('button', { name: '검증 위치 적용' }));
+    await u.click(screen.getByRole('button', { name: '도착지 선택' }));
+    await u.click(screen.getByRole('button', { name: '검증 위치 적용' }));
+    const profile = screen.getByRole('button', { name: /회원가입 · 로그인/ });
+    await u.click(profile);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '로그인하기' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '경로 후보 조회' })).toBeTruthy();
+    await u.click(screen.getByRole('button', { name: '닫기' }));
+    expect(screen.getByText('출발 검증역')).toBeTruthy();
+    expect(screen.getByText('도착 검증역')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '경로 후보 조회' })).toBeTruthy();
+  });
+});
 describe('서버 연결 확인', () => {
   afterEach(() => vi.unstubAllGlobals());
   it('정상 응답이면 연결됨과 확인 시각을 표시한다', async () => {

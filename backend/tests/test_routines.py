@@ -41,7 +41,7 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
 
     def routine_body(self, home, work, search_id, candidate, name='아침 출근'):
         return {'name': name, 'origin_place_id': home['place_id'], 'destination_place_id': work['place_id'],
-                'search_id': search_id, 'candidate_id': candidate['candidate_id']}
+                'search_id': search_id, 'candidate_id': candidate['candidate_id'], 'weekdays': [1, 2, 3, 4, 5]}
 
     async def save(self, body, key=None, csrf=True):
         headers = [(b'origin', b'http://127.0.0.1:5173'), (b'content-type', b'application/json')]
@@ -65,6 +65,9 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data['route']['type'], candidate['type'])
         self.assertEqual(data['route']['total_seconds'], candidate['total_seconds'])
         self.assertEqual(data['route']['transfer_count'], candidate['transfer_count'])
+        self.assertEqual(data['weekdays'], [1, 2, 3, 4, 5])
+        self.assertIsNone(data['target_arrival_local_time'])
+        self.assertEqual(data['timezone'], 'Asia/Seoul')
         self.assertNotIn('latitude', json.dumps(created[2]))
         detail = await self.call('/routines/' + data['routine_id'])
         self.assertEqual(detail[0], 200)
@@ -95,6 +98,15 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.save({**body, 'name': '가' * 31}))[0], 422)
         self.assertEqual((await self.save({**body, 'extra': 'x'}))[0], 422)
         self.assertEqual((await self.save({**body, 'destination_place_id': home['place_id']}))[0], 422)
+        self.assertEqual((await self.save({**body, 'weekdays': []}))[0], 422)
+        self.assertEqual((await self.save({**body, 'weekdays': [0, 1]}))[0], 422)
+        self.assertEqual((await self.save({**body, 'weekdays': [8]}))[0], 422)
+        self.assertEqual((await self.save({**body, 'weekdays': [1, 1, 2]}))[0], 422)
+        self.assertEqual((await self.save({**body, 'weekdays': ['1']}))[0], 422)
+        self.assertEqual((await self.save({**body, 'target_arrival_local_time': '8:30'}))[0], 422)
+        self.assertEqual((await self.save({**body, 'target_arrival_local_time': '09:60'}))[0], 422)
+        self.assertEqual((await self.save({**body, 'target_arrival_local_time': '09:00:00'}))[0], 422)
+        self.assertEqual((await self.save({**body, 'timezone': 'UTC'}))[0], 422)
         self.assertEqual((await self.save({**body, 'search_id': str(uuid4())}))[0], 404)
         self.assertEqual((await self.save({**body, 'candidate_id': str(uuid4())}))[0], 404)
         # A candidate from a different search does not belong to this search.
@@ -107,7 +119,7 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         pin_candidate = pin_result[2]['data']['candidates'][0]['candidate_id']
         self.assertEqual((await self.save({**body, 'search_id': pin_search_id, 'candidate_id': pin_candidate}))[0], 422)
         with auth.database() as connection:
-            connection.execute('UPDATE journey_searches SET expires_at=now() WHERE id=%s', (search_id,))
+            connection.execute("UPDATE journey_searches SET expires_at=now()-interval '1 hour' WHERE id=%s", (search_id,))
         self.assertEqual((await self.save(body))[0], 404)
         # A moved place no longer matches the search that referenced it.
         home2, work2, fresh_id, fresh_candidate = await self.saved_search()
@@ -127,7 +139,7 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         self.csrf = logged[2]['data']['csrf_token']
         foreign = {'name': '다른 회원 루틴', 'origin_place_id': home['place_id'],
                    'destination_place_id': work['place_id'], 'search_id': pin_search_id,
-                   'candidate_id': pin_candidate}
+                   'candidate_id': pin_candidate, 'weekdays': [1, 2, 3, 4, 5]}
         self.assertEqual((await self.save(foreign))[0], 404)
 
     async def test_idempotent_replay_conflict_and_deleted_marker(self):
@@ -215,3 +227,60 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(private, logs)
         entries = [json.loads(line) for line in logs.splitlines()]
         self.assertEqual([entry['route'] for entry in entries], ['/api/v1/routines', '/api/v1/routines/{routine_id}'])
+
+    async def test_schedule_saved_with_target_and_echoed(self):
+        home, work, search_id, candidate = await self.ready()
+        body = {**self.routine_body(home, work, search_id, candidate), 'target_arrival_local_time': '08:30'}
+        created = await self.save(body)
+        self.assertEqual(created[0], 201)
+        data = created[2]['data']
+        self.assertEqual(data['weekdays'], [1, 2, 3, 4, 5])
+        self.assertEqual(data['target_arrival_local_time'], '08:30')
+        self.assertEqual(data['timezone'], 'Asia/Seoul')
+        detail = (await self.call('/routines/' + data['routine_id']))[2]['data']
+        self.assertEqual(detail, data)
+
+    async def schedule(self, path, body, csrf=True):
+        headers = [(b'origin', b'http://127.0.0.1:5173'), (b'content-type', b'application/json')]
+        if self.cookie: headers.append((b'cookie', self.cookie.encode()))
+        if csrf and self.csrf: headers.append((b'x-csrf-token', self.csrf.encode()))
+        return await request(path, 'PATCH', headers=headers, body=json.dumps(body).encode())
+
+    async def test_schedule_update_conflicts_and_ownership(self):
+        home, work, search_id, candidate = await self.ready()
+        data = (await self.save(self.routine_body(home, work, search_id, candidate)))[2]['data']
+        path = '/api/v1/routines/' + data['routine_id']
+        cookie, csrf_token = self.cookie, self.csrf
+        self.cookie = None; self.csrf = None
+        self.assertEqual((await self.schedule(path, {'expected_version': 1}))[0], 401)
+        self.cookie, self.csrf = cookie, csrf_token
+        self.assertEqual((await self.schedule(path, {'expected_version': 1}, csrf=False))[0], 403)
+        self.assertEqual((await self.schedule(path, {'expected_version': 0}))[0], 422)
+        self.assertEqual((await self.schedule(path, {'expected_version': 1, 'weekdays': [2, 2]}))[0], 422)
+        self.assertEqual((await self.schedule(path, {'expected_version': 1, 'target_arrival_local_time': '7:00'}))[0], 422)
+        self.assertEqual((await self.schedule(path, {'expected_version': 2, 'weekdays': [1]}))[0], 409)
+        self.assertEqual((await self.schedule(path, {'expected_version': 1, 'weekdays': [1, 7], 'target_arrival_local_time': '08:30'}))[0], 200)
+        updated = (await self.call('/routines/' + data['routine_id']))[2]['data']
+        self.assertEqual(updated['weekdays'], [1, 7])
+        self.assertEqual(updated['target_arrival_local_time'], '08:30')
+        self.assertEqual(updated['version'], 2)
+        # Unsent fields keep their values; explicit null clears the optional target.
+        self.assertEqual((await self.schedule(path, {'expected_version': 2}))[0], 200)
+        kept = (await self.call('/routines/' + data['routine_id']))[2]['data']
+        self.assertEqual(kept['weekdays'], updated['weekdays'])
+        self.assertEqual(kept['target_arrival_local_time'], updated['target_arrival_local_time'])
+        self.assertEqual(kept['version'], 3)
+        self.assertEqual((await self.schedule(path, {'expected_version': 3, 'target_arrival_local_time': None}))[0], 200)
+        cleared = (await self.call('/routines/' + data['routine_id']))[2]['data']
+        self.assertIsNone(cleared['target_arrival_local_time'])
+        self.assertEqual(cleared['weekdays'], [1, 7])
+        self.assertEqual(cleared['version'], 4)
+        # Another member cannot change or read this schedule.
+        self.cookie = None; self.csrf = None
+        await self.prepare()
+        credentials = self.credentials('other@example.invalid')
+        await self.call('/auth/register', credentials)
+        logged = await self.call('/auth/login', {'email': 'other@example.invalid', 'password': credentials['password']})
+        self.cookie = logged[1][b'set-cookie'].decode().split(';')[0]
+        self.csrf = logged[2]['data']['csrf_token']
+        self.assertEqual((await self.schedule(path, {'expected_version': 4, 'weekdays': [1]}))[0], 404)

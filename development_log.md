@@ -671,3 +671,45 @@
 - 배운 개념: 검색 결과 자원은 만료 정리 대상이라 참조가 필요한 데이터는 저장 시점에 별도 스냅샷 자원으로 복사해야 한다. 응답 조립에 추가 질의가 필요하면 트랜잭션 안에서 수행해야 한다.
 - 남은 일: F06-02 요일·목표 도착 저장, F06-03 목록·선택·수정·삭제, F06-04 복구 안내. 사용자가 helpycode/routine-save를 검토 후 MR 생성·병합한다. Notion 5절의 5.6~5.8 재번호는 예시 절 이동이며 참조 문구는 없음을 확인했다. 2026-10-07 사용자 결정: 홈·내 루틴의 가상 루틴(initialRoutines '평일 출근'·'학교 가는 길')은 지금 유지하고 F06-03에서 실제 API 목록으로 교체하면서 제거한다(사용자 선택).
 - 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+## 2026-10-07 F06-02 루틴 요일·목표 도착 시각 저장(helpycode/routine-schedule)
+
+- 목표: F06-01로 저장한 루틴에 반복 요일(ISO 1~7)과 선택적 목표 도착 시각(HH:mm, Asia/Seoul)을 저장하고, 저장 후 요일·목표 도착만 바꾸는 일정 PATCH를 제공한다. 이전 세션에서 백엔드·마이그레이션·저장 패널 일부까지 구현된 상태로 터미널이 종료돼 이어서 마무리했다.
+- 변경: backend/migrations/versions/0008_routine_schedule.py 신규(routines에 weekdays smallint[] NOT NULL 기본 월~금·CHECK, target_arrival_local_time time, timezone 기본 Asia/Seoul·CHECK), backend/app/routines.py(저장 입력 weekdays 필수·목표 도착 HH:mm 선택 검증, 응답에 weekdays·target_arrival_local_time·timezone 포함, PATCH /routines/{routine_id} 일정 부분: expected_version 불일치 409, 미전송 필드 유지·명시적 null로 목표 삭제, version+1·updated_at 갱신), backend/tests/test_routines.py(요일 빈값/중복/범위/문자열·HH:mm 오류·timezone 입력 차단과 저장·PATCH 테스트 추가, 만료 보정 UPDATE를 과거 시각으로 명시), backend/tests/test_migrations.py(기대 head 0008), frontend/src/components/JourneyCandidates.jsx(저장 패널 반복 요일 토글 기본 월~금·목표 도착 time 입력·요일 0개면 저장 비활성·안내 문구 갱신), frontend/src/components/JourneyComparison.jsx(validSchedule 헬퍼로 POST 본문에 weekdays·target_arrival_local_time 전송, 응답의 요일·목표·timezone 검증 추가), frontend/src/styles/styles.css(routine-days·day-list 스타일 추가 — 기존 tabs/nav 활성 팔레트 재사용), frontend/tests/components/JourneyCandidates.test.jsx(요일 기본·토글·전체 해제 차단·목표 전달·일정 누락 응답 거부 등 신규 5개 포함).
+- 계약: Notion v0.45로 갱신(헤더·상태 줄, 2절 POST/PATCH 행, 5.3 제목·입력·스냅샷·201 응답·PATCH 계약·F06-02 구현/검증 문단, 변경 이력) 후 재조회로 저장 확인(작성 오타 Aisa→Asia 정정 포함). api_contract.md를 Notion 본문과 바이트 일치 방식으로 전문 동기화했다. database_schema.md B절에 0008 적용 기록. POST weekdays 필수 전환은 weekdays 없는 기존 본문이 422가 되는 호환성 변경으로 변경 이력에 명시했다. PATCH는 요일·목표 도착만이며 이름·경로 변경은 F06-03 확장임을 명세에 표기했다.
+- 발견/수정: 기존 api_contract.md 사본이 Notion 이스케이프(\~, \{)를 부분적으로 풀어 쓰고 F06-01 프론트 검증 수치가 109개로 개발 일지·Notion(110개)과 달랐다. 이번부터 Notion 원문 본문을 그대로 저장하는 동기화 방식으로 바꿔 다음 대조가 기계적으로 가능하게 했고 todo.md·feature_breakdown.md의 F06-01 수치를 110개로 정정했다. 프론트 테스트에서 getAllByRole은 0개 기대에 예외를 던지므로 queryAllByRole로 바로잡았다.
+- 실제 검증: 백엔드 unittest 125개(43.4초) 통과 — 요일·시각·timezone 422 케이스, 저장 응답 weekdays·target·timezone, PATCH 401/403/422/409·미전송 유지·null 삭제·version 증가·타인 404, 마이그레이션 up/down roundtrip(기대 head 0008). 프론트 테스트 114개·Vite 프로덕션 빌드 통과. 로컬 DB에 0008 적용 확인(migrate.py current = 0008_routine_schedule head).
+- 시각 검증: tests fixture를 렌더링한 임시 QA 페이지를 Vite+Playwright(Chromium)로 PC1440×1000·모바일390×844에서 확인 — 요일 버튼 7개·기본 월~금 aria-pressed, 금 해제·토 선택 반영, 요일 전부 해제 시 저장 비활성, 목표 도착 08:30 입력 시 저장 전달값 weekdays [1,2,3,4,6]·target '08:30', 기본 저장은 target null, 가로넘침 0px, 콘솔 오류 0, 미색 배경·흰 카드·녹색 강조 기존 톤 유지(스크린샷 확인). 임시 qa_f0602 html/jsx는 삭제했다.
+- 검증 한계: 실제 카카오 저장 흐름 재호출은 하지 않았다(공급자·화면 흐름은 F06-01에서 실호출 검증, 이번 변경은 전달 필드 추가). 화면 시각 검증은 합성 fixture 기준이며 실기기는 미확인. 내 루틴 화면 연동·요일 표기는 F06-03에서 실제 API 목록으로 교체하며 검증한다.
+- 실행 반영: 시각 검증을 위해 Vite 개발 서버를 임시 실행 후 종료했다. 백엔드는 테스트가 ASGI 레벨에서 검증하며 uvicorn 재시작은 사용자 확인 시점에 맞춰 진행한다.
+- 배운 개념: 일정 PATCH에서 '보내지 않으면 유지, 명시적 null이면 삭제'를 구현하려면 Pydantic model_fields_set으로 전송 여부를 구분해야 한다. 부분 수정 계약을 단계(F06-02)로 나눠 도입할 때는 나머지 필드(이름·경로)의 소속 단계를 문서에 명시해 계약이 흐려지지 않게 한다.
+- 남은 일: F06-03 루틴 목록·선택·수정·삭제(App.jsx 가상 루틴 '평일 출근'·'학교 가는 길'을 실제 API 목록으로 교체), F06-04 복구 안내. 커밋은 사용자 화면 확인 후 helpycode/routine-schedule에 진행하고 MR 생성·병합은 사용자가 한다.
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+## 2026-10-07 F06-02 후속: 계정 모달이 경로 비교 화면을 지우던 문제 수정
+
+- 목표: 사용자 확인 중 보고된 "경로 후보 비교에 들어가면 출발지·도착지를 다시 선택해야 하고 그 상태에서 루틴 추가가 안 된다" 문제의 원인 규명과 최소 수정.
+- 원인 진단(근거: App.jsx·JourneyComparison.jsx·OriginSelector.jsx 코드와 17:41~17:42 성공한 검색 3건·저장 0건 DB 대조): 1) App.jsx가 `modal==='account'`일 때 JourneyComparison을 언마운트해 도착지·검색 결과·편집 상태가 사라졌고, 출발지는 홈 위치 모달에서만 App 레벨로 저장돼 비교 화면 안에서 고른 출발지는 보존되지 않았다. 2) 출발지 선택은 서버 TTL 최대 10분(origin-validations expires_at)이라 로그인에 시간을 쓰면 만료됐다. 3) 경로 검색 결과 만료(5분)는 재조회로 같은 출발지·도착지로 복구되므로 재선택 원인이 아니었다. 백엔드 저장 API 자체는 정상(아래 실증).
+- 서버 원인 별건: 사용자가 사용하던 8000 포트를 이전 세션의 낡은 백엔드(F06-01 코드, 시스템 Python, 15:33 시작)가 점유하고 있어 새 프론트가 보낸 weekdays를 모르는 필드로 거부했다. 낡은 프로세스를 종료하고 venv로 새 백엔드를 교체(17:10)했고 PATCH /routines/... 422로 새 계약 서빙을 확인했다. 백그라운드 작업 중단 표시는 포트 충돌 때문이었다.
+- 실제 저장 실증(사용자 확인용): 실제 카카오 공급자로 가입→로그인→강남역/서울역 장소 저장→경로 검색(후보 15)→루틴 저장 201→상세 200까지 성공. DB에 'E2E 저장확인'(weekdays [1,2,3,4,5], 목표도착 08:30, Asia/Seoul, 17:16:56) 기록 확인. 사용자의 마지막 저장 시도가 이 시점 이후 없음을 확인.
+- 수정: App.jsx 93행의 `modal!=='account'` 조건 제거. 계정 모달이 열려 있어도 비교 화면(출발지·도착지·검색 결과·저장 패널)이 유지되고, 로그인 후 조회 버튼으로 이어서 진행한다. 익명 감지는 조회 시 401(AUTH_REQUIRED)로 이뤄지므로 별도 복구 로직이 필요 없었다. API 계약 영향 없음(명세 변경 없음).
+- 테스트: App.test.jsx에 "계정 모달을 열었다 닫아도 출발지·도착지 선택이 유지된다" 추가(OriginSelector 목킹, /me 401 스텁). 프론트 115개 통과. vi.mock은 모듈 최상위에 있어야 한다는 점, <dialog>에 접근 가능한 이름이 없어 이름 미지정 조회로 바로잡았다.
+- 시각 검증: Playwright(Chromium) 실제 화면으로 PC1440×1000(사이드바 프로필→모달)과 모바일390×844(출발지 선택 편집기의 로그인하기→모달)에서 모달 뒤 '경로 후보 조회' 버튼 유지·닫은 뒤에도 유지·가로넘침 0px·콘솔 오류 0 확인. 모바일 스크린샷으로 미색/녹색 톤·잘림 없음 확인. 모바일은 사이드바가 숨겨져(.sidebar display:none) 비교 화면 위 모달 진입은 편집기/조회 실패 경로만 존재한다(기존 설계 유지).
+- 배운 개념: 조건부 렌더링으로 모달을 "화면 대체"로 쓰면 모달을 여는 순간 화면 상태가 사라진다. 모달은 오버레이(dialog)로 두고 화면은 살려두는 것이 상태 보존의 기본이다. 백엔드 교체 후에는 실제 포트 점유자(프로세스 시작 시간·신규 라우트 응답)로 코드 버전을 확인해야 했다.
+- 남은 일: F06-03 루틴 목록·수정·삭제(내 루틴 화면 실제 API 연결 — "저장했는데 내 루틴에 안 보인다" 체감의 근본 해소), F06-04 복구 안내. 출발지 10분 만료와 페이지 이동 시 상태 초기화는 이번 범위 밖(사용자 승인 시 후속).
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+
+
+## 2026-10-08 F06-03 DB·루틴 저장 진단
+
+- 목표: 사용자가 F06-03 진행 중 실제 DB 연결 여부와 경로 후보를 루틴에 추가해도 반영되지 않는 원인 확인을 요청했다. 이번 작업은 연결·저장 진단이며 F06-03 전체 구현 완료를 의미하지 않는다.
+- 작업 상태: 현재 helpycode/routine-schedule, HEAD 및 최신 origin/main 모두2248346. 기존 미커밋 F06-02 코드/문서/0008 마이그레이션이 존재하며 그대로 보존했다. 기능 코드 변경·새 기능 브랜치·기존 변경 커밋/푸시·MR 생성/병합은 하지 않았다. 변경 파일은 이번 진단을 추가한 todo.md 및 development_log.md다.
+- 명세: Notion API 명세 v0.45(마지막 편집2026-10-07T08:05:00.054Z)를 연결 도구로 읽고5.3 및 루틴 API 목록과 로컬 planning.md·feature_breakdown.md·관련 개발 일지/화면/개인화/프롬프트/로깅 문서를 확인했다. POST 저장 및 GET 상세/PATCH 일정은 구현, GET 목록/이름·경로 수정/DELETE는 F06-03 후속이라는 명세와 실제 코드가 일치한다. 진단·실행 환경 복구만 수행했으므로 계약 변경 및 Notion 수정 없음.
+- 실제 DB 확인: backend/.venv/Scripts/python.exe backend/check_db.py 성공, PostgreSQL17.11. migrate.py current는0008_routine_schedule(head). 읽기전용 SQL로 routines8건·journey_plans8건·journey_searches15건 확인. 최신 기존 저장은2026-10-07 17:16:56 KST이며 weekdays 월~금·목표 도착 있음·active다. 이름/계정/주소/연결 비밀은 출력·기록하지 않았다.
+- 원인1: App.jsx initialRoutines와 useState(initialRoutines)가 홈/내 루틴의 가상2개를 사용한다. JourneyComparison.saveRoutine은 POST /api/v1/routines를 호출하지만 App.jsx onRoutineSaved는 토스트/로그만 처리하며 setRoutines 또는 목록 재조회가 없다. DB 저장 성공과 화면 목록 반영이 분리돼 있어 저장해도 목록에 나타나지 않는다.
+- 원인2: 내 루틴의 추가/수정 RoutineForm은 setRoutines로 브라우저 메모리만 바꾼다. 경로 후보 저장 API와 다른 데모 흐름이고 새로고침하면 사라진다. 목록 API GET /api/v1/routines 자체가 없으며 실행 서버 요청은405 METHOD_NOT_ALLOWED다.
+- 실행 상태: 점검 시127.0.0.1:8000 및 localhost:5173 HTTP 접속 모두 실패했다. DB 자체는 실행 중이므로 DB 설정/데이터/마이그레이션을 변경하지 않았다. 프로젝트 venv로 최신 uvicorn을8000에, 현재 Vite를5173에 숨김 창으로 실행했다. 이후 backend health200, frontend HTML200, Vite 프록시 /api/v1/health200 확인. OpenAPI에서 POST /routines 및 GET/PATCH /routines/{id}, RoutineInput의 weekdays/target_arrival_local_time 제공 확인. runtime-check stdout/stderr 로그는 기존 *.log 무시 규칙으로 Git 제외된다.
+- 실제 검증: 백엔드 test_routines.py8개(9.438초) 통과. 실제 PostgreSQL의 테스트 전용 격리 스키마에 합성 공급자 경로를 저장해 POST201·GET200·재로그인 조회·멱등·소유권·장소 삭제 연동·일정 PATCH 검증. 프론트 tests/components/JourneyCandidates.test.jsx13개 통과(저장 본문·요일/목표 시각·성공/실패/만료 등). 실제 카카오/사용자 계정 저장 재현 또는 브라우저 시각 검증은 이번에 수행하지 않았다. 사용자 특정 저장 시도의 HTTP 오류는 캡처하지 않았으므로 모든 실패를 목록 문제로 단정하지 않는다.
+- 배운 개념: DB 연결 성공, 저장 API 성공, 화면 목록 동기화는 각각 확인해야 한다. 저장201을 받더라도 목록이 데모 상태이거나 성공 후 재조회가 없으면 화면에 반영되지 않는다. health200만으로 DB 연결 정상이라고 판단하지 않는다.
+- 남은 일/다음 작업: F06-03은 [ ] 유지. 기존 F06-02 변경 검토·게시 후 본인 GET /routines(명세의 cursor/limit), 홈·내 루틴 실제 목록·저장 후 갱신, 추가/수정/삭제 API 연결 및 빈 상태/인증 만료/오류를 구현하고 검증해야 한다. 확인된 현재 저장 조건은 출발·도착 모두 본인 저장 장소, 검색5분 이내, 검색 당시 location_version 유지다. 실제 사용자 저장 오류는 해당 요청 상태/오류 코드로 별도 구분한다.
+- 기준: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
