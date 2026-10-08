@@ -6,7 +6,8 @@ import re
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
+from fastapi.responses import Response
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, StringConstraints, StrictInt, model_validator
 
@@ -49,6 +50,11 @@ class RoutineInput(BaseModel):
 class RoutineScheduleInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     expected_version: StrictInt
+    name: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=30)] | None = None
+    origin_place_id: UUID | None = None
+    destination_place_id: UUID | None = None
+    search_id: UUID | None = None
+    candidate_id: UUID | None = None
     weekdays: list[StrictInt] | None = None
     target_arrival_local_time: str | None = None
 
@@ -61,6 +67,19 @@ class RoutineScheduleInput(BaseModel):
     @model_validator(mode='after')
     def valid_target(self):
         target_time_value(self.target_arrival_local_time)
+        return self
+
+    @model_validator(mode='after')
+    def complete_changes(self):
+        for field in ('name', 'weekdays'):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError('Name and weekdays cannot be null')
+        route_fields = {'origin_place_id', 'destination_place_id', 'search_id', 'candidate_id'}
+        supplied = route_fields & self.model_fields_set
+        if supplied and (supplied != route_fields or any(getattr(self, field) is None for field in route_fields)):
+            raise ValueError('All route references are required together')
+        if supplied and self.origin_place_id == self.destination_place_id:
+            raise ValueError('Same origin and destination place')
         return self
 
     @model_validator(mode='after')
@@ -152,6 +171,28 @@ def checked_place(connection, user_id, refs, place_id):
     return row
 
 
+def selected_plan(connection, user_id, body):
+    search = checked_search(connection, user_id, body.search_id)
+    stored = next((item for item in search['candidates']
+                   if isinstance(item, dict) and item.get('candidate_id') == str(body.candidate_id)), None)
+    if not stored:
+        raise missing_candidate()
+    # Store the upgraded coordinate-free snapshot; search rows are deleted after a day.
+    snapshot = journey_models.common_candidate(stored)
+    if [ref['place_id'] for ref in search['place_refs']] != [str(body.origin_place_id), str(body.destination_place_id)]:
+        raise auth.AuthError(422, 'VALIDATION_ERROR', '출발·도착 장소와 경로 방향이 일치하지 않아요. 경로를 다시 조회해주세요.')
+    refs = {ref['place_id']: ref['location_version'] for ref in search['place_refs']}
+    origin = checked_place(connection, user_id, refs, body.origin_place_id)
+    destination = checked_place(connection, user_id, refs, body.destination_place_id)
+    connection.execute('''INSERT INTO journey_plans(id,user_id,search_id,candidate_id,candidate,total_seconds,transfer_count,model_version)
+        VALUES(%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (user_id,search_id,candidate_id) DO NOTHING''',
+        (uuid4(), user_id, body.search_id, body.candidate_id, Jsonb(snapshot),
+         snapshot['total_seconds'], snapshot['transfer_count'], snapshot['model_version']))
+    plan = connection.execute('SELECT * FROM journey_plans WHERE user_id=%s AND search_id=%s AND candidate_id=%s FOR UPDATE',
+                              (user_id, body.search_id, body.candidate_id)).fetchone()
+    return origin, destination, plan
+
+
 @router.post('/routines', status_code=201)
 def create(request: Request, body: RoutineInput):
     key = request.headers.get('idempotency-key')
@@ -160,6 +201,7 @@ def create(request: Request, body: RoutineInput):
     fingerprint = hashlib.sha256(json.dumps(body.model_dump(mode='json'), sort_keys=True).encode()).hexdigest()
     with auth.database() as connection:
         user_id = places.authenticated(connection, request, True)
+        connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('routine-write:' + str(user_id),))
         connection.execute('DELETE FROM routine_creation_keys WHERE expires_at <= now()')
         if key:
             connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', (str(user_id) + ':' + key,))
@@ -176,22 +218,7 @@ def create(request: Request, body: RoutineInput):
                 if not row:
                     raise missing_routine()
                 return auth.answer(request, response_data(connection, row), 201)
-        search = checked_search(connection, user_id, body.search_id)
-        stored = next((item for item in search['candidates']
-                       if isinstance(item, dict) and item.get('candidate_id') == str(body.candidate_id)), None)
-        if not stored:
-            raise missing_candidate()
-        # Store the upgraded coordinate-free snapshot; search rows are deleted after a day.
-        snapshot = journey_models.common_candidate(stored)
-        refs = {ref['place_id']: ref['location_version'] for ref in search['place_refs']}
-        origin = checked_place(connection, user_id, refs, body.origin_place_id)
-        destination = checked_place(connection, user_id, refs, body.destination_place_id)
-        connection.execute('''INSERT INTO journey_plans(id,user_id,search_id,candidate_id,candidate,total_seconds,transfer_count,model_version)
-            VALUES(%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (user_id,search_id,candidate_id) DO NOTHING''',
-            (uuid4(), user_id, body.search_id, body.candidate_id, Jsonb(snapshot),
-             snapshot['total_seconds'], snapshot['transfer_count'], snapshot['model_version']))
-        plan = connection.execute('SELECT * FROM journey_plans WHERE user_id=%s AND search_id=%s AND candidate_id=%s',
-                                  (user_id, body.search_id, body.candidate_id)).fetchone()
+        origin, destination, plan = selected_plan(connection, user_id, body)
         row = connection.execute('''INSERT INTO routines(id,user_id,name,origin_place_id,destination_place_id,journey_plan_id,
             weekdays,target_arrival_local_time)
             VALUES(%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *''',
@@ -202,6 +229,30 @@ def create(request: Request, body: RoutineInput):
                                (user_id, key, fingerprint, row['id']))
         data = response_data(connection, row)
     return auth.answer(request, data, 201)
+
+
+@router.get('/routines')
+def listing(request: Request, limit: int = Query(default=20, ge=1, le=100), cursor: str | None = None):
+    with auth.database() as connection:
+        user_id = places.authenticated(connection, request)
+        try:
+            cursor_id = UUID(cursor) if cursor is not None else None
+        except ValueError:
+            raise auth.AuthError(422, 'VALIDATION_ERROR', '목록 조회 위치를 확인해주세요.') from None
+        cursor_time = None
+        if cursor_id:
+            boundary = connection.execute('SELECT created_at FROM routines WHERE id=%s AND user_id=%s',
+                                          (cursor_id, user_id)).fetchone()
+            if not boundary:
+                raise missing_routine()
+            cursor_time = boundary['created_at']
+        rows = connection.execute("""SELECT * FROM routines WHERE user_id=%s
+            AND (%s::uuid IS NULL OR (created_at,id) < (%s::timestamptz,%s::uuid))
+            ORDER BY created_at DESC,id DESC LIMIT %s""",
+            (user_id, cursor_id, cursor_time, cursor_id, limit + 1)).fetchall()
+        data = {'items': [response_data(connection, row) for row in rows[:limit]],
+                'next_cursor': str(rows[limit - 1]['id']) if len(rows) > limit else None}
+    return auth.answer(request, data)
 
 
 @router.get('/routines/{routine_id}')
@@ -217,9 +268,10 @@ def detail(request: Request, routine_id: str):
 
 
 @router.patch('/routines/{routine_id}')
-def update_schedule(request: Request, routine_id: str, body: RoutineScheduleInput):
+def update(request: Request, routine_id: str, body: RoutineScheduleInput):
     with auth.database() as connection:
         user_id = places.authenticated(connection, request, True)
+        connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('routine-write:' + str(user_id),))
         row = connection.execute('SELECT * FROM routines WHERE id=%s AND user_id=%s FOR UPDATE',
                                  (places.parsed_id(routine_id), user_id)).fetchone()
         if not row:
@@ -230,8 +282,37 @@ def update_schedule(request: Request, routine_id: str, body: RoutineScheduleInpu
         target = row['target_arrival_local_time']
         if 'target_arrival_local_time' in body.model_fields_set:
             target = target_time_value(body.target_arrival_local_time)
-        updated = connection.execute('''UPDATE routines SET weekdays=%s, target_arrival_local_time=%s,
+        name = row['name'] if body.name is None else body.name
+        origin_id, destination_id, plan_id, status = (row['origin_place_id'], row['destination_place_id'],
+                                                     row['journey_plan_id'], row['status'])
+        if 'search_id' in body.model_fields_set:
+            origin, destination, plan = selected_plan(connection, user_id, body)
+            origin_id, destination_id, plan_id, status = origin['id'], destination['id'], plan['id'], 'active'
+        updated = connection.execute('''UPDATE routines SET name=%s, weekdays=%s, target_arrival_local_time=%s,
+            origin_place_id=%s, destination_place_id=%s, journey_plan_id=%s, status=%s,
             version=version+1, updated_at=now() WHERE id=%s RETURNING *''',
-            (weekdays, target, row['id'])).fetchone()
+            (name, weekdays, target, origin_id, destination_id, plan_id, status, row['id'])).fetchone()
+        if plan_id != row['journey_plan_id']:
+            remove_unused_plan(connection, row['journey_plan_id'])
         data = response_data(connection, updated)
     return auth.answer(request, data)
+
+
+def remove_unused_plan(connection, plan_id):
+    connection.execute('SELECT id FROM journey_plans WHERE id=%s FOR UPDATE', (plan_id,))
+    connection.execute('DELETE FROM journey_plans WHERE id=%s AND NOT EXISTS '
+                       '(SELECT 1 FROM routines WHERE journey_plan_id=%s)', (plan_id, plan_id))
+
+
+@router.delete('/routines/{routine_id}')
+def delete(request: Request, routine_id: str):
+    with auth.database() as connection:
+        user_id = places.authenticated(connection, request, True)
+        connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('routine-write:' + str(user_id),))
+        row = connection.execute('SELECT * FROM routines WHERE id=%s AND user_id=%s FOR UPDATE',
+                                 (places.parsed_id(routine_id), user_id)).fetchone()
+        if not row:
+            raise missing_routine()
+        connection.execute('DELETE FROM routines WHERE id=%s AND user_id=%s', (row['id'], user_id))
+        remove_unused_plan(connection, row['journey_plan_id'])
+    return Response(status_code=204, headers={'Cache-Control': 'no-store'})

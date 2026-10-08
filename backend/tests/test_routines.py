@@ -284,3 +284,105 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         self.cookie = logged[1][b'set-cookie'].decode().split(';')[0]
         self.csrf = logged[2]['data']['csrf_token']
         self.assertEqual((await self.schedule(path, {'expected_version': 4, 'weekdays': [1]}))[0], 404)
+
+
+    async def remove(self, routine_id, csrf=True):
+        headers = [(b'origin', b'http://127.0.0.1:5173')]
+        if self.cookie: headers.append((b'cookie', self.cookie.encode()))
+        if csrf and self.csrf: headers.append((b'x-csrf-token', self.csrf.encode()))
+        return await request('/api/v1/routines/' + routine_id, 'DELETE', headers=headers)
+
+    async def test_list_pagination_validation_ownership_and_detached_place(self):
+        home, work, search_id, candidate = await self.ready()
+        body = self.routine_body(home, work, search_id, candidate)
+        ids = [(await self.save({**body, 'name': '루틴' + str(index)}))[2]['data']['routine_id'] for index in range(3)]
+        page = await self.call('/routines?limit=2')
+        self.assertEqual(page[0], 200)
+        self.assertEqual(page[1][b'cache-control'], b'no-store')
+        self.assertEqual([item['routine_id'] for item in page[2]['data']['items']], list(reversed(ids))[:2])
+        cursor = page[2]['data']['next_cursor']
+        second = (await self.call('/routines?limit=2&cursor=' + cursor))[2]['data']
+        self.assertEqual([item['routine_id'] for item in second['items']], list(reversed(ids))[2:])
+        self.assertIsNone(second['next_cursor'])
+        for query in ('limit=0', 'limit=101', 'limit=x', 'cursor=bad'):
+            self.assertEqual((await self.call('/routines?' + query))[0], 422)
+        await request('/api/v1/places/' + home['place_id'], 'DELETE', headers=[(b'origin', b'http://127.0.0.1:5173'), (b'cookie', self.cookie.encode()), (b'x-csrf-token', self.csrf.encode())])
+        detached = (await self.call('/routines'))[2]['data']['items']
+        self.assertTrue(all(item['status'] == 'needs_attention' and item['origin_place'] is None for item in detached))
+        self.cookie = None; self.csrf = None
+        self.assertEqual((await self.call('/routines'))[0], 401)
+        await self.prepare()
+        other = self.credentials('other@example.invalid')
+        await self.call('/auth/register', other)
+        logged = await self.call('/auth/login', {'email': other['email'], 'password': other['password']})
+        self.cookie = logged[1][b'set-cookie'].decode().split(';')[0]
+        self.csrf = logged[2]['data']['csrf_token']
+        self.assertEqual((await self.call('/routines'))[2]['data']['items'], [])
+        self.assertEqual((await self.call('/routines?cursor=' + ids[0]))[0], 404)
+        self.assertEqual((await self.remove(ids[0]))[0], 404)
+
+    async def test_name_edit_invalid_patch_and_atomic_route_replacement(self):
+        home, work, search_id, candidate = await self.ready()
+        body = self.routine_body(home, work, search_id, candidate)
+        saved = (await self.save(body))[2]['data']
+        path = '/api/v1/routines/' + saved['routine_id']
+        edited = await self.schedule(path, {'expected_version': 1, 'name': ' 저녁 출근 '})
+        self.assertEqual(edited[0], 200)
+        self.assertEqual(edited[2]['data']['name'], '저녁 출근')
+        self.assertEqual(edited[2]['data']['route'], saved['route'])
+        for invalid in ({'name': ''}, {'name': None}, {'weekdays': None}, {'candidate_id': candidate['candidate_id']},
+                        {'search_id': None}, {'name': 'x' * 31}):
+            self.assertEqual((await self.schedule(path, {'expected_version': 2, **invalid}))[0], 422)
+        reverse = {**body, 'origin_place_id': work['place_id'], 'destination_place_id': home['place_id'], 'expected_version': 2}
+        self.assertEqual((await self.schedule(path, reverse))[0], 422)
+        missing = {**body, 'candidate_id': str(uuid4()), 'expected_version': 2, 'name': '실패한 이름'}
+        self.assertEqual((await self.schedule(path, missing))[0], 404)
+        kept = (await self.call('/routines/' + saved['routine_id']))[2]['data']
+        self.assertEqual(kept['name'], '저녁 출근')
+        self.assertEqual(kept['version'], 2)
+        self.assertEqual((await self.schedule(path, {'expected_version': 1, 'name': '옛 버전'}))[0], 409)
+        fresh_home, fresh_work, fresh_id, fresh_candidate = await self.saved_search()
+        fresh = {**self.routine_body(fresh_home, fresh_work, fresh_id, fresh_candidate), 'expected_version': 2}
+        changed = await self.schedule(path, fresh)
+        self.assertEqual(changed[0], 200)
+        self.assertEqual(changed[2]['data']['version'], 3)
+        self.assertNotEqual(changed[2]['data']['route']['journey_plan_id'], saved['route']['journey_plan_id'])
+        with auth.database() as connection:
+            self.assertEqual(connection.execute('SELECT count(*) AS n FROM journey_plans').fetchone()['n'], 1)
+
+    async def test_delete_confirmation_contract_shared_plan_and_retry_marker(self):
+        home, work, search_id, candidate = await self.ready()
+        body = self.routine_body(home, work, search_id, candidate)
+        first = (await self.save(body, key='delete-key'))[2]['data']
+        second = (await self.save({**body, 'name': '공유 경로'}))[2]['data']
+        self.assertEqual((await self.remove(first['routine_id'], csrf=False))[0], 403)
+        deleted = await self.remove(first['routine_id'])
+        self.assertEqual(deleted[0], 204)
+        self.assertEqual(deleted[1][b'cache-control'], b'no-store')
+        self.assertEqual((await self.remove(first['routine_id']))[0], 404)
+        self.assertEqual((await self.save(body, key='delete-key'))[0], 404)
+        self.assertEqual((await self.call('/routines/' + second['routine_id']))[0], 200)
+        with auth.database() as connection:
+            self.assertEqual(connection.execute('SELECT count(*) AS n FROM journey_plans').fetchone()['n'], 1)
+        self.assertEqual((await self.remove(second['routine_id']))[0], 204)
+        with auth.database() as connection:
+            self.assertEqual(connection.execute('SELECT count(*) AS n FROM journey_plans').fetchone()['n'], 0)
+        self.assertEqual((await self.call('/routines'))[2]['data']['items'], [])
+
+    async def test_route_replacement_recovers_deleted_place_and_rejects_expiry(self):
+        home, work, search_id, candidate = await self.ready()
+        data = (await self.save(self.routine_body(home, work, search_id, candidate)))[2]['data']
+        path = '/api/v1/routines/' + data['routine_id']
+        await request('/api/v1/places/' + home['place_id'], 'DELETE', headers=[(b'origin', b'http://127.0.0.1:5173'), (b'cookie', self.cookie.encode()), (b'x-csrf-token', self.csrf.encode())])
+        # Name/schedule changes preserve the attention state.
+        renamed = await self.schedule(path, {'expected_version': 2, 'name': '복구 대상'})
+        self.assertEqual(renamed[2]['data']['status'], 'needs_attention')
+        fresh_home, fresh_work, fresh_id, fresh_candidate = await self.saved_search()
+        fresh = {**self.routine_body(fresh_home, fresh_work, fresh_id, fresh_candidate), 'expected_version': 3}
+        recovered = await self.schedule(path, fresh)
+        self.assertEqual(recovered[0], 200)
+        self.assertEqual(recovered[2]['data']['status'], 'active')
+        with auth.database() as connection:
+            connection.execute("UPDATE journey_searches SET expires_at=now()-interval '1 hour' WHERE id=%s", (fresh_id,))
+        self.assertEqual((await self.schedule(path, {**fresh, 'expected_version': 4}))[0], 404)
+        self.assertEqual((await self.call('/routines/' + data['routine_id']))[2]['data']['version'], 4)

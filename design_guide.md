@@ -160,3 +160,6 @@ F03-04(2026-10-07): 출발지 방법 선택은 기존 secondary 버튼·선택 �
 
 ### F04-05 상태 안내 (2026-10-07)
 JourneyUnavailable은 기존 card/empty-state/button-row/secondary를 재사용한다. 비교 화면에 한정해 빈 상태 본문은 --ink/14px/1.8 줄간격, 버튼 행은 줄바꿈, text-button도 최소44px를 적용한다. 미확인 후보는 ‘구간 정보 확인 필요’와 상세 사유를 표시한다. 전체 테마/내비게이션 유지. 합성 상태 PC/390×844와 실제 홈/비교 입력 화면 회귀 확인.
+
+### F06-03 루틴 화면 재사용 (2026-10-08)
+RoutinesPanel/RoutineSummary/RoutineStatus는 기존 card/routine-card/routine-grid/day-list/primary/secondary/info-box/place-delete-confirm과 lucide를 재사용한다. 이름/장소는 줄바꿈하고 버튼은44px 이상, 편집 입력에는 라벨·초기 포커스, 삭제 확인은 취소에 초기 포커스, pending 중 중복 행동을 차단한다. 홈의 저장 경로 요약은 기존 카드 톤으로 표시하며 미구현 출발 안내의 예시 숫자는 제거한다. .routine-actions 줄바꿈·.routine-toolbar .tabs 줄바꿈·14px 상태 본문을 적용했다. 새 팔레트/폰트/내비게이션 없음. 데스크톱1440×1000 및 모바일390×844 실제 DB 목록/수정/선택과 삭제 취소를 확인했다.

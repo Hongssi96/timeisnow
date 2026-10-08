@@ -28,19 +28,19 @@ function validSchedule(weekdays,target) {
     &&(target===null||/^([01]\d|2[0-3]):[0-5]\d$/.test(target));
 }
 
-export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAuthError, onRoutineSaved }) {
+export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAuthError, onRoutineSaved, routineToReplace }) {
   const [origin,setOrigin]=useState(()=>selection(initialOrigin)&&initialOrigin.deadline>Date.now()?initialOrigin:null);
   const [destination,setDestination]=useState(null);
   const [editing,setEditing]=useState(null);
   const [preference,setPreference]=useState('balanced');
   const [state,setState]=useState({phase:'idle'});
   const [saves,setSaves]=useState({});
-  const pending=useRef(null),snapshot=useRef(null),saver=useRef(null);
+  const pending=useRef(null),snapshot=useRef(null),saver=useRef(null),saveAttempts=useRef({});
   const busy=['loading','waiting'].includes(state.phase);
   function stop(){pending.current?.abort();pending.current=null;}
   function stopSaving(){saver.current?.abort();saver.current=null;}
   function reset(){stop();snapshot.current=null;setState({phase:'idle'});}
-  function resetSaves(){stopSaving();setSaves({});}
+  function resetSaves(){stopSaving();saveAttempts.current={};setSaves({});}
   function expire(){
     stop();snapshot.current=null;setEditing(null);
     setOrigin(value=>value?.deadline>Date.now()?value:null);setDestination(value=>value?.deadline>Date.now()?value:null);
@@ -126,26 +126,29 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
     if(!refs[0]||!refs[1]){failure(new ApiError('SEARCH_EXPIRED'));return;}
     if(!state.candidates?.some(c=>c.candidate_id===candidateId)){failure(new ApiError('INVALID_RESPONSE'));return;}
     const controller=new AbortController();saver.current=controller;
-    const key=state.saveKeys?.[candidateId]||crypto.randomUUID();
+    const body={name,origin_place_id:refs[0].place_id,destination_place_id:refs[1].place_id,
+      search_id:snapshot.current.accepted.search_id,candidate_id:candidateId,weekdays,target_arrival_local_time:targetArrival,
+      ...(routineToReplace ? {expected_version:routineToReplace.version} : {})};
+    const signature=JSON.stringify(body);
+    let attempt=saveAttempts.current[candidateId];
+    if(!attempt||attempt.signature!==signature)attempt=saveAttempts.current[candidateId]={signature,key:crypto.randomUUID()};
+    const key=attempt.key;
     setSaves(previous=>({...previous,[candidateId]:'saving'}));
     try{
       const csrf=await apiRequest('/api/v1/auth/csrf',{signal:controller.signal});
       if(typeof csrf.data?.csrf_token!=='string')throw new ApiError('INVALID_RESPONSE');
-      const response=await apiRequest('/api/v1/routines',{method:'POST',
-        body:{name,origin_place_id:refs[0].place_id,destination_place_id:refs[1].place_id,
-              search_id:snapshot.current.accepted.search_id,candidate_id:candidateId,
-              weekdays,target_arrival_local_time:targetArrival},
+      const response=await apiRequest('/api/v1/routines'+(routineToReplace?'/'+routineToReplace.routine_id:''),{method:routineToReplace?'PATCH':'POST',
+        body,
         signal:controller.signal,headers:{'X-CSRF-Token':csrf.data.csrf_token,'Idempotency-Key':key}});
       if(controller.signal.aborted)return;
       const data=response.data;
-      if(response.status!==201||!safeJourneyId(data?.routine_id)||typeof data.name!=='string'||data.name.length<1||data.name.length>30
+      if(response.status!==(routineToReplace?200:201)||!safeJourneyId(data?.routine_id)||typeof data.name!=='string'||data.name.length<1||data.name.length>30
         ||!safeJourneyId(data.route?.journey_plan_id)||typeof data.route.type!=='string'
         ||!Number.isSafeInteger(data.route.total_seconds)||data.route.total_seconds<0
         ||!Number.isSafeInteger(data.route.transfer_count)||data.route.transfer_count<0||data.route.transfer_count>2
         ||!['active','needs_attention'].includes(data.status)||!Number.isInteger(data.version)||data.version<1
         ||typeof data.origin_place?.label!=='string'||typeof data.destination_place?.label!=='string'
         ||!validSchedule(data.weekdays,data.target_arrival_local_time)||data.timezone!=='Asia/Seoul')throw new ApiError('INVALID_RESPONSE');
-      state.saveKeys={...state.saveKeys,[candidateId]:key};
       setSaves(previous=>({...previous,[candidateId]:'saved'}));
       onRoutineSaved?.(data);
     }catch(error){
@@ -156,6 +159,7 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
   }
   return <div className="journey-comparison">
     <button className="text-button comparison-back" onClick={onBack}><ArrowLeft size={18}/>오늘의 출발로 돌아가기</button>
+    {routineToReplace&&<div className="info-box">‘{routineToReplace.name}’의 경로를 바꿔요. 출발·도착 장소를 선택하고 새 경로를 저장해주세요.</div>}
     <div className="page-heading"><div><p className="eyebrow">COMPARE YOUR ROUTE</p><h1>내 이동 경로를 비교해요<span>.</span></h1><p>출발·도착지를 직접 고르고 예상 시간과 구간을 확인해요.</p></div></div>
     <section className="card comparison-form"><h2>어디에서 어디로 갈까요?</h2>
       <div className="comparison-endpoints">{[['origin','출발지',origin],['destination','도착지',destination]].map(([key,label,value])=><div className="comparison-endpoint" key={key}><span className="soft-icon"><MapPin size={20}/></span><div><h3>{label}</h3><p>{value?value.label:'위치를 선택해주세요'}</p>{value&&<p className="candidate-note">{value.location_address}</p>}<button className="secondary" onClick={()=>edit(key)}>{label} {value?'변경':'선택'}</button></div></div>)}</div>
@@ -168,6 +172,6 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
     {state.message&&<div className="info-box" role="alert">{state.message}{state.retryAt&&<p>잠시 기다리면 다시 확인할 수 있어요.</p>}</div>}
     {state.phase==='anonymous'&&<button className="primary" onClick={onLogin}>로그인하기</button>}
     {['empty','unsupported'].includes(state.phase)&&<JourneyUnavailable unsupported={state.phase==='unsupported'} codes={state.reasons} onOrigin={()=>edit('origin')} onDestination={()=>edit('destination')}/>}
-    {state.phase==='ready'&&<JourneyCandidates key={snapshot.current?.accepted?.search_id} candidates={state.candidates} preference={preference} onRecheck={()=>run(true,true)} onSavedLocations={candidateId=>saves[candidateId]} onSaved={saveRoutine} defaultRoutineName={origin&&destination?`${origin.label} → ${destination.label} 통근`:''}/>}
+    {state.phase==='ready'&&<JourneyCandidates key={snapshot.current?.accepted?.search_id} candidates={state.candidates} preference={preference} onRecheck={()=>run(true,true)} onSavedLocations={candidateId=>saves[candidateId]} onSaved={saveRoutine} defaultRoutineName={routineToReplace?.name||(origin&&destination?`${origin.label} → ${destination.label} 통근`:'')} defaultWeekdays={routineToReplace?.weekdays} defaultTarget={routineToReplace?.target_arrival_local_time} replacing={!!routineToReplace}/>}
   </div>;
 }

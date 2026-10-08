@@ -9,7 +9,7 @@ function memberData(response) {
   return response.data;
 }
 
-export default function AccountForm() {
+export default function AccountForm({ onSessionChange }) {
   const [mode, setMode] = useState('login');
   const [member, setMember] = useState(null);
   const [email, setEmail] = useState('');
@@ -49,12 +49,12 @@ export default function AccountForm() {
       });
       if (controller.signal.aborted) return;
       setPassword('');
-      if (logout) { setMember(null); setState({ phase: 'ready', message: '로그아웃했어요.' }); }
+      if (logout) { onSessionChange?.(); setMember(null); setState({ phase: 'ready', message: '로그아웃했어요.' }); }
       else if (mode === 'register') {
         setMode('login'); setState({ phase: 'ready', message: '가입했어요. 비밀번호를 입력해 로그인해주세요.' });
       } else {
         const response = await apiRequest('/api/v1/me', { signal: controller.signal });
-        if (!controller.signal.aborted) { setMember(memberData(response)); setState({ phase: 'ready' }); }
+        if (!controller.signal.aborted) { setMember(memberData(response)); setState({ phase: 'ready' }); onSessionChange?.(); }
       }
     } catch (error) {
       if (!controller.signal.aborted) {
