@@ -16,6 +16,7 @@ from app.places.router import router as places_router
 from app.origins.router import router as origins_router
 from app.journeys.router import router as journeys_router
 from app.routines.router import router as routines_router
+from app.walking.router import router as walking_router
 
 app = FastAPI(title="지금이니? API", version="0.1.0")
 app.include_router(auth_router)
@@ -23,6 +24,7 @@ app.include_router(places_router)
 app.include_router(origins_router)
 app.include_router(journeys_router)
 app.include_router(routines_router)
+app.include_router(walking_router)
 
 
 def error_response(request, status, code, message, details=None, headers=None):

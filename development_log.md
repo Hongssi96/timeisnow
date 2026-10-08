@@ -4,6 +4,17 @@
 
 ## 실제 기록
 
+### 2026-10-08 — F05-01 선택 후보 도보 근거 수집
+- 목표/기반: 사용자 진행 요청에 따라 R02 병합 main4ddd36b를 확인하고 최신 origin/main에서 `codex/walking-evidence` 생성. 최신 Notion v0.49 및 TODO·planning·feature_breakdown·personalization·ai_prompts·logging 정책 확인 후 새 읽기 계약을 v0.50으로 먼저 추가했다.
+- 변경 파일: `backend/app/walking/{router,service,repository,dto}.py`, 패키지 초기화·main 라우터 등록·`backend/tests/test_walking.py`. GET `/api/v1/journey-searches/{search_id}/candidates/{candidate_id}/walking-evidence`에서 접근1개·각 환승 연결1개·마지막1개를 조회한다. 기존 journey.v1/장소 참조 검증 재사용, 안정적인 segment UUID/원본 leg ID 유지, 연속 도보 제공값 합산.
+- 정책/이유: 제공0초는 0+WALK_DURATION_ZERO, 미제공은 null+PROVIDER_WALK_MISSING. 모든 물리 범위는 unconfirmed, 지하철은 입구/승강장도 미확인. needs_data·ready_for_estimation/reusable=false. 정밀 좌표/출입구 설명 비노출, 남는 경로 시간을 도보/대기로 배분하지 않는다. 저장소에 장소 참조의 출발/도착 역할이 없어 추측하지 않고 검색 지점 참조를 사용한다. F04-04/GPS 자동 판정 보류 유지.
+- 저장/호환성: 새 DDL·지도/AI 호출·검색/근거 DB 쓰기·검색 만료 연장 없음. 기존 인증 세션 활동 기한 갱신은 유지한다. 새 GET 추가이며 기존 API/클라이언트·보관/계산 동작 유지. 일반 로그에 원문/정밀 위치 추가 없음.
+- 실제 검증: 신규7개/전체 백엔드137개(59.241초) 통과. 실제 PostgreSQL 테스트 임시 스키마/ASGI·합성 공급자로 값/누락/0초·연속 도보·환승·지하철·반복 조회 검색 행 무변경/추가 호출0·auth401·소유권/잘못된ID/만료/미완료404·장소 이름 유지/위치409/삭제404·손상502·OpenAPI 모델 확인. 사용자 업무 DB 변경·실제 공급자 물리 범위 검증 없음.
+- 실행 확인: 프로젝트 실행 명령 확인 후 백엔드 재시작(worker20796), health200·OpenAPI 새 GET 등록·실행 서버 비인증401 AUTH_REQUIRED/no-store 확인. 초기 프로세스 검사는 venv가 시스템 Python을 사용하는 점 때문에 중단했으며 command line의 프로젝트 경로를 확인한 뒤 재시작했다. 프론트 변경/시각 검증/프론트 재테스트 없음.
+- 문서: Notion v0.50 API 목록·5.5 계약/예시·상태·변경 이력 저장 후 재조회 확인. api_contract.md 원본 복사, walking_api.md·planning/personalization 수집 설명·TODO/feature_breakdown F05-01 체크 동기화. 프롬프트 작업 블록 자체는 변경 없음. MR 생성/병합은 사용자 담당.
+- 배운 개념/남은 일: 공급자 숫자 존재와 실제 이동 범위 검증은 다르며 null와0의 구분이 허위 기준값 저장을 막는다. 다음 F05-02 프롬프트/버전 로딩. F05-03 AI·F05-04 저장은 후속, 보행 가능 범위·방향·입구/승강장은 미검증 유지.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.50, 새 도보 근거 GET API 추가)
+
 ### 2026-10-07 — F04-03 실제 경로 후보 비교 화면
 - 목표/기반: 사용자 진행 요청에 따라 F04-02 main63674ac 병합을 fetch로 확인, 최신 main에서 codex/journey-comparison 생성. 기존 미색/초록·카드/버튼·내비게이션 톤으로 실제 출발/도착 선택과 후보 비교를 연결한다. 에이전트 MR 생성/main 병합 없음.
 - 사전 확인/명세: todo/feature_breakdown F04-03·최신 Notion v0.41 5.2.3~4/20절·planning/personalization/ai_prompts/logging/development_log·design_guide/screen_plan 및 기존 App/OriginSelector/OriginReview/MapPinPicker/PlacesCard·CSS·API클라이언트/테스트를 비교했다. 구현 전에 Notion v0.42 5.2.5에 사용자 흐름·접수/조회/중지/재시도/만료·비교/상세/미확인 근거·호환성을 구체화했다. 기존 서버 API/JSON모델/권한/DB DDL/300초·600초·24시간 및GPS 수치 보류 계약 유지. 최신 재조회/전문 로컬 api_contract.md 동기화 확인. 기준 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa

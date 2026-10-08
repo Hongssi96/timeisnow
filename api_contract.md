@@ -1,7 +1,7 @@
 # 지금이니? API 설계 초안
-- 문서 버전: 0.49 · 작성일: 2026-09-30 · 수정일: 2026-10-08 (F06-04 루틴 복구 안내)
+- 문서 버전: 0.50 · 작성일: 2026-09-30 · 수정일: 2026-10-08 (F05-01 도보 근거 수집)
 - 프론트엔드: React · 백엔드: Python FastAPI
-- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. F03-05a 수동 확인은 구현/검증 완료이며 GPS 수치/자동 일치 판정은 사용자 결정으로 보류. F04-01 depart_now 대중교통 후보 조회 API 및F04-02 공통 구간 모델은 구현, F04-03 후보 비교 화면은 구현. F06-01 루틴 저장·상세 API와 비교 화면 저장 연동, F06-02 루틴 요일·목표 도착 저장(저장 입력과 일정 PATCH 포함)은 구현. F06-03 본인 목록·선택·이름/일정/경로 수정·삭제와 F06-03a 루틴 등록 중 장소 저장·선택은 구현·검증 완료. F06-04 장소 변경/삭제 루틴 복구 안내도 구현·검증 완료. AI/실시간·목표 도착 기반 출발 안내·약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
+- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. F03-05a 수동 확인은 구현/검증 완료이며 GPS 수치/자동 일치 판정은 사용자 결정으로 보류. F04-01 depart_now 대중교통 후보 조회 API 및F04-02 공통 구간 모델은 구현, F04-03 후보 비교 화면은 구현. F06-01 루틴 저장·상세 API와 비교 화면 저장 연동, F06-02 루틴 요일·목표 도착 저장(저장 입력과 일정 PATCH 포함)은 구현. F06-03 본인 목록·선택·이름/일정/경로 수정·삭제와 F06-03a 루틴 등록 중 장소 저장·선택은 구현·검증 완료. F06-04 장소 변경/삭제 루틴 복구 안내도 구현·검증 완료. F05-01 기존 후보 도보 근거·누락 조회 API도 구현·검증 완료. AI/실시간·목표 도착 기반 출발 안내·약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
 - 기준: 대화에서 확정한 요구사항 및 프로젝트 `C:/projects/timeisnow` 폴더의 `planning.md`, `feature_breakdown.md`, `personalization.md`, `logging.md`, `ai_prompts.md`.
 - 이 페이지는 수동 관리하는 설계 문서다. 코드와 자동 동기화되는 상태가 아니다.
 <table_of_contents/>
@@ -174,6 +174,13 @@ GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1\~2절 출발�
 <td>경로: search_id</td>
 <td>200: status, candidates\[\], unavailable_reasons\[\]</td>
 <td>완료·진행·실패 구분. 실시간/시간표 근거 표시</td>
+</tr>
+<tr>
+<td>`GET /journey-searches/{search_id}/candidates/{candidate_id}/walking-evidence`</td>
+<td>필요</td>
+<td>경로: search_id, candidate_id</td>
+<td>200: walking.evidence.v1, status=needs_data, segments\[\], expires_at</td>
+<td>F05-01 기존 후보의 접근/환승/마지막 도보 제공값·누락 조회. 물리 범위 미검증, AI/저장/재사용은 후속</td>
 </tr>
 <tr>
 <td>`GET /walking-estimates/{estimate_id}`</td>
@@ -540,6 +547,12 @@ origin/destination은 saved_place 또는 좌표 출발 객체다. 권한 거절 
 - 홈/내 루틴에서 삭제된 출발·도착 지점을 구분하고, 참조가 남은 needs_attention은 장소나 경로 정보 확인 필요로 안내한다. 이전 예상 시간은 현재 경로처럼 표시하지 않는다. 경로 복구 행동은 저장 장소 선택 → 현재 장소로 경로 재조회 → 후보 확인 → 기존 루틴 PATCH 변경 저장 순서다. 이름/요일/목표 시각을 기본값으로 유지하며 장소 선택은 저장 장소 모드로 시작하고 인라인 새 장소 저장도 제공한다. 진입/취소/검색만으로 복구 완료·새 루틴 생성 없음.
 - 복구/경로 교체 PATCH 성공200 뒤 본인 routine_id·active·version=expected_version+1을 검증하고 목록을 새로 불러온다. 409/404는 최신 루틴 다시 확인 행동을 제공해 목록으로 돌아가 재조회하며 자동 덮어쓰기/자동 PATCH 재전송 없음. 인증 만료·만료 후보·무결과/공급자 실패는 기존 안전한 복구 흐름을 유지한다.
 - 범위: 기존 needs_attention/삭제 참조와 이번 이후 장소 변경을 처리한다. 과거 active 스냅샷의 위치 일치 여부는 근거 없이 추정하지 않는다. 실제 노선 운행 변경의 자동 감지·실시간/AI 안내는 후속이다. API 경로/입출력/인증/보관/계산·기존 클라이언트 호환성 유지, 장소 변경 후 상태 전이와 화면 흐름 확장. 구현/검증 완료.
+### 5.5 도보 근거 수집(F05-01)
+- 계약 확정 <mention-date start="2026-10-08"/>: GET /api/v1/journey-searches/\{search_id\}/candidates/\{candidate_id\}/walking-evidence. 쿠키 인증·본인 성공 검색/후보만200, CSRF 불필요·no-store. 입력 UUID 오류/없음/타인/미완료/검색300초 만료는404 RESOURCE_NOT_FOUND(기존 자원 ID 규칙). 참조 장소 없음404·location_version 변경409 VERSION_CONFLICT, 깨진 후보502 PROVIDER_RESPONSE_INVALID. 읽기는 기존 검색 결과만 사용하며 새 지도/AI 호출·검색/근거 DB 쓰기·검색 보관 연장 없음. 기존 쿠키 인증의 세션 활동 기한 갱신은 유지한다.
+- 200 data: model_version=walking.evidence.v1, search_id,candidate_id,expires_at(기존 검색 기한),status=needs_data,ready_for_estimation=false,reusable=false,segments 배열. 접근1개·각 환승 연결1개·마지막1개를 순서대로 제공한다. 각 segment는 segment_id(검색/후보/역할/연결 기반 안정적 UUID),role(access/transfer/egress),connection_id(환승 외null),walking_leg_ids\[\],from_ref/to_ref,provider_duration_seconds/provider_distance_meters(미제공null, 명시0은0),source(provider_estimate 또는 missing),scope(provider_walking_segment 또는 unknown),physical_endpoints=unconfirmed,missing_segments\[\]를 포함한다. from_ref/to_ref는 \{type:search_origin/search_destination\} 또는 \{type:transit_stop,leg_id,stop_name\}. 기존 저장소가 장소 참조의 출발/도착 역할을 보관하지 않으므로 양 끝은 검색 지점 참조이며 place_refs의 소유권/location_version은 별도 검증한다. 정밀 좌표·출입구 설명은 포함하지 않는다.
+- 누락 segment 예시(접근): role=access,connection_id=null,walking_leg_ids=\[\],from_ref=\{type:search_origin\},to_ref=\{type:transit_stop,leg_id:원본교통UUID,stop_name:합성역\},provider_duration_seconds=null,provider_distance_meters=null,source=missing,scope=unknown,physical_endpoints=unconfirmed,missing_segments=\[PHYSICAL_ENDPOINTS_UNCONFIRMED,PROVIDER_WALK_MISSING,ENTRANCE_PLATFORM_UNCONFIRMED\]. 마지막 코드는 지하철에 인접할 때만 포함한다. 전체 필드 설명은 `walking_api.md`와 OpenAPI EvidenceEnvelope를 따른다.
+- 기존 journey.v1 WALKING 역할·ID·거리·시간과 connections 참조에서 근거를 수집한다. 연속 도보는 역할별 합산하되 원본 leg ID들을 유지한다. 환승 도보가 없으면0으로 대체하지 않는다. 미제공은 PROVIDER_WALK_MISSING, 제공0초는 WALK_DURATION_ZERO, 모든 구간은 PHYSICAL_ENDPOINTS_UNCONFIRMED, 지하철 접점은 ENTRANCE_PLATFORM_UNCONFIRMED를 표시한다. 실제 보행 가능/정류장 방향·입구/승강장 범위가 미검증이므로 ready_for_estimation=false이며 AI 호출·기준 시간 저장·개인화 학습/재사용은 F05-02 이후다. 총 경로시간의 차이를 도보/대기/여유로 배분하지 않는다.
+- F04-04/GPS 자동 판정 보류를 유지한다. 이 API는 제공 근거와 누락을 구분하는 단계이며 빠진 도보를 새로 산정하거나 운행/내부 동선을 인증하지 않는다. 기존 API/응답/계산/보관/DDL·클라이언트 호환성 유지, 새 읽기 API 추가. 일반 로그에는 이름·좌표·근거 원문을 출력하지 않는다. 구현/검증 완료. 실제 PostgreSQL 임시 스키마/ASGI·합성 공급자로 신규7개/전체137개 통과, 서버 재시작·health200·OpenAPI 등록 확인. 프론트 변경 없음, 물리 범위 실검증·AI 호출·기준값 저장은 후속.
 ### 5.6 도보 결과
 `GET /api/v1/walking-estimates/estimate_demo_01`의 data 예시:
 ```json
@@ -1393,6 +1406,7 @@ F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프�
 - 기존 경로/응답 객체 유지, 설정 상한·만료·공유 ETA120초·자동 종료/삭제·출시 알림 범위가 변경/확정됐다. 아직 서비스가 미구현이므로 배포된 클라이언트 마이그레이션 없음. 422/404/409 등 기존 오류 사용, 소유권·동시 수락·기한 경계·삭제 사본 검증은 구현 시 수행한다.
 - 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회/수정/삭제 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. F03-04 main0402d67·R01 mainca8cd93 병합 확인, F03-01\~04 구현/검증 완료. F03-05a 수동 확인은main8b4b40b에 병합 완료다. GPS 수치/자동 일치 판정은 보류한다. F04-01은 main0402d67에서codex/journey-search로 시작해최신main8b4b40b를통합한뒤구현/검증, F04-01은main9670281에병합완료, F04-02는main63674ac에병합완료. F04-03은main4f94af1에병합완료, F04-04는사용자요청으로보류. F04-05는codex/journey-unavailable에서F04-03을통합해구현/검증했다. 사용자MR/병합 후 다음F05-01 도보근거수집이며 미확인물리근거를확정값으로채우지않는다.
 ## 변경 이력
+- <mention-date start="2026-10-08"/> v0.50: F05-01 선택 후보의 접근/환승/마지막 도보 근거·누락 조회 API 추가. 기존 공급자 근거만 구분하며 물리 범위 미검증·AI/재사용 준비 전 상태 유지. 기존 API/DDL/보관·클라이언트 호환성 영향 없음. 구현/검증 완료(신규7개/백엔드137개·서버 재시작).
 - <mention-date start="2026-10-08"/> v0.49: F06-04 장소 위치/출입구 변경 후 루틴 확인 필요 상태 연동과 복구·최신 재조회 흐름 추가. 이름만 변경 시 유지, 이전 스냅샷/일정 보존. API 필드/DDL·기존 클라이언트 호환성 영향 없음. 구현/검증 완료.
 - <mention-date start="2026-10-08"/> v0.48: 원하는 이동 방법의 후보를 첫 카드부터 확인하는 F04-03a 흐름 추가 및 구현·검증 완료. 기존 비교 기준·나머지 후보 유지, 방식별 무결과 안내. API/DB 변경 및 호환성 영향 없음. 프론트138개/빌드·합성 PC/모바일 확인.
 - <mention-date start="2026-10-08"/> v0.47: 사용자 요청으로 루틴 등록 중 출발/도착 선택기의 장소 검색·명시 저장·저장 후 선택 반영 흐름을 추가했다(5.3.2, F06-03a). 기존 장소/출발지 검증/루틴 API를 재사용하며 경로·필드·인증·보관·계산·스키마 및 기존 클라이언트 호환성 유지. 구현·검증 완료.
