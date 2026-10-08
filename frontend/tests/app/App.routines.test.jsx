@@ -7,7 +7,7 @@ import { apiRequest, ApiError } from '../../src/lib/api';
 
 vi.mock('../../src/lib/api', async original => ({ ...await original(), apiRequest: vi.fn() }));
 vi.mock('../../src/components/PlacesCard', () => ({ default: () => null }));
-vi.mock('../../src/components/JourneyComparison', () => ({ default: ({ onRoutineSaved, onBack, routineToReplace }) => <><p>{routineToReplace ? '기존 루틴 경로 변경' : '경로 저장 화면'}</p><button onClick={() => onRoutineSaved(item('new', '추가한 루틴'))}>후보 저장 성공</button><button onClick={onBack}>홈 복귀</button></> }));
+vi.mock('../../src/components/JourneyComparison', () => ({ default: ({ onRoutineSaved, onBack, onRoutineReload, routineToReplace }) => <><p>{routineToReplace ? '기존 루틴 경로 변경' : '경로 저장 화면'}</p><button onClick={() => onRoutineSaved(item('new', '추가한 루틴'))}>후보 저장 성공</button><button onClick={onBack}>홈 복귀</button><button onClick={onRoutineReload}>최신 루틴 다시 확인</button></> }));
 vi.mock('../../src/components/AccountForm', () => ({ default: ({ onSessionChange }) => <button onClick={onSessionChange}>검증용 계정 변경</button> }));
 afterEach(() => vi.resetAllMocks());
 const nav = name => within(screen.getByRole('navigation', { name: '주 메뉴' })).getByRole('button', { name });
@@ -105,6 +105,20 @@ it('shows deleted places as attention needed and allows route replacement',async
   const broken={...item(),origin_place:null,status:'needs_attention'};
   const {user}=setup([broken]);render(<App/>);await screen.findByRole('heading',{name:'실제 출근'});
   expect(screen.getByText('삭제된 장소 → 회사')).toBeTruthy();
-  await user.click(nav('내 루틴'));await user.click(screen.getByRole('button',{name:'경로 바꾸기'}));
+  await user.click(nav('내 루틴'));await user.click(screen.getByRole('button',{name:'루틴 복구하기'}));
   expect(screen.getByText('기존 루틴 경로 변경')).toBeTruthy();
+});
+
+it('shows deleted endpoint recovery without old estimates and reloads latest list', async () => {
+  const broken={...item(),status:'needs_attention',origin_place:null,version:2};
+  const { user, set }=setup([broken]);render(<App/>);
+  await screen.findByText('루틴 복구가 필요해요');
+  expect(screen.getByText(/출발 장소가 삭제됐어요/)).toBeTruthy();
+  expect(screen.queryByText(/공급자 예상 약/)).toBeNull();
+  await user.click(screen.getByRole('button',{name:'루틴 복구하기'}));
+  set([{...broken,version:3,destination_place:null}]);
+  await user.click(screen.getByRole('button',{name:'최신 루틴 다시 확인'}));
+  await screen.findByText(/출발·도착 장소가 삭제됐어요/);
+  expect(screen.getByRole('button',{name:'루틴 복구하기'})).toBeTruthy();
+  expect(apiRequest.mock.calls.every(([,options])=>!options?.method)).toBe(true);
 });

@@ -69,3 +69,4 @@ F03-04(2026-10-07): POST /origin-validations 구현. 단발GPS/지도 서울·�
 
 ## F06-03 루틴 관리 (2026-10-08)
 GET /routines(limit/cursor), PATCH /routines/{id}(이름/일정·전체 경로 참조 교체), DELETE /routines/{id}204를 제공한다. 본인 목록과 버전/CSRF/삭제 멱등 표시는 [routine_api.md](../routine_api.md)를 따른다. 최신 마이그레이션은0008_routine_schedule이며 추가 DDL은 없다. 코드 반영 후 서버를 재시작한다. 개발 서버의 네트워크 제한과 DB 상태는 별개이며 카카오 API에 접근 가능한 실행 환경이 필요하다.
+F06-04(2026-10-08): 장소 location_version이 증가하면 연결된 본인 루틴을 같은 트랜잭션에서 needs_attention/version+1로 바꾼다. label만 변경/동일값 수정은 루틴을 유지한다. 장소 변경/삭제와 경로 교체는 기존 회원별 routine-write 잠금을 공유한다. 기존0008 DDL/응답 유지. 로컬 서버 재시작 적용, 루틴13개 포함 백엔드130개 회귀 통과. routine_api.md·Notion v0.49 참고.
