@@ -1,6 +1,6 @@
 # 지금이니? — TODO
 
-- 마지막 갱신: 2026-10-08 (R02 백엔드 3계층 리팩터링)
+- 마지막 갱신: 2026-10-08 (R02 서버 재시작·재검토)
 - 프로젝트: `C:/projects/timeisnow`
 - 진행 현황 기준 문서: 이 파일. 상세 요구·완료 기준은 [기능 분리](./feature_breakdown.md), [기획](./planning.md), [약속 확장](./meeting_plan.md), [API 명세](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa)를 따른다.
 - 현재: 공통 요청/로그와 기본 회원 인증 완료. 가입 입력 안내 및 localhost CSRF 차단 수정(2026-10-06, development_log.md·백엔드56개/프론트27개·Notion v0.33). PostgreSQL 회원 인증 테이블5개 적용, 경로/이동/약속 업무 API는 미구현. 장소 구현 상태는 아래 F03-01 기록을 따른다.
@@ -22,12 +22,13 @@
 - 현재: F06-03a 루틴 등록 중 장소 검색·저장·선택 반영 완료(2026-10-08, development_log.md·Notion v0.47·프론트134개/빌드). 저장 장소가 없어도 루틴 화면에서 새 출발·도착 장소를 저장하고 자동 선택해 경로·루틴 등록을 이어갈 수 있다. codex/routine-inline-places는 미병합 F06-02·03와 저장 버튼 수정도 포함한다.
 - 현재: main a99eea4에 인라인 장소 저장까지 병합 확인. F04-03a 이동 방법 우선 보기 완료(2026-10-08, development_log.md·Notion v0.48·프론트138개/빌드·합성 PC/모바일). codex/journey-method-priority에서 구현했다.
 - 현재: F06-04 장소 변경/삭제 후 루틴 복구 안내 완료(2026-10-08, development_log.md·Notion v0.49·백엔드130개/프론트142개/빌드·합성 PC/모바일). codex/routine-recovery는 최신 main a99eea4에서 생성하고 미병합 F04-03a를 포함했다.
-- 다음 작업: 사용자 검토 후 codex/routine-recovery MR/병합, 이후 F05-01 도보 근거 수집. F07 출발 안내, GPS 자동 판정·메일 인증/복구는 후속이다.
+- 현재 재검토: R02 서버 재시작·동작 검증 통과. journeys/service.py SQL2곳 위임은 남아 있다(아래 R02·개발 일지).
+- 다음 작업: R02 SQL2곳 repository 위임 마무리 후 F05-01 도보 근거 수집. F07 출발 안내, GPS 자동 판정·메일 인증/복구는 후속이다.
 
 ## 개발 구조 정리
 
 - [x] R01: 프론트엔드 실행 코드와 테스트를 별도 역할별 디렉터리로 정리한다. (2026-10-07, development_log.md R01·프론트57개/빌드·실행 확인; API/화면 동작 변경 없음)
-- [x] R02: 백엔드를 Spring 스타일 3계층(common+도메인별 router/service/repository·dto·provider)으로 재구성한다. (2026-10-08, development_log.md R02·백엔드130개 기준선 동일 통과·OpenAPI 17경로 동일; API 계약/DDL 변경 없음, Notion v0.49 명세 영향 없음)
+- [ ] R02: 백엔드를 Spring 스타일 3계층(common+도메인별 router/service/repository·dto·provider)으로 재구성한다. (2026-10-08 재검토: 실행/백엔드130개·프론트142개/빌드·OpenAPI17경로23동작 통과. journeys/service.py SQL2곳이 남아 SQL 전담 기준 부분 미완료로 체크 해제. development_log.md R02 서버 재시작 및 독립 재검토 근거, API/DDL 변경 없음·Notion v0.49)
 
 ## 체크 방법
 

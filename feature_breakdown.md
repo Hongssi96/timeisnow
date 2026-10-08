@@ -248,4 +248,4 @@ React는 약속 생성·초대·조율·확정·공유 화면, FastAPI는 권한
 ## 개발 구조 정리
 
 - [x] R01: frontend 실행 코드(src/app·components·lib·styles)와 테스트(tests/app·components·lib)를 분리한다. (2026-10-07, development_log.md R01·기존57개/빌드·실행 확인, API/화면 동작 변경 없음)
-- [x] R02: backend를 Spring 스타일 3계층(common·도메인별 router/service/repository·dto·provider)으로 재구성한다. (2026-10-08, development_log.md R02·백엔드130개 기준선 동일 통과, API 계약/DDL 변경 없음)
+- [ ] R02: backend를 Spring 스타일 3계층(common·도메인별 router/service/repository·dto·provider)으로 재구성한다. (2026-10-08 재검토: journeys/service.py SQL2곳이 남아 부분 미완료로 체크 해제. 실행/백엔드130개·프론트142개/빌드 정상, development_log.md R02 재검토 근거·API/DDL 변경 없음)
