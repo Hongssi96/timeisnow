@@ -4,6 +4,26 @@
 
 ## 실제 기록
 
+### 2026-10-12 — F05-01 main 병합 및 통합 검증
+- 요청/기준: 사용자가 codex/walking-evidence를 찾아 병합하도록 명시 요청하여 기존 사용자 직접 병합 규칙의 이번 작업 예외로 적용했다. fetch 후 main/origin/main6257ba2와 기능 브랜치c5ad2ce를 확인했다. 최신 Notion v0.51의5.5 도보 근거 계약을 다시 읽고 구현과 비교했다.
+- 통합: walking 패키지/라우터/테스트와 walking_api.md·개인화/기획 문서를 반영했다. api_contract/development_log/planning/todo 충돌을 해결하며 최신 v0.51과 지도 핀 저장 기록, 도보 근거 기록을 모두 보존했다. TODO/feature_breakdown F05-01 완료 상태를 맞추고 다음 작업을 F05-02로 정리했다. 기존 기능 코드는 수정하지 않았다.
+- 실제 검증: backend/.venv/Scripts/python.exe -m unittest discover -s backend/tests 전체141개,59.251초,OK. 실제 PostgreSQL 임시 스키마/ASGI 및 합성 공급자 검증이며 지도 핀 저장4개와 도보 근거7개를 함께 포함한다. git diff --check 통과·문서 충돌 표시0건. UI 변경이 없어 프론트/시각 검증은 반복하지 않았다. 실제 지도/AI 공급자 호출·개발 서버 재시작은 이번 병합 범위에서 수행하지 않았다.
+- 명세 영향: 기존 v0.51 계약의 구현을 main에 통합하는 작업이며 새 계약 변경 없음. Notion 수정 불필요, 최신 본문을 확인했고 로컬 api_contract.md의 v0.51을 보존했다. https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
+- 배운 개념/남은 일: 서로 다른 기능 브랜치의 문서 충돌은 최신 계약과 양쪽 검증 이력을 함께 보존해야 한다. F05-01 통합 검증 완료, 다음 F05-02 프롬프트 블록·버전 로딩. 물리 도보 범위·AI 산정/저장/재사용은 기존 후속 상태다.
+
+
+### 2026-10-08 — F05-01 선택 후보 도보 근거 수집
+- 목표/기반: 사용자 진행 요청에 따라 R02 병합 main4ddd36b를 확인하고 최신 origin/main에서 `codex/walking-evidence` 생성. 최신 Notion v0.49 및 TODO·planning·feature_breakdown·personalization·ai_prompts·logging 정책 확인 후 새 읽기 계약을 v0.50으로 먼저 추가했다.
+- 변경 파일: `backend/app/walking/{router,service,repository,dto}.py`, 패키지 초기화·main 라우터 등록·`backend/tests/test_walking.py`. GET `/api/v1/journey-searches/{search_id}/candidates/{candidate_id}/walking-evidence`에서 접근1개·각 환승 연결1개·마지막1개를 조회한다. 기존 journey.v1/장소 참조 검증 재사용, 안정적인 segment UUID/원본 leg ID 유지, 연속 도보 제공값 합산.
+- 정책/이유: 제공0초는 0+WALK_DURATION_ZERO, 미제공은 null+PROVIDER_WALK_MISSING. 모든 물리 범위는 unconfirmed, 지하철은 입구/승강장도 미확인. needs_data·ready_for_estimation/reusable=false. 정밀 좌표/출입구 설명 비노출, 남는 경로 시간을 도보/대기로 배분하지 않는다. 저장소에 장소 참조의 출발/도착 역할이 없어 추측하지 않고 검색 지점 참조를 사용한다. F04-04/GPS 자동 판정 보류 유지.
+- 저장/호환성: 새 DDL·지도/AI 호출·검색/근거 DB 쓰기·검색 만료 연장 없음. 기존 인증 세션 활동 기한 갱신은 유지한다. 새 GET 추가이며 기존 API/클라이언트·보관/계산 동작 유지. 일반 로그에 원문/정밀 위치 추가 없음.
+- 실제 검증: 신규7개/전체 백엔드137개(59.241초) 통과. 실제 PostgreSQL 테스트 임시 스키마/ASGI·합성 공급자로 값/누락/0초·연속 도보·환승·지하철·반복 조회 검색 행 무변경/추가 호출0·auth401·소유권/잘못된ID/만료/미완료404·장소 이름 유지/위치409/삭제404·손상502·OpenAPI 모델 확인. 사용자 업무 DB 변경·실제 공급자 물리 범위 검증 없음.
+- 실행 확인: 프로젝트 실행 명령 확인 후 백엔드 재시작(worker20796), health200·OpenAPI 새 GET 등록·실행 서버 비인증401 AUTH_REQUIRED/no-store 확인. 초기 프로세스 검사는 venv가 시스템 Python을 사용하는 점 때문에 중단했으며 command line의 프로젝트 경로를 확인한 뒤 재시작했다. 프론트 변경/시각 검증/프론트 재테스트 없음.
+- 문서: Notion v0.50 API 목록·5.5 계약/예시·상태·변경 이력 저장 후 재조회 확인. api_contract.md 원본 복사, walking_api.md·planning/personalization 수집 설명·TODO/feature_breakdown F05-01 체크 동기화. 프롬프트 작업 블록 자체는 변경 없음. MR 생성/병합은 사용자 담당.
+- 배운 개념/남은 일: 공급자 숫자 존재와 실제 이동 범위 검증은 다르며 null와0의 구분이 허위 기준값 저장을 막는다. 다음 F05-02 프롬프트/버전 로딩. F05-03 AI·F05-04 저장은 후속, 보행 가능 범위·방향·입구/승강장은 미검증 유지.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.50, 새 도보 근거 GET API 추가)
+
+
 ### 2026-10-08 — F03-02a 검색 없이 지도 핀 저장·자동 선택
 - 목표/기반: 사용자가 지도에서 고른 지점을 저장하려고 주소를 다시 검색해야 하는 불편을 해결하도록 요청. 최신 origin/main4ddd36b에서 codex/map-pin-place-save 생성. TODO·장소/출발/루틴 명세·기획·기능 목록·디자인/화면·로깅 문서와 Notion v0.50 확인, 구현 전에 v0.51/5.1.4 조건부 핀 생성 계약 추가. F05-01은 별도 codex/walking-evidence에 있으며 이번 브랜치에 미병합 코드를 포함하지 않았다.
 - 원인/변경: 기존 PlaceInput의 search_id/candidate_id 필수와 create의 후보 조회 때문에 지도 핀만으로 새 장소 생성 불가. backend/app/places/dto.py에 source 기본search/map_pin과 조건부 검증, service.py에 확인 ID 기반 생성 분기 추가. map_pin은 name=생성 당시label, address/location_address=서버 확인 법정동, 실제 좌표=확인된 핀. 정밀 주소/공식 장소명을 추측하지 않는다. 검색 입력과 과거 멱등 해시 유지, 새 DDL 없음.
