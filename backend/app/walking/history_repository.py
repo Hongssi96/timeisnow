@@ -17,14 +17,14 @@ def execution(connection,user_id,request_id):
 
 
 def insert_execution(connection,values):
-    connection.execute('''INSERT INTO ai_executions(id,user_id,request_id,body_hash,task_type,model_version,system_prompt_version,
-        prompt_version,policy_version,profile_version,input_evidence,context_snapshot,structured_result,validation_status,failure_code,latency_ms,usage,created_at,retained_until)
-        VALUES(%s,%s,%s,%s,'walking_estimate',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',values)
+    connection.execute("""INSERT INTO ai_executions(id,user_id,request_id,body_hash,task_type,model_version,system_prompt_version,
+        prompt_version,policy_version,profile_version,input_evidence,context_snapshot,structured_result,validation_status,failure_code,latency_ms,usage,created_at,retained_until,reused_estimates)
+        VALUES(%s,%s,%s,%s,'walking_estimate',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",values)
 
 
 def insert_path(connection,values):
     connection.execute('''INSERT INTO walking_paths(id,user_id,path_key,candidate_id,origin_ref,destination_ref,direction,scope,
-        place_refs,evidence,verified_at,calculated_at,expires_at,retained_until) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',values)
+        place_refs,evidence,verified_at,calculated_at,expires_at,retained_until,cache_key,cache_identity) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',values)
 
 
 def insert_estimate(connection,values):
@@ -38,10 +38,32 @@ def insert_revision(connection,values):
 
 
 def execution_estimates(connection,user_id,execution_id):
-    return connection.execute('''SELECT p.candidate_id,r.estimate_id,r.id AS revision_id,r.expires_at FROM walking_estimate_revisions r
+    return connection.execute("""SELECT p.candidate_id,r.estimate_id,r.id AS revision_id,r.expires_at,false AS reused FROM walking_estimate_revisions r
         JOIN walking_estimates e ON (e.id,e.user_id)=(r.estimate_id,r.user_id)
         JOIN walking_paths p ON (p.id,p.user_id)=(e.walking_path_id,e.user_id)
-        WHERE r.user_id=%s AND r.ai_execution_id=%s ORDER BY p.candidate_id''',(user_id,execution_id)).fetchall()
+        WHERE r.user_id=%s AND r.ai_execution_id=%s
+        UNION ALL
+        SELECT link->>'candidate_id',r.estimate_id,r.id,LEAST(r.expires_at,(link->>'expires_at')::timestamptz),true
+        FROM ai_executions a CROSS JOIN LATERAL jsonb_array_elements(a.reused_estimates) link
+        JOIN walking_estimate_revisions r ON r.id=(link->>'revision_id')::uuid AND r.user_id=a.user_id
+        JOIN walking_estimates e ON (e.id,e.user_id)=(r.estimate_id,r.user_id) AND e.id=(link->>'estimate_id')::uuid
+        JOIN walking_paths p ON (p.id,p.user_id)=(e.walking_path_id,e.user_id)
+        WHERE a.user_id=%s AND a.id=%s AND p.retained_until>clock_timestamp() AND r.retained_until>clock_timestamp()
+        ORDER BY candidate_id""",(user_id,execution_id,user_id,execution_id)).fetchall()
+
+
+def cache_candidate(connection,user_id,cache_key,revision_id=None):
+    return connection.execute("""SELECT r.*,p.cache_key,p.cache_identity,p.place_refs,p.expires_at AS path_expires_at,
+        p.retained_until AS path_retained_until,a.input_evidence,a.model_version,a.system_prompt_version,a.prompt_version,
+        a.policy_version,a.retained_until AS execution_retained_until,a.validation_status
+        FROM walking_paths p JOIN walking_estimates e ON (e.walking_path_id,e.user_id)=(p.id,p.user_id)
+        JOIN walking_estimate_revisions r ON (r.estimate_id,r.user_id)=(e.id,e.user_id)
+        JOIN ai_executions a ON (a.id,a.user_id)=(r.ai_execution_id,r.user_id)
+        WHERE p.user_id=%s AND p.cache_key=%s AND (%s::uuid IS NULL OR r.id=%s::uuid)
+        AND p.expires_at>clock_timestamp() AND r.expires_at>clock_timestamp()
+        AND p.retained_until>clock_timestamp() AND r.retained_until>clock_timestamp() AND a.retained_until>clock_timestamp()
+        AND a.validation_status='validated'
+        ORDER BY r.calculated_at DESC,r.id DESC LIMIT 1""",(user_id,cache_key,revision_id,revision_id)).fetchone()
 
 
 def summary(connection,user_id,estimate_id):

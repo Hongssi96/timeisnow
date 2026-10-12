@@ -58,3 +58,5 @@ current는 DB 적용 위치, history는 파일의 변경 순서다. upgrade head
 참고: [Alembic 공식 튜토리얼](https://alembic.sqlalchemy.org/en/latest/tutorial.html).
 
 2026-10-12 F05-04:0009_walking_history는ai_executions/walking_paths/walking_estimates/walking_estimate_revisions4개테이블을 추가한다. 기존데이터변경없음, downgrade는산정이력을삭제하므로 실제DB에서는기존규칙에따라주의하며 왕복검증은격리스키마에서수행한다. 상세walking_api.md·database_schema.md.
+
+2026-10-12 F05-05:0010_walking_cache는 확인된 물리 캐시 키/식별자 및 최소 재사용 연결 컬럼을 추가한다. 기존 행은 NULL 키·빈 재사용 목록이며 백필하지 않는다. 격리 왕복 검증은0009의 legacy 행을 보존한 채0010 적용/0009 복구/재적용과 전체 왕복을 확인한다. 실제 DB downgrade는 하지 않는다.

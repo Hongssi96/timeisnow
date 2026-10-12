@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
+from app.ai.walking_dto import Token
 
 
 class Internal(BaseModel):
@@ -50,3 +51,13 @@ class EstimateSummary(BaseModel):
 class EstimateEnvelope(BaseModel):
     data: EstimateSummary
     meta: dict[str,str]
+
+
+class CacheSource(Internal):
+    candidate_id: Token
+    provider: Token
+    provider_path_ref: Token
+    path_version: Token
+    origin_entrance_ref: Token
+    destination_entrance_ref: Token
+    condition_version: Token

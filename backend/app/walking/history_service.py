@@ -1,5 +1,6 @@
-"""Immutable validated snapshots; no public writes or provider calls."""
+"""Owner-bound internal orchestration and immutable validated snapshots."""
 from datetime import timedelta
+from decimal import Decimal
 import hashlib
 import json
 import time
@@ -16,6 +17,7 @@ from app.ai.prompt_loader import load_prompt
 from app.journeys.service import check_refs
 from app.places.service import parsed_id
 from app.walking import history_repository as repository
+from app.walking import cache_service as cache
 from app.walking.history_dto import Context,ExecutionMetadata,EstimateSummary
 
 
@@ -60,14 +62,20 @@ def check_context(connection,user_id,request,context,refs):
 def saved_result(connection,user_id,execution_id):
     rows=repository.execution_estimates(connection,user_id,execution_id)
     return {'execution_id':str(execution_id),'estimates':[{'candidate_id':row['candidate_id'],
-        'estimate_id':str(row['estimate_id']),'revision_id':str(row['revision_id'])} for row in rows]}
+        'estimate_id':str(row['estimate_id']),'revision_id':str(row['revision_id']),
+        'reused':row['reused'],'expires_at':row['expires_at'].isoformat()} for row in rows]}
 
 
-def persist(user_id,value,output,*,context,metadata,failure_code=None):
+def persist(user_id,value,output,*,context,metadata,failure_code=None,cache_sources=None,_reused=None):
     """For trusted server callers after ownership and physical evidence verification."""
     user_id=parsed_id(str(user_id))
     request=parse_input(value)
     context,metadata,refs=parse_context(context,metadata)
+    sources=cache.parse_sources(cache_sources,request)
+    reused=_reused or []
+    reused_ids={item['candidate_id'] for item in reused}
+    if len(reused_ids)!=len(reused):invalid()
+    context_snapshot=cache.snapshot(context,refs,sources)
     bundle=load_prompt('walking_estimate',expected_version='walking_estimate.v1')
     validated=None
     if failure_code is None:
@@ -75,15 +83,17 @@ def persist(user_id,value,output,*,context,metadata,failure_code=None):
         except (ValidationError,TypeError,ValueError):
             raise AuthError(502,'AI_OUTPUT_INVALID','AI 산정 결과를 확인할 수 없어요.') from None
         validate_output(validated,request)
-        if any(item.status=='ok' for item in validated.results) and metadata.model_version is None:invalid()
+        if any(item.status=='ok' and item.candidate_id not in reused_ids for item in validated.results) and metadata.model_version is None:invalid()
     elif failure_code not in {'AI_OUTPUT_INVALID','PROVIDER_UNAVAILABLE','PROVIDER_TIMEOUT','PROMPT_RESOURCE_INVALID'}:invalid()
     status='failed' if failure_code else ('validated' if any(item.status=='ok' for item in validated.results) else 'needs_data')
     # Free-form model reasons are not persisted; they are unnecessary for numeric provenance.
     structured=validated.model_dump() if validated else None
     if structured:
         for item in structured['results']:item.pop('reason',None)
-    body_hash=fingerprint({'input':request.model_dump(),'output':validated.model_dump() if validated else None,
-        'context':{**context.model_dump(mode='json'),'place_refs':refs},'metadata':metadata.model_dump(),'failure_code':failure_code})
+    hash_input={'input':request.model_dump(),'output':validated.model_dump() if validated else None,
+        'context':context_snapshot,'metadata':metadata.model_dump(),'failure_code':failure_code}
+    if sources is not None:hash_input['reused_estimates']=reused
+    body_hash=fingerprint(hash_input)
     with database() as connection:
         now=check_context(connection,user_id,request,context,refs)
         old=repository.execution(connection,user_id,request.request_id)
@@ -92,31 +102,43 @@ def persist(user_id,value,output,*,context,metadata,failure_code=None):
                 raise AuthError(409,'IDEMPOTENCY_CONFLICT','실행 식별자를 다른 산정에 재사용할 수 없어요.')
             if old['retained_until']<=now:missing()
             return saved_result(connection,user_id,old['id'])
+        # Re-check source ownership, identity, math and expiry in the saving transaction.
+        if reused:
+            if failure_code or sources is None:invalid()
+            candidates={item.candidate_id:item for item in request.candidates}
+            for link in reused:
+                candidate=candidates.get(link['candidate_id'])
+                if candidate is None:invalid()
+                hit=cache.lookup(connection,user_id,candidate,request,refs,sources.get(candidate.candidate_id),now,context,link['revision_id'])
+                if hit is None or hit[1]!=link:missing()
+                actual=next(item for item in validated.results if item.candidate_id==candidate.candidate_id)
+                if actual.model_dump(exclude={'reason'})!=hit[0].model_dump(exclude={'reason'}):invalid()
         execution_id=uuid4();retained=now+timedelta(days=90)
         repository.insert_execution(connection,(execution_id,user_id,request.request_id,body_hash,metadata.model_version,
             bundle.system.version,bundle.prompt_version,request.policy_version,request.profile.version,
-            Jsonb(request.model_dump()),Jsonb({**context.model_dump(mode='json'),'place_refs':refs}),Jsonb(structured) if structured else None,status,failure_code,metadata.latency_ms,
-            Jsonb(metadata.usage.model_dump()) if metadata.usage else None,now,retained))
+            Jsonb(request.model_dump()),Jsonb(context_snapshot),Jsonb(structured) if structured else None,status,failure_code,metadata.latency_ms,
+            Jsonb(metadata.usage.model_dump()) if metadata.usage else None,now,retained,Jsonb(reused)))
         by_id={item.candidate_id:item for item in validated.results} if validated else {}
         for candidate in request.candidates:
             result=by_id.get(candidate.candidate_id)
-            if result is None or result.status!='ok':continue
+            if result is None or result.status!='ok' or candidate.candidate_id in reused_ids:continue
             if missing_evidence(candidate,request.profile):invalid()
             base,factor,seconds,method=expected(candidate,request.profile)
             expires=min(now+timedelta(days=30),context.valid_until)
             path_id,estimate_id,revision_id=uuid4(),uuid4(),uuid4()
             evidence=candidate.model_dump()
+            cache_key,cache_identity=cache.identity(candidate,request,refs,sources.get(candidate.candidate_id) if sources is not None else None)
             repository.insert_path(connection,(path_id,user_id,fingerprint({'candidate':evidence,'place_refs':refs}),candidate.candidate_id,
                 candidate.origin_ref,candidate.destination_ref,candidate.direction,candidate.scope,Jsonb(refs),Jsonb(evidence),
-                context.verified_at,now,expires,retained))
+                context.verified_at,now,expires,retained,cache_key,Jsonb(cache_identity) if cache_identity is not None else None))
             repository.insert_estimate(connection,(estimate_id,user_id,path_id,request.policy_version,now))
             repository.insert_revision(connection,(revision_id,user_id,estimate_id,execution_id,request.profile.version,
-                base,factor,seconds,method,now,expires,retained))
+                Decimal(str(base)),Decimal(str(factor)),seconds,method,now,expires,retained))
         return saved_result(connection,user_id,execution_id)
 
 
-def record_failure(user_id,value,*,context,metadata,failure_code):
-    return persist(user_id,value,None,context=context,metadata=metadata,failure_code=failure_code)
+def record_failure(user_id,value,*,context,metadata,failure_code,cache_sources=None):
+    return persist(user_id,value,None,context=context,metadata=metadata,failure_code=failure_code,cache_sources=cache_sources)
 
 
 def detail(request,estimate_id):
@@ -143,16 +165,17 @@ def purge_expired_history(user_id):
         repository.purge(connection,user_id)
 
 
-def _estimate_and_store(user_id,value,*,context):
+def _estimate_and_store(user_id,value,*,context,cache_sources=None):
     """Owned internal end-to-end execution with checks before and after the model call."""
     from app.ai.walking_service import estimate
     request=parse_input(value)
     checked_context,_,refs=parse_context(context,{'model_version':None})
+    sources=cache.parse_sources(cache_sources,request)
     with database() as connection:
         now=check_context(connection,parsed_id(str(user_id)),request,checked_context,refs)
         old=repository.execution(connection,user_id,request.request_id)
         if old:
-            context_snapshot={**checked_context.model_dump(mode='json'),'place_refs':refs}
+            context_snapshot=cache.snapshot(checked_context,refs,sources)
             if old['input_evidence']!=request.model_dump() or old['context_snapshot']!=context_snapshot:
                 raise AuthError(409,'IDEMPOTENCY_CONFLICT','실행 식별자를 다른 산정에 재사용할 수 없어요.')
             if old['retained_until']<=now:missing()
@@ -161,32 +184,57 @@ def _estimate_and_store(user_id,value,*,context):
                 raise AuthError(504 if code=='PROVIDER_TIMEOUT' else 502 if code=='AI_OUTPUT_INVALID' else 503,
                                 code,'이전 산정 실행이 실패했어요. 새 실행으로 다시 확인해주세요.')
             rows=repository.execution_estimates(connection,user_id,old['id'])
-            if any(row['expires_at']<=now for row in rows):missing()
+            if len(rows)!=sum(item['status']=='ok' for item in old['structured_result']['results']) or any(row['expires_at']<=now for row in rows):missing()
+            # Replay also checks the current physical/profile contract of reused sources.
+            for link in old['reused_estimates']:
+                candidate=next(item for item in request.candidates if item.candidate_id==link['candidate_id'])
+                if cache.lookup(connection,user_id,candidate,request,refs,sources.get(candidate.candidate_id) if sources else None,now,checked_context,link['revision_id']) is None:missing()
             replay=old['structured_result']
             for result in replay['results']:result['reason']='저장된 검증 실행 결과예요.'
             return {'result':replay,**saved_result(connection,user_id,old['id'])}
-    called=any(not missing_evidence(candidate,request.profile) for candidate in request.candidates)
+        hits={}
+        if sources is not None:
+            for candidate in request.candidates:
+                hit=cache.lookup(connection,user_id,candidate,request,refs,sources.get(candidate.candidate_id),now,checked_context)
+                if hit:hits[candidate.candidate_id]=hit
+    misses=[item for item in request.candidates if item.candidate_id not in hits]
+    called=any(not missing_evidence(candidate,request.profile) for candidate in misses)
     started=time.monotonic()
     try:
-        output=estimate(request)
+        results={key:hit[0] for key,hit in hits.items()}
+        if misses:
+            subset=parse_input({**request.model_dump(),'candidates':[item.model_dump() for item in misses]})
+            results.update({item.candidate_id:item for item in estimate(subset).results})
+        output=EstimateOutput(request_id=request.request_id,prompt_version='walking_estimate.v1',
+            results=[results[item.candidate_id] for item in request.candidates])
+        validate_output(output,request)
     except AuthError as error:
         if error.code in {'AI_OUTPUT_INVALID','PROVIDER_UNAVAILABLE','PROVIDER_TIMEOUT'}:
             record_failure(user_id,request,context=checked_context,metadata={'model_version':None,
-                'latency_ms':round((time.monotonic()-started)*1000) if called else None},failure_code=error.code)
+                'latency_ms':round((time.monotonic()-started)*1000) if called else None},failure_code=error.code,cache_sources=cache_sources)
         raise
     stored=persist(user_id,request,output,context=checked_context,metadata={'model_version':'gpt-5.6-luna' if called else None,
-        'latency_ms':round((time.monotonic()-started)*1000) if called else None})
+        'latency_ms':round((time.monotonic()-started)*1000) if called else None},cache_sources=cache_sources,
+        _reused=[hit[1] for hit in hits.values()])
     return {'result':output.model_dump(mode='json'),**stored}
 
 
-def estimate_and_store(user_id,value,*,context):
+def estimate_and_store(user_id,value,*,context,cache_sources=None):
     request=parse_input(value)
     user_id=parsed_id(str(user_id))
-    key='walking-execution:'+str(user_id)+':'+request.request_id
+    checked,_,refs=parse_context(context,{'model_version':None})
+    sources=cache.parse_sources(cache_sources,request)
+    keys=['walking-execution:'+str(user_id)+':'+request.request_id]
+    if sources is not None:
+        physical_keys={cache.identity(item,request,refs,sources.get(item.candidate_id))[0] for item in request.candidates}
+        keys+=['walking-cache:'+str(user_id)+':'+key for key in sorted(key for key in physical_keys if key)]
     with database() as locking_connection:
-        if not repository.try_execution_lock(locking_connection,key):
-            raise AuthError(409,'EXECUTION_IN_PROGRESS','같은 산정 실행이 처리 중이에요.')
+        held=[]
         try:
-            return _estimate_and_store(user_id,request,context=context)
+            for key in keys:
+                if not repository.try_execution_lock(locking_connection,key):
+                    raise AuthError(409,'EXECUTION_IN_PROGRESS','같은 도보 산정이 처리 중이에요.')
+                held.append(key)
+            return _estimate_and_store(user_id,request,context=checked,cache_sources=cache_sources)
         finally:
-            repository.release_execution_lock(locking_connection,key)
+            for key in reversed(held):repository.release_execution_lock(locking_connection,key)

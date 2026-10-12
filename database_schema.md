@@ -288,3 +288,7 @@ CASCADE는 부모와 수명이 같은 자식(예: 삭제 대상 이벤트의 정
 0009_walking_history: walking_paths, walking_estimates, walking_estimate_revisions, ai_executions를 우선 생성한다. C절은 전체 후속 설계이며 이번 실제 필드는 마이그레이션을 기준으로 한다. 최소 후보/근거·장소 위치 버전 참조와 확인/산정/30일 유효/90일 보관을 path에 보존, 숫자/프로필 버전/실행 연결은revision에 보존한다. estimate/path·revision/estimate·revision/execution은 id,user_id 복합FK로 동일 소유자를 강제한다. 같은 실행request_id는 회원별unique이며 동일내용 재요청과 내용충돌을 구분한다. 새 근거/산정은 새 path/estimate/revision(현재revision_no1)을 생성한다. 갱신/개인화 부모 연결은 후속이다.
 
 ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조화 결과·검증 상태·실패코드·실측 지연/알려진 사용량만 보관한다. model/지연/사용량 미확인은null, 원문/정밀 위치/이름/메모/키/내부사고는 비저장. 회원삭제CASCADE, 장소삭제는 과거JSON 참조를 보존하고 요약조회404로 차단한다. 위치/프로필 버전 변경409,90일 청소 함수 제공·자동 스케줄은 후속이다. 상세 walking_api.md·Notion v0.54.
+
+## F05-05 캐시 확장 — 2026-10-12
+
+0010_walking_cache: walking_paths.cache_key char(64)/cache_identity jsonb는 nullable 쌍이며 미확인 기존 행을 백필하지 않는다. 회원·물리 키·기한 조회 인덱스를 추가한다. ai_executions.reused_estimates jsonb는 NOT NULL·기본[]·배열 제약이다. 최소 재사용 연결은 본인 원본 FK 조회와 검산으로 확인하고 삭제/만료 연결은 재실행을 차단한다. 기존 numeric revision은 수정/복제하지 않는다. 회원 CASCADE·90일 정리 유지. walking_api.md·Notion v0.55.

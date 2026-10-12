@@ -150,3 +150,7 @@ meeting_api.md 11절의 meeting.created/confirmed/closed, invite.accepted/reject
 ## F05-04 권한 관리되는 최소 품질 이력 — 2026-10-12
 
 ai_executions에 검증된 최소 입력/Context·reason 제외 구조화 결과·실패 코드·모델/프롬프트/정책/프로필 버전·실측 지연/확인한 사용량을90일 보관한다. 없는지연/사용량과 실행하지 않은 모델은null이며 숫자를 만들어 채우지 않는다. 손상된 출력/원문/이름/정밀위치/키/내부사고는 비저장, 일반로그는 기존HTTP 메타데이터만 유지한다. record_failure는 허용된실패코드만, 유효산정은revision으로 분리한다. 회원삭제CASCADE·90일 청소함수, 자동스케줄은배포후속이다. walking_api.md·Notion v0.54.
+
+## F05-05 캐시 적용 이력 — 2026-10-12
+
+ai_executions.reused_estimates에 최소 원본 연결(candidate/estimate/revision/effective expiry)만90일 보관한다. 전체 적중은 model_version/latency_ms/usage=null로 모델 실행 집계에서 제외한다. 부분 적중은 누락 후보 호출의 실측값만 기록한다. 재사용으로 숫자 revision과 원본 만료/보관 기한을 연장하지 않는다. 삭제된 원본은 연결 JSON에서 역추정해 복구하지 않고404로 차단한다. 일반 HTTP 로그 필드와 개인 정보 비저장 규칙을 유지한다. walking_api.md·Notion v0.55.
