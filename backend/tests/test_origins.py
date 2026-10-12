@@ -128,7 +128,9 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
     async def test_limit_includes_failed_provider_calls(self):
         await self.signup_login()
         origin={'type':'map_pin','latitude':37.5,'longitude':127}
-        with patch.object(places_provider,'region_for_location',side_effect=auth.AuthError(503,'PROVIDER_UNAVAILABLE','synthetic')) as provider:
+        with database() as connection:
+            window_time=auth.repository.clock_now(connection)
+        with patch.object(auth.repository,'clock_now',return_value=window_time), patch.object(places_provider,'region_for_location',side_effect=auth.AuthError(503,'PROVIDER_UNAVAILABLE','synthetic')) as provider:
             for _ in range(10):
                 self.assertEqual((await self.call('/origin-validations',{'origin':origin}))[0],503)
             result=await self.call('/origin-validations',{'origin':origin})

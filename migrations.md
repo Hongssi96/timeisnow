@@ -56,3 +56,5 @@ current는 DB 적용 위치, history는 파일의 변경 순서다. upgrade head
 검증: 통합 테스트 1개 통과, pip check 정상, 개발 DB head 확인, 임시 스키마 잔여 0개, 잘못된 포트의 실패 로그/종료 코드 1 확인. 빈 baseline 검증이므로 업무 데이터 복구나 FK 검증 완료를 뜻하지 않는다.
 
 참고: [Alembic 공식 튜토리얼](https://alembic.sqlalchemy.org/en/latest/tutorial.html).
+
+2026-10-12 F05-04:0009_walking_history는ai_executions/walking_paths/walking_estimates/walking_estimate_revisions4개테이블을 추가한다. 기존데이터변경없음, downgrade는산정이력을삭제하므로 실제DB에서는기존규칙에따라주의하며 왕복검증은격리스키마에서수행한다. 상세walking_api.md·database_schema.md.
