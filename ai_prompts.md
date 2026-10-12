@@ -11,7 +11,7 @@ F04-01(2026-10-07, Notion v0.40): 카카오 대중교통 후보 조회 POST /jou
 - 버전: 0.2
 - 작성일: 2026-09-30
 - 연결 문서: [planning.md](./planning.md)
-- 상태: 구현 전 명세. 모델 연결 및 평가를 통과한 운영 프롬프트는 아님.
+- 상태: F05-02 버전별 런타임 블록 로딩 구현(2026-10-12). 모델 연결 및 평가를 통과한 운영 프롬프트는 아님.
 - 선정 모델: OpenAI GPT-5.6 Luna (`gpt-5.6-luna`, 2026-10-06 사용자 확정). 공급자 공식 문서에서 구조화 출력 지원 확인. 실제 스키마 준수·품질·지연·비용 평가는 미완료이며 기존 프롬프트 블록/버전을 유지한다. 예산·데이터 전달/보관 조건은 D02-04/D03에서 확정한다.
 - 근거: [공식 모델 문서](https://developers.openai.com/api/docs/models/gpt-5.6-luna).
 
@@ -247,3 +247,13 @@ routine에서 depart_at은 현재 저장 계약이 지원하지 않으므로 안
 ## D03 보관·재사용 후속 결정 — 2026-10-06
 
 기준 도보 산정30일·개인 품질90일·실행 로그14일, 자연어 컨텍스트10분·작업 결과24시간 적용. 기존 지도 근거/모델 입력·출력 스키마 유지, 원문 위치/채팅을 일반 로그에 복제하지 않는다. 유효한 기준값의 개인화/다음차량 변경으로 AI를 재호출하지 않는다. policy_decisions.md·Notion v0.26 기준, 프롬프트/모델 품질 검증 및 구현은 미완료.
+
+## 12. F05-02 런타임 로딩 — 2026-10-12
+
+서버의 app.ai.prompt_loader.load_prompt(task, expected_version=...)가 패키지 리소스를 읽는다. common.v1 SYSTEM과 walking_estimate.v1 또는 journey_explanation.v2 DEVELOPER를 별도 메시지로 반환한다. prompt_version은 작업 블록 버전이며 system.version도 함께 보존한다. UTF-8 JSON 파일은 backend/app/ai/prompts에 두며 각 파일은 version·role·content를 갖는다. 문서의 해당 text 블록과 본문/버전이 정확히 같은지 test_prompt_loader.py로 검증한다. 문구는 이번 작업에서 바꾸지 않아 기존 프롬프트 버전을 유지한다.
+
+허용 작업은 walking_estimate, journey_explanation이다. 자연어 일정은 별도 SYSTEM을 요구하므로 F17에서 연결한다. 임의 파일 경로/알 수 없는 작업, 기대 버전 불일치, 누락/손상/빈 리소스·잘못된 역할은 PromptLoadError로 중단하며 오류에는 원문/경로를 포함하지 않는다. 반환 객체는 불변이고 messages()는 매번 새 목록을 반환한다. 작업 디렉터리에 의존하지 않으며 호출마다 읽고 프로세스 캐시는 두지 않는다. 요청 입력은 별도 데이터 메시지로 연결해야 하며 문서 전체를 전송하지 않는다.
+
+로더는 후속 AI 서비스용 내부 모듈이다. 기존 HTTP API·인증·오류·DB/보관/계산 정책을 바꾸지 않으며 AI/지도 호출·사용자 데이터 입력·품질 이력 쓰기는 없다. 자동 서버 실행 연결과 실제 모델 호출/응답 검증은 F05-03 후속이다. 로딩 성공은 프롬프트 품질 평가나 도보 산정 준비 완료를 뜻하지 않는다.
+
+검증: backend/.venv/Scripts/python.exe -m unittest discover -s backend/tests -p test_prompt_loader.py (8개).
