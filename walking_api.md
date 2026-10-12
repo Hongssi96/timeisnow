@@ -64,3 +64,15 @@ GET /api/v1/walking-estimates/{estimate_id}는 본인 쿠키 인증·no-store, C
 산정 유효기간은 생성+30일과 Context.valid_until 중 이른 시각, 품질 이력은90일. 장소 변경/삭제 후 숫자 조회를 차단하며 과거 품질 이력은 보존한다. 회원 삭제는4테이블 CASCADE, purge_expired_history(user_id)는 해당 회원의90일 만료 이력을 정리한다. 자동 매일 실행/배포 스케줄은 후속이다. 재산정/계수만 변경/F05-05 캐시/출발 안내/사용자 생성 연결 및 실제 물리 근거 확보는 아직 후속이다.
 
 동시 실행 보강: estimate_and_store는 사용자/request_id별DB 세션advisory 잠금으로 두 번째 AI 호출을 차단하고 내부409 EXECUTION_IN_PROGRESS를 반환한다. 완료한 동일 실행은 모델 재호출 없이 조회한다. 장소 수정 잠금은 모델 호출 동안 유지하지 않고 저장 전 위치 버전을 다시 검사한다.
+
+## F05-05 같은 조건의 저장값 재사용 — 2026-10-12
+
+Notion v0.55. 내부 estimate_and_store(..., cache_sources=[...])를 확장한다. 서버가 먼저 검증한 candidate_id, provider, provider_path_ref, path_version, origin_entrance_ref, destination_entrance_ref, condition_version만 받는다. 식별자는 ASCII1~200자, 중복 후보/추가 필드/미확인 unknown·unconfirmed·none·null을 거부한다. 출입구 적용이 없을 때만 not_applicable을 명시한다. 클라이언트가 만든 플래그를 물리 검증으로 받아서는 안 된다. 미제공 또는0010 이전 이력은 캐시를 추정하지 않고 기존 산정 흐름을 따른다.
+
+캐시 키는 사용자별 장소/location_version·양끝 물리 참조·방향·범위/필요범위·공급자 경로/버전·양끝 출입구·조건 버전·기준 거리/시간/기개인화 여부·거리 기준일 때 속도·정책/공통/작업 프롬프트/모델 버전이다. 일시적인 candidate/evidence/request ID는 제외한다. 현재 근거가 유효·준비된 후보만 저장된 유효 검증 revision을 검색한다. 프로필 전체 스냅샷이 같아야 하고, 물리 조건은 같지만 프로필만 변경됐으면409 PROFILE_RECALCULATION_REQUIRED로 AI 없이 차단한다. 계수 재계산은F05-06 후속이다.
+
+전체/부분 적중을 지원하며 누락 후보만AI에 전달한다. 원본 기준/계수/최종 정수초를현재입력으로 다시 검산하고 현재candidate/evidence ID로 결과를 연결한다. 기준 실수는F05-03과같은 rel_tol=1e-12/abs_tol=1e-9, 최종초/계수는정확히일치해야 한다. DB NUMERIC에는 Decimal(str(검증값))으로 전달해 긴 계수를 보존한다. 내부 estimates는 candidate_id,estimate_id,revision_id,reused,expires_at이다. 적중은원본ID·계산시각·revision을유지하고 effective expires_at=min(원본기한,현재근거기한)으로반환한다. 원본만료연장/새numeric revision 없음. 기존GET은단순조회이므로reused=false유지한다.
+
+전체 입력/Context/cache_sources 및 원본 연결로 멱등 재실행을 검사한다. ai_executions.reused_estimates에 candidate/estimate/revision/effective expiry만 보존한다. 전부적중이면 모델/지연/사용량null, 부분적중은실제누락호출의메타데이터만기록한다. 원본연결삭제/만료 후 재실행은404, 실행ID내용변경409. 사용자/request_id와정렬된사용자/물리키 세션잠금으로 다른실행ID의동시호출도409 EXECUTION_IN_PROGRESS. 호출중장소변경/원본만료는저장전재확인해 전체롤백한다. 일반로그에이름/정밀좌표/키/원문추가없음.
+
+0010_walking_cache: walking_paths.cache_key/cache_identity(nullable 쌍) 및회원/키/기한인덱스, ai_executions.reused_estimates(기본빈배열). 이전이력백필없음. 신규공개API/UI없음. 실제walking.evidence는needs_data·reusable=false를유지하므로실사용재사용/출발안내연결은후속이다.

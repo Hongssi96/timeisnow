@@ -279,3 +279,7 @@ Responses strict JSON Schema를 요청하고 provider 응답 completed/모델·�
 ## 14. F05-04 검증 결과 저장 — 2026-10-12
 
 history_service.estimate_and_store/persist는 F05-03 결과를 재검산하고 모델 자유문 reason을 저장하지 않는다. Context/본인·프로필/장소 버전은 호출 전후 검사한다. 정상 숫자는 불변revision, needs_data/실패는 안전한 최소 실행 이력만 보관한다. 같은 실행 ID 재요청은 AI 중복 실행을 막으며 조건별캐시는 F05-05후속이다. 알려지지 않은 사용량은null, actualmodel/지연은 확인한값만 사용한다. 현재 미확인 근거는 숫자저장 차단, 원문/정밀위치/키·내부사고 비저장. 프롬프트 문구/버전 변경 없음. walking_api.md·Notion v0.54.
+
+## 15. F05-05 재사용 후보는 호출 입력에서 제외 — 2026-10-12
+
+현재 검증 근거와 같은 물리 키·프로필·버전의 유효 저장값만 재검산해 재사용한다. 전체 적중은 모델 호출0회, 부분 적중은 누락 후보만 USER JSON에 담는다. 현재 candidate/evidence ID로 결과를 연결하고 원본 estimate/revision을 유지한다. cache_sources는 서버 검증 식별자이며 AI 입력에 추가하지 않는다. 프롬프트 문구/버전 변경과 원문/정밀 위치/이름/키 전송 없음. 실제 미확인 walking.evidence는 needs_data를 유지한다. walking_api.md·Notion v0.55.
