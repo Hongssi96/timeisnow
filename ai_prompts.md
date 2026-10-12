@@ -257,3 +257,21 @@ routine에서 depart_at은 현재 저장 계약이 지원하지 않으므로 안
 로더는 후속 AI 서비스용 내부 모듈이다. 기존 HTTP API·인증·오류·DB/보관/계산 정책을 바꾸지 않으며 AI/지도 호출·사용자 데이터 입력·품질 이력 쓰기는 없다. 자동 서버 실행 연결과 실제 모델 호출/응답 검증은 F05-03 후속이다. 로딩 성공은 프롬프트 품질 평가나 도보 산정 준비 완료를 뜻하지 않는다.
 
 검증: backend/.venv/Scripts/python.exe -m unittest discover -s backend/tests -p test_prompt_loader.py (8개).
+
+## 13. F05-03 AI 입력·결과 검증 — 2026-10-12
+
+서버 내부 app.ai.walking_service.estimate는 4절 입력만 검증한 뒤 common.v1 SYSTEM·walking_estimate.v1 DEVELOPER·별도 USER JSON으로 전달한다. 공개 HTTP API는 추가하지 않는다. 호출자는 먼저 인증/소유권/근거 만료·보행 가능/물리 범위·방향을 검증해야 한다. 현재 walking.evidence.v1을 받는 estimate_evidence는 미확인 범위를 그대로 needs_data로 처리하며 AI를 호출하지 않는다. stop_name/좌표/메모/공급자 원문은 산정 입력에 없다. 후보마다 결과 하나를 입력 순서로 반환한다.
+
+입력 DTO는 strict 자료형·추가 필드 금지·유한 양수 시간/거리/속도·계수0.5~2.0·고정 valid_factor_range·후보1~20개·중복 후보/근거 금지·길이 제한된 ASCII 식별자와 누락 코드를 검사한다. 검증된 입력의 is_walkable_route=false, direction=unknown, scope 미확인/required_scope 불일치, 근거 ID 없음, 누락 있음, 공급자 시간 및 거리/속도 부족이면 호출 없이 needs_data와 null 시간/계수·method=none을 반환한다. 양수 입력의 나눗셈이 유한 기준 시간을 만들지 못해도 외부 호출 전 거부한다. 현재 근거의 명시0은 WALK_DURATION_ZERO와 null 산정으로 남기며0초 산정 성공으로 바꾸지 않는다.
+
+Responses strict JSON Schema를 요청하고 provider 응답 completed/모델·메시지/거절/도구·응답 크기를 확인한다. 출력 request_id·prompt_version·유일 후보/근거·양끝/방향/범위·자료형·상태/null 규칙을 검증한다. ok는 입력 근거 전체와 누락 없음, 공급자 우선 기준 시간 또는 거리/속도, 기본/검증 계수 및 이중 보정 방지, ceil(기준×계수)를 서버가 재검산한다. 기준 실수 직렬화 비교에 rel_tol=1e-12/abs_tol=1e-9를 쓰되 최종 정수 초는 정확히 같아야 한다. 여유·차량 대기·임의 패널티는 포함하지 않는다. needs_data/unsupported는 시간/계수null·method=none이며 needs_data에는 누락 사유가 필요하다.
+
+형식 오류는 같은 최소 입력으로 최대1회 추가 호출한다. 수식·ID·범위·근거 등 의미 오류와 거절/미완료·모델 불일치·전송 오류는 재시도하지 않는다. 502 AI_OUTPUT_INVALID,503 PROVIDER_UNAVAILABLE,504 PROVIDER_TIMEOUT을 내부 오류로 구분하며 원문/키/URL은 로그에 출력하지 않는다. 설정은 .env보다 프로세스 환경 우선, 기존 gpt-5.6-luna/HTTPS만 허용한다. store=false·512출력토큰·35초·256KiB응답 제한·리다이렉트 차단, 도구나 JSON 모드 자동 대체 없음.
+
+실행 확인 도구 backend/check_ai_walking.py는 공개 주소/사용자 자료 없이 합성300초·factor1.2→360초 사례를 최대1회 호출하고 서버 검산 결과만 출력한다. 2026-10-12 승인된 실제 합성 요청에서 strict 응답·360초 검산 성공(2.51초)을 확인했다. 키 최소 인증 테스트는2026-10-12 HTTP200·1.43초·16토큰 성공했지만 구조화 산정 품질 평가와 구분한다. 저장/품질 이력·재사용·화면 연결은 F05-04 이후이며 현재 API의 needs_data/ready_for_estimation=false를 유지한다.
+
+공식 연결 형식 근거: [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses). 신규18개·전체백엔드167개 로컬 검증 통과, 실제 합성 구조화 응답·360초 검산을 확인했다(2.51초).
+
+2026-10-12 실호출 후속: 사용자 승인된 구조화 합성 요청1회를 실행했지만503 PROVIDER_UNAVAILABLE로 실패했다. 키 존재/모델/호스트 설정은 로컬 재확인 정상이며 공급자 인증/요청 형식/가용성 중 원인은 미확정이다. 다음 진단 도구는 upstream_http_status와 허용된 upstream_error_code만 추가 출력한다. 원문/키/URL은 출력하지 않고 공개 오류 형식도 유지한다. 추가 호출은 아직 실행하지 않았다.
+
+2026-10-12 최종 실서버 확인: 최초1회 실패 뒤 사용자 승인된 추가 최대3회에서 HTTP400 및 INVALID/MAX_OUTPUT_TOKENS 고정 태그를 확인했다. 출력 한도를4096에서512로 낮춘 마지막 요청은 status=ok·model_matches=true·walking_estimate.v1·결과1개·estimated_seconds=360·server_validation_passed=true,2.51초로 성공했다. 원문·키·URL은 출력하지 않았으며 합성 입력만 전송했다. 더 큰 후보 묶음의 실서버 응답/전체 도보 품질은 미검증이고512토큰 내 완료되지 않으면 AI_OUTPUT_INVALID로 거부한다. 저장/실사용 연결·물리 범위 확보는 후속이다. 오류 진단은 고정 분류 태그만 허용하며 공급자 메시지 부분 문자열을 그대로 출력하지 않는다.
