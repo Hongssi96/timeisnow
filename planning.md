@@ -489,3 +489,7 @@ F04-04는 사용자 요청으로 보류. 경로 없음/승하차 지점 연결 �
 ### F05-01 도보 근거 수집 (2026-10-08)
 
 선택 후보의 접근·각 환승·마지막 도보를 기존 공급자 값과 누락으로 구분해 GET walking-evidence에서 조회한다. 물리 범위 미검증·ready_for_estimation/reusable=false를 유지하며 누락은 null, 제공0은0으로 남긴다. 추가 지도/AI 호출·검색 보관 연장·새 저장은 없다. 양 끝은 역할을 추측하지 않은 검색 지점 참조, 장소 소유권/위치 버전은 별도 검증한다. F04-04/GPS 자동 판정은 보류, AI 산정/저장/재사용은 후속이다. Notion v0.50·walking_api.md·development_log.md 기준.
+
+### F05-02 프롬프트 블록·버전 로딩 (2026-10-12)
+
+ai_prompts.md의 common.v1 SYSTEM과 walking_estimate.v1/journey_explanation.v2 작업 DEVELOPER를 서버 패키지 리소스에서 분리 로딩한다. 문구/버전 일치·기대 버전·누락/손상·역할을 검증하고 입력 데이터는 후속 단계의 별도 메시지로 유지한다. 문구/계산/API/저장 정책 변경 없음. 실제 AI 호출·구조화 결과 검증은 F05-03, 자연어 일정 SYSTEM은 F17 후속이다.

@@ -4,6 +4,16 @@
 
 ## 실제 기록
 
+### 2026-10-12 — F05-02 프롬프트 블록·버전 로딩
+- 목표/기준: 사용자 진행 요청에 따라 fetch 후 최신 origin/main bb4e72e에서 codex/prompt-loading 생성. TODO·planning/feature_breakdown/personalization/ai_prompts/logging 및 최신 Notion v0.51의5.5·프롬프트/계산 정책을 확인했다. F05-02는 기존 작업 문구를 버전별로 읽는 내부 기반이며 실제 AI 호출은 F05-03이다.
+- 변경 파일/이유: backend/app/ai/prompt_loader.py에 불변 PromptBlock/PromptBundle·load_prompt·안전한 PromptLoadError를 추가했다. app/ai/prompts의 common.v1/walking_estimate.v1/journey_explanation.v2 JSON은 ai_prompts.md 해당 text 블록을 변경 없이 복사했다. 허용 작업만 선택, 기대 버전/역할/필드/빈 내용 검증, 패키지 리소스로 실행 폴더 독립 로딩. SYSTEM과 DEVELOPER를 분리하고 입력은 후속 별도 메시지로 유지한다. 자연어 일정은 별도 SYSTEM이므로 F17 후속. 캐시/외부 호출/DB 쓰기/일반 로그 추가 없음. dataclass repr에서 본문을 제외하고 messages는 새 목록으로 반환한다.
+- 실제 검증: test_prompt_loader.py 신규8개 0.041초 OK. 문서와 본문/버전 정확 일치·별도 역할·실행 폴더 변경·임의 경로/일정 작업 거절·기대 버전 오류·누락/인코딩/손상/잘못된 역할/빈 내용·부분 실패·불변/목록 오염 방지를 확인했다. 백엔드 전체149개 58.731초 OK(실제 PostgreSQL 임시 스키마/ASGI·합성 공급자 포함). git diff --check 통과. UI/API 실행 흐름 무변경이므로 프론트/시각 검증·서버 재시작은 수행하지 않았다. 실서비스 AI/지도 호출·모델 품질 평가는 하지 않았다.
+- 문서/명세: Notion v0.52에5.5.1 내부 로더 범위/실패/구현 상태·상단 상태·버전/변경 이력을 갱신하고 재조회 저장 확인. 파일명이 자동 링크로 바뀐 부분은 코드 표기로 수정 후 다시 확인했다. api_contract.md는 최종 본문1471줄을 줄별 비교해 일치 확인. ai_prompts/planning/backend README·TODO/feature_breakdown 동기화. 기존 HTTP 입력/응답·인증/권한/오류·DDL/보관/계산 계약 및 클라이언트 호환성 영향 없음. 프롬프트 문구/버전은 유지하며 구현 상태만 확장했다.
+- 배운 개념: 문서 전체를 보내지 않고 버전·역할이 붙은 런타임 블록만 로딩하면 설명 문서와 모델 지시를 분리할 수 있다. 문서와 패키지 리소스의 일치 테스트로 복사본 드리프트를 발견한다. 로더 검증과 실제 모델 출력/품질 평가는 서로 다른 완료 조건이다.
+- 남은 일/다음: F05-02 완료·기능 브랜치 커밋/푸시 후 사용자 MR/병합 대상. 다음 F05-03 최소 근거/구조화 출력 검증. 현재 walking.evidence는 물리 범위 미확인/needs_data이며 산정 준비로 바꾸지 않았다. AI 키의 기존 사용자 제공 기한은2026-10-08로 실제 호출 전에 갱신 여부 확인 필요. F04-04/GPS 자동 판정 보류 유지.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.52).
+
+
 ### 2026-10-12 — F05-01 main 병합 및 통합 검증
 - 요청/기준: 사용자가 codex/walking-evidence를 찾아 병합하도록 명시 요청하여 기존 사용자 직접 병합 규칙의 이번 작업 예외로 적용했다. fetch 후 main/origin/main6257ba2와 기능 브랜치c5ad2ce를 확인했다. 최신 Notion v0.51의5.5 도보 근거 계약을 다시 읽고 구현과 비교했다.
 - 통합: walking 패키지/라우터/테스트와 walking_api.md·개인화/기획 문서를 반영했다. api_contract/development_log/planning/todo 충돌을 해결하며 최신 v0.51과 지도 핀 저장 기록, 도보 근거 기록을 모두 보존했다. TODO/feature_breakdown F05-01 완료 상태를 맞추고 다음 작업을 F05-02로 정리했다. 기존 기능 코드는 수정하지 않았다.

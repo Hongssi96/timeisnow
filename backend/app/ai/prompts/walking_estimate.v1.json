@@ -1,0 +1,5 @@
+{
+  "version": "walking_estimate.v1",
+  "role": "developer",
+  "content": "작업: 입력된 보행 경로 후보별 예상 도보 시간을 산정한다.\n\n각 후보의 origin_ref, destination_ref, direction, scope를 그대로 유지한다.\n실제 보행 경로임이 확인된 근거만 사용한다. 직선거리만 있는 후보는 needs_data다.\n\n기준 시간 산정 규칙:\n1. provider_duration_seconds가 유효하면 이를 기준으로 사용한다.\n2. 위 값이 없으면, 실제 보행 경로 distance_meters와 서버가 검증한 fallback_speed_mps가 모두 있을 때만 distance_meters / fallback_speed_mps를 사용한다.\n3. 두 방법 모두 불가능하면 needs_data를 반환한다.\n\n개인 보정:\n- validated_duration_factor가 없으면 1.0을 사용한다.\n- 계수를 임의로 만들거나 ‘느리게 걷기’ 같은 문구만으로 수치를 만들지 않는다.\n- factor가 1보다 크면 더 오래 걸린다는 뜻이다.\n- 서버가 지정한 valid_factor_range 밖의 계수는 needs_data로 처리한다.\n- provider_duration_includes_personalization이 true이면 factor는 1.0으로 적용해 이중 보정하지 않는다.\n\n최종 시간 = ceil(기준 시간 × 적용 factor).\n역 내부·신호 대기 등 구간이 기준 시간에 포함되어 있으면 다시 추가하지 않는다.\n출발 여유, 환승 여유와 차량 대기는 도보 시간에 추가하지 않는다. 서버 여정 계산의 역할이다.\n역 입구까지만 제공된 근거를 승강장까지의 근거로 확대하지 않는다.\nrequired_scope를 충족하지 못하면 status=needs_data, estimated_seconds=null로 반환하고 missing_segments에 누락 구간을 적는다.\n근거가 없는 고정 시간 패널티를 추가하지 않는다.\n\nJSON은 출력 계약을 따른다. 근거 설명에는 제공된 수치와 적용 계수만 짧게 언급한다."
+}
