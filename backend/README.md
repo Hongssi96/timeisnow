@@ -77,3 +77,13 @@ F06-04(2026-10-08): 장소 location_version이 증가하면 연결된 본인 루
 app.ai.prompt_loader의 load_prompt('walking_estimate', expected_version='walking_estimate.v1')는 common.v1 SYSTEM과 walking_estimate.v1 DEVELOPER, 두 버전을 포함한 불변 PromptBundle을 반환한다. messages()로 별도 역할 메시지를 받으며 입력 JSON은 후속 서비스에서 별도로 전달한다. 경로 설명은 journey_explanation.v2를 지원한다. 자연어 일정은 F17에서 별도 SYSTEM을 연결한다.
 
 app/ai/prompts의 UTF-8 JSON 리소스를 배포 코드와 함께 보존한다. 파일 누락/손상·역할/버전 불일치·지원하지 않는 작업은 안전한 PromptLoadError이며 AI 호출로 진행하지 않는다. ai_prompts.md와 리소스 문구·버전 일치 검증은 test_prompt_loader.py를 실행한다. API/DB 변경과 AI 호출은 없으며 후속 F05-03에서 서비스에 연결한다.
+
+## F05-03 내부 AI 도보 산정 (2026-10-12)
+
+app/ai/walking_dto.py(최소 입출력), walking_service.py(준비 근거 분류/검산), provider.py(Responses 전송)를 사용한다. 공개 HTTP API는 추가하지 않는다. estimate 호출 전 소유권/근거 유효성·물리 범위 확인은 후속 호출 서비스 책임이다. 기존 미확인 Evidence의 estimate_evidence는 이름/좌표를 제거하고 needs_data로 반환하며 외부 호출하지 않는다.
+
+AI 실패 원문·키·전체 URL·본문은 출력하지 않는다. DTO/JSON Schema·거절·미완료·ID/근거/범위/수식 검증 및 최대1회 형식 재시도는 ai_prompts.md13절/Notion v0.53을 따른다. 저장·품질 이력·재사용·화면 연결은 후속이다. 로컬 합성 검증: backend/.venv/Scripts/python.exe -m unittest discover -s backend/tests -p test_ai_walking.py. 실제 서버 승인 후 check_ai_walking.py로 개인정보 없는 합성 요청 최대1회와 검산 결과만 확인할 수 있다. 2026-10-12 실제 합성 요청의 strict 응답·360초 서버 검산 성공(2.51초)을 확인했다.
+
+2026-10-12 실호출 후속: 사용자 승인된 구조화 합성 요청1회를 실행했지만503 PROVIDER_UNAVAILABLE로 실패했다. 키 존재/모델/호스트 설정은 로컬 재확인 정상이며 공급자 인증/요청 형식/가용성 중 원인은 미확정이다. 다음 진단 도구는 upstream_http_status와 허용된 upstream_error_code만 추가 출력한다. 원문/키/URL은 출력하지 않고 공개 오류 형식도 유지한다. 추가 호출은 아직 실행하지 않았다.
+
+2026-10-12 최종: HTTP400의 max_output_tokens 오류 진단 후 출력 한도를512로 낮춰 실제 합성1후보 검산 성공. 응답 미완료는 거부하며 다수 후보/실제 보행 품질·운영 서비스 연결은 후속이다. 공급자 오류 진단에는 상태·허용 오류코드·고정 분류태그만 포함한다.

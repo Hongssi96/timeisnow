@@ -4,6 +4,33 @@
 
 ## 실제 기록
 
+### 2026-10-12 — F05-03 최종 실제 합성 검증 및 완료
+- 승인/원인: 사용자가 동일한 개인정보 없는 합성 요청의 추가 진단·수정 검증을 최대3회 승인했다. 추가1회 HTTP400/unclassified, 고정 태그 진단을 보강한 추가2회에서 INVALID/MAX_OUTPUT_TOKENS를 확인했다. 원문을 출력하지 않고 고정 어휘만 진단했으며 HTTP 오류코드/공개503 형식은 유지했다. 첫 실패의 정확 원인은 후속 진단으로 출력 토큰 설정 문제로 좁혔다.
+- 수정/실제 결과: provider.py의 max_output_tokens를4096에서512로 낮추고 전송 계약 테스트를 함께 수정했다. 마지막 추가3회 check_ai_walking.py 실행은 status=ok·prompt_version=walking_estimate.v1·model_matches=true·result_count1·result_statusok·estimated_seconds360·server_validation_passedtrue·2.51초, 종료0. 합성300초×factor1.2의 strict 응답/ID/근거/범위/수식 검산을 확인했다. 실제 모델명은 중계 서버 보고값이며 내부 실제 공급자 증명은 아니다. 승인된 추가3회 모두 사용, 최초 실패까지 구조화 요청 총4회, 이후 외부 호출 없음. 키/URL/응답·오류 원문/개인 위치·카카오 원본은 출력/전송하지 않았다.
+- 최종 로컬 검증: 신규19개0.091초 OK(토큰 한도·거절/미완료·안전한 HTTP 상태/코드/고정 태그 포함), 전체백엔드168개58.394초 OK(실제 PostgreSQL 격리 스키마/ASGI·합성 공급자). git diff --check 통과. 앞선 실패/승인 대기 기록은 당시 진행 이력으로 보존한다. UI/기존HTTP/DB 계약 변경이 없어 프론트/시각 확인과 서버 재시작은 수행하지 않았다.
+- 문서/완료: 게시 전 최신 Notion v0.53 재확인,5.5.2의 출력 한도512·실호출 결과·검증/완료 상태,5.5.1 후속 문구·상단 구현 상태·변경 이력을 갱신하고 재조회 확인. api_contract1479줄 전문 일치. ai_prompts/planning/provider_plan/backend README·TODO/feature_breakdown F05-03 완료 동기화. 기존 HTTP/DDL/계산 공식/보관·클라이언트 호환성 유지, 내부 전송 제한과 구현 상태만 확정. 프롬프트 문구/버전은 그대로다.
+- 배운 개념/다음: HTTP503 정규화만으로는 인증 오류와 요청 형식 오류를 구분할 수 없어 고정 어휘 기반 안전한 진단이 도움이 된다. 키 최소 인증과 실제 구조화 요청 호환성은 별도 검증이다. F05-03 서버 내부 최소 입력/검증 모듈 단계 완료, 사용자 MR/병합 후 F05-04 산정/근거 이력 저장. 현재 물리 근거 미확인 Evidence는 호출0/needs_data를 유지한다. 다수 후보 실응답·512토큰 내 완료 가능성·실제 도보/서비스/운영 품질은 미검증이며 미완료 응답은 거부한다. 유효한 물리 범위 확보/사용자 서비스 연결/저장·재사용은 후속이다.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.53).
+
+
+### 2026-10-12 — F05-03 첫 실호출 실패 및 안전한 진단 보강
+- 승인/실행: 사용자가 합성 도보 요청1회를 승인하여 준비된 check_ai_walking.py를 실행했다. 실제 출력은 failed/http_status503/PROVIDER_UNAVAILABLE, 종료코드1. 도구는 재시도하지 않았고 추가 요청도 실행하지 않았다. 키/모델/호스트 설정의 존재/일치는 로컬 재확인 정상이다. 공급자의 원래 HTTP 상태를 보존하지 않은 최초 어댑터 때문에 인증·형식·가용성 중 정확한 원인은 미확정이다.
+- 보강/검증: provider.py의 AIProviderError/http_failure는 제한된 응답 크기에서 공급자 HTTP 상태와 허용 코드만 내부 진단에 보존한다. 알 수 없는 코드/본문·키·URL은 출력하지 않는다. check_ai_walking.py에서 안전한 상태/코드만 출력, 공개 AuthError 계약은 기존503 유지. HTTP400 invalid_json_schema/invalid_api_key 및 악성 코드/본문/자료형 비노출 테스트1개 추가, 신규19개0.090초·전체백엔드168개58.749초 OK. py_compile·diff --check 통과. 이번 보강 후 실제 외부 요청은 실행하지 않았다.
+- 문서/상태: Notion v0.53의5.5.2·변경 이력에 첫 실호출503 실패/원인 미확정/추가 진단 승인 대기·19개/168개 결과를 기록하고 재조회 확인. api_contract1479줄 전문 일치. TODO/feature_breakdown은 미완료 유지, ai_prompts/backend README/provider_plan 실패 기록 추가. 기능 브랜치의 최종 완료 커밋·푸시는 실호출 확인 후 진행한다.
+- 남은 일: 최초 승인1회는 사용했다. 추가 사용자 승인 후 동일한 개인정보 없는 합성 입력으로 공급자 오류를 진단하고 필요한 수정/검증을 수행한다. 아직 실제 구조화 응답 성공이나 품질 평가 완료로 보고하지 않는다.
+
+
+### 2026-10-12 — F05-03 AI 최소 입력·구조화 결과 검증 (실호출 승인 대기)
+- 목표/기준: 사용자 다음TODO 진행 요청. 최신 origin/main2b2e210에서 F05-02 병합을 fetch로 확인하고 codex/ai-walking-validation 생성. TODO·기획/기능·개인화/프롬프트/로깅·최신 Notion v0.52를 확인했다. 현재 F05-01은 미확인 물리 범위/산정 준비false이므로 운영 입력을 AI에 보내지 않는다. OpenAI Docs 스킬로 공식 Responses Structured Outputs 문서를 검색/열람 후 strict text.format 형식을 확인했다. https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses
+- 계약/범위: 구현 전 Notion v0.53의5.5.2에 내부 입력·준비조건·결과 검산·실패/재시도 계약을 추가했다. 공개 HTTP/UI API·DDL·계산 공식/기존 보관 정책 변경 없음. 검증된 내부 후보만 모델로 전달하며 부족한 후보는 needs_data로 차단한다. 인증/소유권/물리 근거 확인은 후속 호출 서비스의 선행 책임이며 새 클라이언트 입력 경로는 없다. 저장/품질 이력·재사용은 F05-04 이후다.
+- 변경 파일/이유: app/ai/walking_dto.py strict 최소 입력/출력, provider.py HTTPS Responses strict JSON Schema·storefalse·4096출력토큰/35초/256KiB·리다이렉트/도구/거절/미완료/모델 검사, walking_service.py 준비조건 분류·SYSTEM/DEVELOPER/USER 분리·결과ID/근거/범위/수식/ceil 검산·형식 최대1회 추가호출을 구현했다. 공급자 시간 우선·거리/검증 속도 fallback·기본계수/이중보정 방지, 숫자 유한성/중복·추가 필드 차단. estimate_evidence는 현 미확인 근거에서 이름/좌표를 제거하고 호출0/needs_data를 보존한다. check_ai_walking.py는 합성300초×1.2→360초를 최대1회(재시도 없음) 요청하고 안전한 검산 요약만 출력하도록 준비했다.
+- 실제 로컬 검증: test_ai_walking.py 신규18개0.076초 OK, 백엔드 전체167개59.732초 OK(실제 PostgreSQL 임시 스키마/ASGI·합성 공급자). 정상/ceil/계수/이중보정·공급자 우선·미확인/누락/0초·정밀 위치/메모 추가 필드 거절·동일ID/근거·출력 위조/버전/상태/null/수식·한정 재시도·거절/미완료/도구/크기/HTTP/timeout·유한 입력의 파생 오버플로·누락 사유 상한 보존을 확인했다. 마지막 보강은 누락20개에 서버 사유를 추가해도 결과를 보존하는 경계 테스트다. py_compile 구문 확인·git diff --check 통과. UI/기존 API 흐름 무변경으로 프론트/시각 검증·서버 재시작은 수행하지 않았다.
+- 키/실호출: 앞선 사용자 명시 승인으로 check_ai.py 최소 인증1회는HTTP200·completed·모델 일치·OK·1.43초·11/5/16토큰 성공. 현재 키 인증 가능, 실제 만료일/갱신 상태 미확인. 이번 F05-03 합성 요청은 자동 승인 검토가 이전 승인을 키 인증1회로 한정해 키의 mlapi.run 전송을 거부했다. 거부된 명령은 실행되지 않았고 해당 명령의 로컬 보강/합성 검증만 외부 통신 없이 분리 수행했다. 우회 요청/추가 외부 호출 없음. 실제 구조화 모델 응답/품질은 미검증, 별도 사용자 승인 대기다. 키/URL/원문/개인 위치는 기록하지 않았다.
+- 문서: Notion v0.53을 내부 구현·18개/167개 검증 완료 및 실호출 승인 대기로 갱신,5.5.1 후속 상태와 변경 이력을 맞추고 재조회 확인. api_contract.md 최종1479줄 줄별 일치 확인. ai_prompts13절/planning/provider_plan/backend README·TODO/feature_breakdown 동기화. F05-03 체크는 실호출 검증 전 미완료로 유지한다.
+- 배운 개념/남은 일: strict JSON Schema도 ID/범위/수식 의미 검증을 대체하지 않는다. 공급자 값 존재와 실제 보행 범위 확인은 다르며 미확인 입력의 호출 차단이 중요하다. 로컬 구현/회귀는 완료, 승인 후 준비된 합성 요청1회와 서버 검산을 확인하고 최종 기록·커밋·푸시한다. 실제 사용자 위치/카카오 원문 전송·물리 범위 확보·저장/재사용/운영품질은 후속이다.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.53).
+
+
 ### 2026-10-12 — F05-02 프롬프트 블록·버전 로딩
 - 목표/기준: 사용자 진행 요청에 따라 fetch 후 최신 origin/main bb4e72e에서 codex/prompt-loading 생성. TODO·planning/feature_breakdown/personalization/ai_prompts/logging 및 최신 Notion v0.51의5.5·프롬프트/계산 정책을 확인했다. F05-02는 기존 작업 문구를 버전별로 읽는 내부 기반이며 실제 AI 호출은 F05-03이다.
 - 변경 파일/이유: backend/app/ai/prompt_loader.py에 불변 PromptBlock/PromptBundle·load_prompt·안전한 PromptLoadError를 추가했다. app/ai/prompts의 common.v1/walking_estimate.v1/journey_explanation.v2 JSON은 ai_prompts.md 해당 text 블록을 변경 없이 복사했다. 허용 작업만 선택, 기대 버전/역할/필드/빈 내용 검증, 패키지 리소스로 실행 폴더 독립 로딩. SYSTEM과 DEVELOPER를 분리하고 입력은 후속 별도 메시지로 유지한다. 자연어 일정은 별도 SYSTEM이므로 F17 후속. 캐시/외부 호출/DB 쓰기/일반 로그 추가 없음. dataclass repr에서 본문을 제외하고 messages는 새 목록으로 반환한다.
