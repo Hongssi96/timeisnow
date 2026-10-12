@@ -275,3 +275,7 @@ Responses strict JSON Schema를 요청하고 provider 응답 completed/모델·�
 2026-10-12 실호출 후속: 사용자 승인된 구조화 합성 요청1회를 실행했지만503 PROVIDER_UNAVAILABLE로 실패했다. 키 존재/모델/호스트 설정은 로컬 재확인 정상이며 공급자 인증/요청 형식/가용성 중 원인은 미확정이다. 다음 진단 도구는 upstream_http_status와 허용된 upstream_error_code만 추가 출력한다. 원문/키/URL은 출력하지 않고 공개 오류 형식도 유지한다. 추가 호출은 아직 실행하지 않았다.
 
 2026-10-12 최종 실서버 확인: 최초1회 실패 뒤 사용자 승인된 추가 최대3회에서 HTTP400 및 INVALID/MAX_OUTPUT_TOKENS 고정 태그를 확인했다. 출력 한도를4096에서512로 낮춘 마지막 요청은 status=ok·model_matches=true·walking_estimate.v1·결과1개·estimated_seconds=360·server_validation_passed=true,2.51초로 성공했다. 원문·키·URL은 출력하지 않았으며 합성 입력만 전송했다. 더 큰 후보 묶음의 실서버 응답/전체 도보 품질은 미검증이고512토큰 내 완료되지 않으면 AI_OUTPUT_INVALID로 거부한다. 저장/실사용 연결·물리 범위 확보는 후속이다. 오류 진단은 고정 분류 태그만 허용하며 공급자 메시지 부분 문자열을 그대로 출력하지 않는다.
+
+## 14. F05-04 검증 결과 저장 — 2026-10-12
+
+history_service.estimate_and_store/persist는 F05-03 결과를 재검산하고 모델 자유문 reason을 저장하지 않는다. Context/본인·프로필/장소 버전은 호출 전후 검사한다. 정상 숫자는 불변revision, needs_data/실패는 안전한 최소 실행 이력만 보관한다. 같은 실행 ID 재요청은 AI 중복 실행을 막으며 조건별캐시는 F05-05후속이다. 알려지지 않은 사용량은null, actualmodel/지연은 확인한값만 사용한다. 현재 미확인 근거는 숫자저장 차단, 원문/정밀위치/키·내부사고 비저장. 프롬프트 문구/버전 변경 없음. walking_api.md·Notion v0.54.
