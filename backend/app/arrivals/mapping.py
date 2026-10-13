@@ -70,23 +70,34 @@ def resolve(context,expires_at,*,diagnostics=None):
         record(reason='ROUTE_CANDIDATE_LIMIT');return None
     record(stage='route_stations')
     routes=[(rid,query('stops',{'routeId':rid},deadline)) for rid in ids]
-    result=scoped_matches(match_route(stops,points,routes,30,require_contiguous=True),scopes)
+    raw=match_route(stops,points,routes,30,max_matches=32)
+    if raw['status']=='candidate_limit':
+        record(reason='VISIT_CANDIDATE_LIMIT');return None
+    result=scoped_matches(raw,scopes)
     record(matched_count=len(result['matches']))
-    if result['status']!='candidate_unique':
-        if diagnostics is not None:record(match_checks=diagnose_match(stops,points,routes,scopes,30))
+    if not result['matches']:
+        if diagnostics is not None:record(match_checks=diagnose_match(stops,points,routes,scopes,30,require_contiguous=False))
         record(reason='ROUTE_SEQUENCE_UNCONFIRMED');return None
+    route_ids={match['route_id'] for match in result['matches']}
+    if len(route_ids)!=1:
+        record(reason='ROUTE_MATCH_AMBIGUOUS');return None
     record(stage='route_info')
-    match=result['matches'][0]
-    info=query('info',{'routeId':match['route_id']},deadline)
+    rid=next(iter(route_ids))
+    info=query('info',{'routeId':rid},deadline)
     if len(info)!=1:
         record(reason='ROUTE_INFO_UNCONFIRMED');return None
-    direction=direction_candidate(match,dict(routes)[match['route_id']],info[0],match)
-    if direction['status']!='direction_candidate':
-        record(reason=direction.get('reason') or 'TURNAROUND_UNCONFIRMED');return None
+    verified=[]
+    for match in result['matches']:
+        direction=direction_candidate(match,dict(routes)[rid],info[0],match)
+        if direction['status']=='direction_candidate':
+            verified.append((match,direction))
+    if len(verified)!=1:
+        record(reason='DIRECTION_MATCH_AMBIGUOUS' if verified else 'TURNAROUND_UNCONFIRMED');return None
+    match,direction=verified[0]
     at=datetime.now(timezone.utc)
     if at>=expires_at:
         record(reason='SEARCH_EXPIRED');return None
     record(stage='complete',reason='MAPPING_CONFIRMED')
     return Mapping(provider='gyeonggi-bus',first_leg_id=UUID(context['first_leg_id']),station_id=match['board_station_id'],
                    route_id=match['route_id'],sta_order=match['board_order'],route_dest_id=direction['route_dest_id'],
-                   mapping_version='gbis.station-scope.v1.30m.contiguous',verified_at=at,valid_until=expires_at)
+                   mapping_version='gbis.station-scope.v2.30m.ordered',verified_at=at,valid_until=expires_at)
