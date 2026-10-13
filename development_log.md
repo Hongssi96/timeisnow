@@ -1000,3 +1000,35 @@
 미실행·근거 부족·실패·만료를 분리해야 사용자가 불확실한 시간에 의존하지 않는다. 요약 응답에서 세부 누락을 추측하지 않고, 보조 안내를 추가할 때 기존 접근성 오류 알림을 중복하지 않아야 한다. 예측값 제공은 물리 범위/방향이나 출발 가능성을 검증했다는 뜻이 아니다.
 
 완료 범위는 현재 루틴/후보 상태를 설명하는 UI와 알려진 실패/만료 표현이다. 현재 실제 walking.evidence는 needs_data/ready_for_estimation=false/reusable=false이며 실제 AI 공개 생성 API 연결과 물리 근거 확보는 후속이다. 실제 출발 시각은 아직 만들지 않는다. 다음은 F07-01 첫 탑승의 최신 도착 후보 연결과 이후 출발 안내 계산이다.
+
+## 2026-10-13 — F07-01a 첫 탑승 도착 조회 기반, F07-01 전체 미완료
+
+### 목표·사전 확인·범위 분리
+
+F07-01 최신 도착 후보를 진행하기 위해todo.md·최신 Notion v0.57·public_arrivals_plan.md/provider_plan.md·personalization.md·policy_decisions.md·기존 진단/신선도/경로 모델을 확인했다. F05-07은main5be6426에 병합됐고 해당 최신main에서 codex/first-boarding-arrivals를 생성했다. MR 생성/병합은 하지 않는다.
+
+현재 journey.v1은정류소 public_id/공공방향ID가null이고운영매핑저장소/호출자가없다. 경기queryTime은공식문서상정보요청시간이며원천생성시각이아니다. 따라서실제최신도착연결을완료라고표시할수없어F07-01을미체크로유지하고준비단계F07-01a만분리했다. 사전Notion v0.58에이제약/허용입력/응답/오류/기한을기록했다.
+
+### 구현과 변경 파일
+
+- backend/app/arrivals/dto.py: server-only Mapping(첫leg/양수공공ID·순번/목적방향·버전/검증/기한),arrival.evidence.v1/후보/응답모델. 공개입력으로검증플래그/공공ID를받지않는다.
+- provider.py: 고정경기공식HTTPS·DATA_GO_KR_SERVICE_KEY·3초·256KiB·리다이렉트/HTTP자동전환금지. stationId/routeId/staOrder/routeDestId가일치하는유일행과RUN의양수초/차량ID를검사한다. 분/0/음수/결측/미확인운행상태를시간으로만들지않는다. 중복JSON키/비정상상수/스키마/중복차량502, 공급자/전송503,시간초과504. queryTime을원천시각으로반환하지않는다. 원문/번호판/키/URL로그없음.
+- service.py/repository.py/router.py·main.py: 본인/활성회원/검색기한·후보스냅샷/첫교통leg·장소버전·매핑기한을호출전후확인한다. 현재공개GET /journey-searches/{search_id}/candidates/{candidate_id}/first-arrivals는버스미매핑/지하철미지원·후보없음·guidancefalse를반환하고공급자를호출하지않는다. 선택적내부검증매핑이있을때만조회한다. 수신/검증생성120초중이른기한과검색/매핑기한을적용하고경계120초까지만유효하다. 미확인/naive/미래시간은최신으로바꾸지않는다. 검증된생성시각만절대ETA기준으로쓰고지난예측을탑승/놓침관측으로만들지않는다. 현재경기조회는생성시각없음·ETA null·guidancefalse다.
+- backend/tests/test_first_arrivals.py: 신규17개실제격리PostgreSQL/ASGI·합성상류검증. 실제공급자조회/키전송은하지않았다.
+- arrivals_api.md,api_contract.md,planning.md,provider_plan.md,public_arrivals_plan.md,personalization.md,logging.md,README.md,todo.md,feature_breakdown.md: 준비단계계약·공식항목근거·검증상태/예시와남은운영매핑/원천시각연결을동기화했다. 신규DDL/DB저장·캐시·프론트/AI변경없음.
+
+### 실제 검증
+
+- 최초14개4.240초통과. JSON/크기/키없음/0차량과장소변경검증을추가한17개4.601초통과.
+- backend/.venv/Scripts/python.exe -m unittest discover -s backend/tests:238개전부통과,104.254초. ID/초/운행상태·키/크기/전송오류·120초경계/초과·미래/naive/지난예측·미매핑무호출/본인/검색만료/장소변경전후·TTL무연장/원문비노출·OpenAPI를확인했다.
+- AST service.py/router.py/provider.py 직접SQL 실행0건·git diff --check 통과. 신규SQL은repository한곳에만있다.
+- 프로젝트백엔드를확인후재시작. 실제health200·프론트200·새GET비인증401 AUTH_REQUIRED·OpenAPI등록확인. DB head0011유지,회원20/장소35/루틴12·ai_executions0/walking_paths0확인. 실제사용자산정/도착/품질이력생성없음. 프론트변경이없어시각/프론트테스트를추가로실행하지않았다.
+- 공식[경기버스도착항목매뉴얼](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusArrival)을2026-10-13웹으로재확인했다. queryTime은정보요청시간,예측초/순번/상태/목적ID가별도임을확인했다. 서울공식지하철자료페이지도열었지만새개인키전송/실조회는하지않았다. 공식문서조회와서비스실조회검증을혼동하지않는다.
+
+### 명세 저장·배운 개념·남은 작업
+
+최종Notion v0.58을갱신하고다시읽어F07-01a준비완료와F07-01전체미완료가저장됐음을확인했다. 중복5.7번호는5.9첫탑승근거로정리했다. api_contract.md 전체1529줄과Notion본문을줄별대조해일치를확인했다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+요청시각/수신시각과원천생성시각은다르다. 정상HTTP/예측초존재만으로최신정보와경로방향이검증됐다고할수없다. 방향/순번매핑은클라이언트의확인플래그나장소이름으로대체할수없으며,알수없는원천정보를그대로차단해야출발시각을만들어내지않는다.
+
+F07-01a만완료다. F07-01전체는실제경로의공공ID/방향운영매핑·생성시각/시간대·실조회연결이없어미완료로유지한다. 경기어댑터만준비했으며서울버스/지하철운영연결·실시간화면·출발/환승/목표도착계산은후속이다. 다음F07-01b에서운영매핑과신뢰가능한원천시간을검증해야한다. 이번작업은준비코드/조회계약으로보고하며실제최신도착연결완료로보고하지않는다.

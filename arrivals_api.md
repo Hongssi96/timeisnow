@@ -1,0 +1,26 @@
+# 첫 탑승 도착 근거 — F07-01a
+
+- 날짜:2026-10-13·Notion v0.58. F07-01 전체는 미완료다.
+- 목표: 검증된 공공 ID가 있는 첫 탑승만 조회하고, 원천 최신성을 확인할 수 없으면 출발 계산에 사용하지 않는다.
+
+## 현재 공개 조회
+
+GET /api/v1/journey-searches/{search_id}/candidates/{candidate_id}/first-arrivals: 로그인·본인·no-store, CSRF 불필요. 잘못된UUID/없음/타인/검색 만료404, 장소 위치 버전 변경409. 현재 공공 ID/방향이 없는 버스 후보는200 mapping_required·후보[]·valid_for_guidance=false이며 공급자를 호출하지 않는다. 지하철 첫 탑승은 unsupported다. 클라이언트의 정류소ID/검증 완료 쿼리/플래그는 매핑으로 사용하지 않는다.
+
+arrival.evidence.v1: search_id,candidate_id,first_leg_id,status,source_status,received_at/generated_at,expires_at,valid_for_guidance,reasons,candidates. status는 mapping_required/unsupported/no_arrivals/insufficient_data/fresh/expired, source_status는unknown/fresh/stale/clock_mismatch다. 후보는 비식별candidate_id,provider_prediction_seconds,predicted_arrival_at(nullable). 원문·차량번호·좌표·키/URL 비노출, 새 저장/캐시/DDL/기간 연장 없음.
+
+## 내부 조회와 경기 어댑터
+
+first_arrivals(user_id,search_id,candidate_id,verified_mapping=...)는 호출 전후 본인/활성 회원·검색/후보 스냅샷·장소 위치 버전·매핑 기한을 확인한다. 호출 서비스가 첫 교통leg와 연결을 검증한 Mapping만 전달한다. provider=gyeonggi-bus,first_leg_id(UUID),station_id/route_id/route_dest_id(양수 숫자 문자열1~20자),sta_order(정수1~1000),mapping_version(ASCII토큰1~200자),verified_at/valid_until(aware datetime)을 사용한다. 공개 입력으로 이 구조를 받지 않으며 아직 자동 매핑 저장소/호출자는 없다.
+
+고정 https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalItemv2, DATA_GO_KR_SERVICE_KEY(.env보다프로세스환경우선),3초·256KiB·리다이렉트/HTTP 자동 전환 없음. 정상0/무결과4/공급자 실패를 구분하고 stationId/routeId/staOrder/routeDestId가 일치하는 유일 행만 사용한다. RUN의 predictTimeSec1/2는1~86400초 정수, vehId1/2는숫자ID/0제외. 분 필드로 대체하지 않고0/음수/누락/미확인 운행 상태는 시간 근거 부족이다. STOP은무후보,WAIT/PASS는운행/정차 조건이 미확인인 보수적 상태다. 중복 JSON 키/비정상 상수/중복 차량·잘못된 스키마는502, 전송/권한/쿼터503, 시간초과504. 원문·요청URL·키를 로그/DB에 기록하지 않는다.
+
+## 최신성
+
+수신 후120초와 검증된 생성 후120초 중 이른 기한에 검색/매핑 기한을 더해 적용한다.120초 경계까지 유효하며 초과는expired다. 원천 시각 없음/naive/미래와 수신 시각 역전은 최신으로 바꾸지 않는다. 검증된 생성시각이 있는 내부 입력만 생성시각+예측초를 계산하고, 이미 지난 예측은 사용하지 않는다. 차량 놓침/탑승 관측으로 해석하지 않는다.
+
+[경기 공식 항목 명세](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusArrival)는 queryTime을 정보요청시간, predictTimeSec1/2를 초 단위로 설명한다. queryTime을 생성시각으로 사용하지 않으므로 현재 경기 조회는 source_status=unknown·predicted_arrival_at=null·valid_for_guidance=false다. 초가 있어도 최신 도착 후보/출발 안내 완료로 표시하지 않는다.
+
+## 남은 범위
+
+F07-01 전체 완료에는 실제 경로의 공공 정류소/노선/순번/방향 운영 매핑, 공급자 생성시각/시간대와 실조회 확인, 서울 버스/지하철 등 지원 확대가 필요하다. 현재 검색 모델의 public_id/public_direction_id는null이다. 자동 매핑·실제 공급자 호출·프론트·출발 시각/환승/목표 도착 계산은 이번 단계에서 수행하지 않았다. 다음은 F07-01b 운영 매핑과 신뢰 가능한 시간 근거 연결이다.
