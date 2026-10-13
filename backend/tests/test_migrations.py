@@ -35,7 +35,19 @@ class MigrationTest(unittest.TestCase):
                     connection.execute(text('''INSERT INTO saved_places(id,user_id,label,name,address,latitude,longitude,version)
                         VALUES(:id,:user_id,'home','synthetic','synthetic address',37.5,127,4)'''), {'id':place_id,'user_id':user_id})
                     connection.commit()
+                    command.upgrade(config, '0009_walking_history')
+                    path_id=str(uuid4())
+                    connection.execute(text("""INSERT INTO walking_paths(id,user_id,path_key,candidate_id,origin_ref,destination_ref,direction,scope,
+                        place_refs,evidence,verified_at,calculated_at,expires_at,retained_until)
+                        VALUES(:id,:user_id,repeat('a',64),'legacy','origin','destination','outbound','synthetic','[]',jsonb_build_object('legacy',true),
+                        clock_timestamp(),clock_timestamp(),clock_timestamp()+interval '30 days',clock_timestamp()+interval '90 days')"""),{'id':path_id,'user_id':user_id})
+                    connection.commit()
                     command.upgrade(config, "head")
+                    self.assertEqual(connection.execute(text('SELECT cache_key,cache_identity,evidence FROM walking_paths WHERE id=:id'),{'id':path_id}).one(),(None,None,{'legacy':True}))
+                    connection.commit()
+                    command.downgrade(config, '0009_walking_history')
+                    self.assertEqual(connection.execute(text('SELECT evidence FROM walking_paths WHERE id=:id'),{'id':path_id}).scalar_one(),{'legacy':True})
+                    connection.commit()
                     command.upgrade(config, "head")
                     self.assertEqual(connection.execute(text('SELECT location_source,entrance_note,location_address,version FROM saved_places')).one(),
                                      ('search',None,None,4))
@@ -47,12 +59,13 @@ class MigrationTest(unittest.TestCase):
                     command.upgrade(config, 'head')
                     self.assertEqual(connection.execute(text(
                         "SELECT version_num FROM alembic_version")).scalars().all(),
-                        ["0008_routine_schedule"])
+                        ["0011_walking_recalculation"])
                     self.assertEqual(sorted(inspect(connection).get_table_names(schema=schema)),
-                                     ['alembic_version', 'auth_credentials', 'auth_rate_limit_buckets',
+                                     ['ai_executions', 'alembic_version', 'auth_credentials', 'auth_rate_limit_buckets',
                                       'auth_sessions', 'journey_plans', 'journey_search_keys', 'journey_searches',
                                       'place_creation_keys', 'place_location_confirmations', 'place_searches',
-                                      'routine_creation_keys', 'routines', 'saved_places', 'user_profiles', 'users'])
+                                      'routine_creation_keys', 'routines', 'saved_places', 'user_profiles', 'users',
+                                      'walking_estimate_revisions', 'walking_estimates', 'walking_paths'])
                     connection.commit()
                     command.downgrade(config, "base")
                     self.assertEqual(connection.execute(text(

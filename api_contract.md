@@ -1,7 +1,7 @@
 # 지금이니? API 설계 초안
-- 문서 버전: 0.53 · 작성일: 2026-09-30 · 수정일: 2026-10-12 (F05-03 AI 입력·결과 검증)
+- 문서 버전: 0.56 · 작성일: 2026-09-30 · 수정일: 2026-10-13 (F05-06 계수 변경 재계산)
 - 프론트엔드: React · 백엔드: Python FastAPI
-- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. F03-05a 수동 확인은 구현/검증 완료이며 GPS 수치/자동 일치 판정은 사용자 결정으로 보류. F04-01 depart_now 대중교통 후보 조회 API 및F04-02 공통 구간 모델은 구현, F04-03 후보 비교 화면은 구현. F06-01 루틴 저장·상세 API와 비교 화면 저장 연동, F06-02 루틴 요일·목표 도착 저장(저장 입력과 일정 PATCH 포함)은 구현. F06-03 본인 목록·선택·이름/일정/경로 수정·삭제와 F06-03a 루틴 등록 중 장소 저장·선택은 구현·검증 완료. F06-04 장소 변경/삭제 루틴 복구 안내도 구현·검증 완료. F03-02a 검색 없는 지도 핀 저장·자동 선택도 구현·검증 완료. F05-01 기존 후보 도보 근거·누락 조회 API도 구현·검증 완료. F05-02 서버 내부 프롬프트 블록·버전 로딩도 구현·검증 완료. F05-03 서버 내부 AI 최소 입력/구조화 결과 검증과 실제 합성 최소 호출도 구현·검증 완료. AI/실시간·목표 도착 기반 출발 안내·약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
+- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. F03-05a 수동 확인은 구현/검증 완료이며 GPS 수치/자동 일치 판정은 사용자 결정으로 보류. F04-01 depart_now 대중교통 후보 조회 API 및F04-02 공통 구간 모델은 구현, F04-03 후보 비교 화면은 구현. F06-01 루틴 저장·상세 API와 비교 화면 저장 연동, F06-02 루틴 요일·목표 도착 저장(저장 입력과 일정 PATCH 포함)은 구현. F06-03 본인 목록·선택·이름/일정/경로 수정·삭제와 F06-03a 루틴 등록 중 장소 저장·선택은 구현·검증 완료. F06-04 장소 변경/삭제 루틴 복구 안내도 구현·검증 완료. F03-02a 검색 없는 지도 핀 저장·자동 선택도 구현·검증 완료. F05-01 기존 후보 도보 근거·누락 조회 API도 구현·검증 완료. F05-02 서버 내부 프롬프트 블록·버전 로딩도 구현·검증 완료. F05-03 서버 내부 AI 최소 입력/구조화 결과 검증과 실제 합성 최소 호출도 구현·검증 완료. F05-04 내부 산정/품질 이력 저장과 본인 상세 조회도 구현·검증 완료. F05-05 서버 내부 조건별 전체/부분 재사용도 구현·검증 완료. F05-06 내부 개인 계수 재계산·경로 변경/만료 무효화도 구현·검증 완료. AI/실시간·목표 도착 기반 출발 안내·약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
 - 기준: 대화에서 확정한 요구사항 및 프로젝트 `C:/projects/timeisnow` 폴더의 `planning.md`, `feature_breakdown.md`, `personalization.md`, `logging.md`, `ai_prompts.md`.
 - 이 페이지는 수동 관리하는 설계 문서다. 코드와 자동 동기화되는 상태가 아니다.
 <table_of_contents/>
@@ -33,7 +33,7 @@ API는 React가 FastAPI에 요청하는 약속이다. GET은 조회, POST는 생
 ## 3. 인증 방식 결정
 첫 버전은 이메일 중복 확인과 비밀번호 기반 가입/로그인이다. 메일 소유 확인·복구는 후순위, 가입 즉시 active다. 서버 세션·HttpOnly 쿠키·CSRF 상세 계약은17절을 따른다.
 ## 4. 기능별 API 목록
-GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1\~2절 출발지 선택/수동 확인·5.2.3절 depart_now 경로 후보 및 본인 작업 조회·5.3절 루틴 저장/상세/일정 및5.3.1절 목록/이름/경로 수정/삭제는 구현되어 있으며 그 외 항목은 **미구현**이다. 성공 응답 열은 공통 data 내부 필드를 요약한다.
+GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1\~2절 출발지 선택/수동 확인·5.2.3절 depart_now 경로 후보 및 본인 작업 조회·5.3절 루틴 저장/상세/일정 및5.3.1절 목록/이름/경로 수정/삭제·5.5.3절 본인 도보 산정 상세는 구현되어 있으며 그 외 항목은 **미구현**이다. 성공 응답 열은 공통 data 내부 필드를 요약한다.
 ### 01. 시스템·계정
 <table header-row="true">
 <tr>
@@ -187,7 +187,7 @@ GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1\~2절 출발�
 <td>필요</td>
 <td>경로: estimate_id</td>
 <td>200: estimate_id, revision_id, base_seconds, estimated_seconds, source, reused, calculated_at, expires_at</td>
-<td>본인 도보 산정값 및 근거 요약</td>
+<td>F05-04 본인 검증 산정 요약(5.5.3). 만료/삭제404·위치/프로필409, 조건별 재사용은 후속</td>
 </tr>
 <tr>
 <td>`POST /walking-estimates/{estimate_id}/recalculations`</td>
@@ -563,33 +563,58 @@ origin/destination은 saved_place 또는 좌표 출발 객체다. 권한 거절 
 ### 5.5.1 프롬프트 블록·버전 로딩(F05-02)
 - 구현/검증 완료 <mention-date start="2026-10-12"/>: 서버 내부 load_prompt는 `ai_prompts.md`의 common.v1 SYSTEM과 walking_estimate.v1 또는 journey_explanation.v2 DEVELOPER를 분리 로딩한다. 작업 버전과 SYSTEM 버전을 함께 보존하며 문서와 리소스의 문구·버전 일치를 검증한다. 기존 문구와 프롬프트 버전 유지.
 - 허용된 작업만 선택하며 기대 버전 불일치·파일 누락/손상/빈 내용·잘못된 역할은 내부 PromptLoadError로 중단한다. 오류에는 본문/경로를 포함하지 않는다. 불변 블록과 새 메시지 목록을 반환하고 실행 폴더에 의존하지 않는다. 입력 JSON은 후속 단계의 별도 데이터 메시지로 전달한다. 자연어 일정은 보행 SYSTEM과 결합하지 않으며 F17에서 별도로 연결한다.
-- 신규 로더 테스트8개·전체 백엔드149개 통과(실제 PostgreSQL 임시 스키마/ASGI 및 합성 공급자 포함). 운영 모델 품질 평가·산정/품질 이력 저장·사용자 서비스 연결은 후속이며 F05-03 내부 구조화 출력 검증 및 실제 합성 최소 호출의 상태는5.5.2절을 따른다. walking.evidence.v1의 needs_data 및 ready_for_estimation/reusable=false를 유지한다. 기존 HTTP API·입출력·인증/권한·오류·DB/보관·계산 계약과 클라이언트 호환성 영향 없음. UI 변경 없음.
+- 신규 로더 테스트8개·전체 백엔드149개 통과(실제 PostgreSQL 임시 스키마/ASGI 및 합성 공급자 포함). 운영 모델 품질 평가·사용자 서비스 연결은 후속이며 F05-03 내부 구조화 출력 검증/합성 최소 호출은5.5.2절, F05-04 내부 산정/품질 이력 저장은5.5.3절을 따른다. walking.evidence.v1의 needs_data 및 ready_for_estimation/reusable=false를 유지한다. 기존 HTTP API·입출력·인증/권한·오류·DB/보관·계산 계약과 클라이언트 호환성 영향 없음. UI 변경 없음.
 ### 5.5.2 AI 최소 입력·구조화 결과 검증(F05-03)
-- 내부 구현·합성/실서버 최소 검증 완료 <mention-date start="2026-10-12"/>: 인증·소유권·유효기간과 물리 범위를 확인한 서버 내부 호출용 산정 모듈을 구현했다. 새 HTTP API·UI·저장소 없음. 현재 walking.evidence.v1은 전 구간 물리 범위 미확인으로 AI에 전송하지 않고 needs_data를 유지한다. 실제 근거 확보·사용자 서비스 연결·산정 저장/품질 이력은 후속이다.
+- 내부 구현·합성/실서버 최소 검증 완료 <mention-date start="2026-10-12"/>: 인증·소유권·유효기간과 물리 범위를 확인한 서버 내부 호출용 산정 모듈을 구현했다. 새 HTTP API·UI·저장소 없음. 현재 walking.evidence.v1은 전 구간 물리 범위 미확인으로 AI에 전송하지 않고 needs_data를 유지한다. 실제 근거 확보·사용자 서비스 연결은 후속이며 내부 산정 저장/품질 이력은5.5.3절에서 구현했다.
 - 내부 입력은 기존 `ai_prompts.md`의 request_id, policy_version=walk-policy.v1, profile 및 candidates만 허용한다. profile은 version·validated_duration_factor(null 또는0.5\~2.0)·valid_factor_range=\[0.5,2.0\]·fallback_speed_mps(null 또는 양의 유한수). 후보는 ID/양끝 참조·direction·scope/required_scope·is_walkable_route·거리/공급자 시간(null 또는 양의 유한수)·이미 개인화 여부·근거 ID/누락 코드만 갖는다. 후보1\~20개·중복 ID/근거 금지·추가 필드 금지, 이름/주소/좌표/메모/공급자 원문 비전송. ID·방향·범위·누락은 제한된 식별자 문자열로 검증한다.
 - 실제 보행 확인·명시 방향·일치하는 범위·근거 ID·누락 없음·양수 기준 시간(공급자 우선, 없으면 검증 거리/속도)이 모두 충족한 후보만 AI에 보낸다. 부족한 후보는 서버가 null 시간/계수·method=none·needs_data와 누락 사유로 반환하며 반복 호출하지 않는다. 계수 기본1.0, 공급자 개인화 포함이면1.0, 최종 ceil(기준×계수)·여유/차량대기 추가 금지 유지.
 - F05-02 SYSTEM/DEVELOPER와 입력 JSON USER 메시지를 분리하여 설정된 HTTPS Responses 서버의 gpt-5.6-luna에 전달한다. store=false·strict JSON Schema·최대512출력토큰·35초·256KiB응답 제한, 리다이렉트/도구 호출/암묵적 JSON 모드 대체 금지. 설정은 기존 환경 우선 규칙. 연결/HTTP 실패503 PROVIDER_UNAVAILABLE, timeout504 PROVIDER_TIMEOUT, 거절/미완료/모델 불일치/손상502 AI_OUTPUT_INVALID. 키/URL/본문/오류 원문은 일반 로그에 남기지 않는다.
 - 출력은 request_id·walking_estimate.v1·후보마다 유일 결과·양끝/방향/범위 보존·입력에 존재하는 근거 ID·숫자 자료형/유한성/상태와 null 규칙을 검증한다. ok는 모든 근거 보존·누락 없음·공급자 우선/거리÷속도·계수와 ceil을 서버가 재검산하며 불일치 전부 거부한다. needs_data/unsupported는 시간/계수null·method=none이며 unsupported는 확정된 다른 경로 지원을 의미하지 않는다. 형식 오류만 동일 입력으로 최대1회 재시도, 의미/수식/근거 오류·거절/연결 실패는 재시도 없음. 오류 결과는 저장하지 않는다.
-- 검증 완료: 신규19개·최종 전체 백엔드168개 통과(58.394초, PostgreSQL 임시 스키마/ASGI·합성 공급자 포함). strict 요청/실패·ID/범위/수식·형식 재시도·현재 근거 호출0·누락/0초 보존·안전한 HTTP 오류 진단을 확인했다. 최초 구조화 요청 실패 후 사용자 승인된 추가3회에서 공급자HTTP400 및 INVALID/MAX_OUTPUT_TOKENS 고정 태그를 확인했다. 출력 한도를4096에서512로 낮춘 마지막 실제 `mlapi.run` 합성1후보 요청은 모델 보고값 일치·walking_estimate.v1·status=ok·estimated_seconds=360·서버 검산 성공,2.51초였다. 공급자 HTTP 상태·허용 오류 코드·고정 태그만 진단 출력하며 원문/키/URL·개인 위치 비노출, 공개 오류 계약 유지. `backend/check_ai_walking.py`는 합성300초×1.2=360초 요청을 재시도 없이 최대1회 실행한다. F05-03 내부 모듈 구현/최소 연결 검증 완료, 다수 후보 실응답·실제 보행/운영 품질·서비스 연결·산정 저장은 후속이다.512토큰 한도에서 응답이 미완료면 검증 실패로 거부한다.
+- 검증 완료: 신규19개·최종 전체 백엔드168개 통과(58.394초, PostgreSQL 임시 스키마/ASGI·합성 공급자 포함). strict 요청/실패·ID/범위/수식·형식 재시도·현재 근거 호출0·누락/0초 보존·안전한 HTTP 오류 진단을 확인했다. 최초 구조화 요청 실패 후 사용자 승인된 추가3회에서 공급자HTTP400 및 INVALID/MAX_OUTPUT_TOKENS 고정 태그를 확인했다. 출력 한도를4096에서512로 낮춘 마지막 실제 `mlapi.run` 합성1후보 요청은 모델 보고값 일치·walking_estimate.v1·status=ok·estimated_seconds=360·서버 검산 성공,2.51초였다. 공급자 HTTP 상태·허용 오류 코드·고정 태그만 진단 출력하며 원문/키/URL·개인 위치 비노출, 공개 오류 계약 유지. `backend/check_ai_walking.py`는 합성300초×1.2=360초 요청을 재시도 없이 최대1회 실행한다. F05-03 내부 모듈 구현/최소 연결 검증 완료, 다수 후보 실응답·실제 보행/운영 품질·서비스 연결은 후속이며 내부 산정 저장은5.5.3절에서 구현했다.512토큰 한도에서 응답이 미완료면 검증 실패로 거부한다.
+### 5.5.3 산정값·근거 이력 저장(F05-04)
+- 내부 저장·본인 조회 구현/검증 완료 <mention-date start="2026-10-12"/>: 검증된 서버 내부 산정 결과를 walking_paths·walking_estimates·walking_estimate_revisions·ai_executions에 저장한다. 새 쓰기 HTTP API 없음. 인증된 사용자·유효한 프로필 버전·본인 장소/location_version·검증된 물리 근거의 유효기간은 저장 트랜잭션에서 확인한다. F05-03 입력/결과를 다시 검산하며 미확인/needs_data/unsupported는 유효 산정 revision을 만들지 않는다. 현재 실제 walking.evidence는 미확인 상태이므로 산정값 저장이 차단된다.
+- 내부 저장 입력은 F05-03 최소 입력/검증 결과와 서버 확인 Context(place_refs, verified_at, valid_until), 실행 메타데이터(model_version, latency_ms?, usage?)다. Context는 공개 클라이언트가 만들 수 없고 호출 서비스가 먼저 물리 경로·방향·범위/소유권을 확인해야 한다. 정밀 위치/장소명/메모/원문/내부 사고 과정은 저장하지 않는다. 모델/지연/사용량은 호출자가 실제로 확인한 값만 기록하며 미제공 지연/사용량은 null이다. 프로필 계수는 검증된 내부 스냅샷이며 실제 개인화 학습 연결은 F09 후속이다.
+- 동일 사용자/request_id의 동일 입력·결과·Context·메타데이터는 같은 실행/산정ID를 반환한다. 다른 내용이면409 IDEMPOTENCY_CONFLICT. 실행90일 보관 동안 같은 실행 식별자를 재사용하지 않는다. 공개24시간 생성 멱등 정책을 바꾸지 않는 내부 실행 식별 규칙이다. 저장은 회원별 기존 routine-write 잠금→회원/프로필→정렬된 장소 참조 순서로 원자 처리하며 실패 시 일부 행을 남기지 않는다. 과거 기준·계수·최종값/버전·근거는 불변 스냅샷으로 보존한다. estimate_and_store는 사용자/request_id별 DB 세션 advisory 잠금으로 동시 실행을 차단한다. 이미 실행 중이면 내부409 EXECUTION_IN_PROGRESS, 완료된 동일 실행은 모델 재호출 없이 반환한다. 이 잠금은 물리 모델 호출 동안 장소 수정 잠금을 잡지 않고 저장 직전에 버전을 재검사한다.
+- 유효한 ok 후보만 path/estimate/revision을 만들고 기준 시간·계수·최종 초·범위/방향·최소 근거ID·장소 참조/위치 버전·profile_version·common/walking 프롬프트/정책/모델 버전을 연결한다. 산정 유효기간은 계산시각+30일과 물리 근거 valid_until 중 이른 시각, 품질 이력 보관은 생성부터90일. needs_data/unsupported는 안전한 구조화 상태만 실행 이력에 기록한다. 실패는 허용된 실패 코드·최소 입력만 기록하고 산정값/원문을 저장하지 않는다. 회원 삭제는 CASCADE, 장소 삭제/위치 변경은 조회 시 차단하며 과거 품질 스냅샷은90일 보존한다. 기간청소 함수를 제공하고 자동 매일 스케줄은 배포 후속이다.
+- GET /api/v1/walking-estimates/\{estimate_id\}: 쿠키 인증·본인만200·CSRF 불필요·no-store. 기존5.6 data 필드 estimate_id,revision_id,base_seconds,applied_duration_factor,estimated_seconds,scope,source=ai_estimate\|profile_recalculation,reused=false,calculated_at,expires_at,prompt_version,policy_version을 반환한다. 조건별 재사용은5.5.4의 내부 실행에서 수행하며 단순 GET 조회는 재사용으로 표시하지 않는다. 원문/품질 내부 필드는 비노출. 잘못된UUID/없음/타인/30일 또는 근거 만료·삭제된 장소는404 RESOURCE_NOT_FOUND, 장소 location_version/프로필 버전 변경은409 VERSION_CONFLICT. 읽기는 모델 호출·산정 쓰기·만료 연장 없음, 기존 세션 활동 갱신만 유지한다.
+- 신규 Alembic0009_walking_history로4개테이블·복합 소유권FK/조회/보관 인덱스를 추가한다. 내부 추가 저장/읽기만으로 기존 루틴/검색/프론트 클라이언트 호환성 영향 없음. F05-05 내부 캐시 재사용은5.5.4에서 구현했다. F05-06 내부 재계산/재산정 분기는5.5.5에서 구현했다. F07 출발 안내와 실제 보행 근거 확보/사용자 생성 연결은 후속이다.
+- 검증 완료: 신규16개·전체 백엔드184개 통과(82.124초, PostgreSQL 격리 스키마/ASGI·합성 AI). 정상/실패/needs_data·30일/근거기한/90일·소유권·장소/프로필 버전·불변/중복/동시 실행·호출 도중 위치 변경·롤백·복합FK를 확인했다. Alembic0009 실제 개발DB 적용/4테이블 확인, 기존 회원/장소/루틴 행 수 유지. 격리 스키마 마이그레이션 적용/복구/재적용 통과. 백엔드 재시작·health200·OpenAPI GET 등록·실서버 비인증401 AUTH_REQUIRED·프론트200 확인. 기존 시간 경계에 의존하던 장소 만료/호출제한 테스트의 시간만 안정화했으며 해당 API 구현/정책은 변경하지 않았다. 외부 AI/카카오 추가 호출 및 실제 사용자 산정값 생성은 수행하지 않았다.
+### 5.5.4 저장값 조건별 재사용(F05-05)
+- 내부 구현/검증 완료 <mention-date start="2026-10-12"/>. 공개 쓰기 API/화면 추가 없음. 기존 estimate_and_store에 선택적 cache_sources를 전달한다. 서버가 검증한 candidate_id, provider, provider_path_ref, path_version, origin_entrance_ref, destination_entrance_ref, condition_version을 사용한다. 출입구가 적용되지 않는 경우만 not_applicable로 명시한다. unknown 등 미확인 식별자와 클라이언트 추정값은 허용하지 않는다. cache_sources 미제공/기존 이력은 재사용하지 않는다.
+- 키는 사용자별 저장 장소/location_version·양끝 물리 참조·방향·범위/필요 범위·공급자 경로/버전·출입구·조건 버전·기준 거리/시간/기개인화 여부·필요한 fallback_speed·정책/공통 프롬프트/작업 프롬프트/모델 버전으로 구분한다. 일시적 candidate_id/evidence_id/request_id는 키에서 제외한다. 현재 물리 근거가 needs_data/unsupported이거나 유효기간이 지났으면 저장값을 쓰지 않는다.
+- 같은 사용자·물리 조건·프로필 스냅샷의 유효한 검증 revision만 재사용한다. 원본 수치를 현재 입력으로 다시 검산하고 현재 candidate/evidence ID로 연결한다. 계수/프로필 버전만 바뀐 경우5.5.5의 서버 재계산으로 연결하며 AI를 호출하지 않는다. 같은 물리 키에서 프로필의 다른 필드도 바뀌면409 PROFILE_RECALCULATION_REQUIRED로 차단한다.
+- 전체/부분 적중 모두 지원한다. 적중 후보는 AI 호출에서 제외하고 누락 후보만 F05-03에 전달한다. 내부 반환 estimates에 candidate_id/estimate_id/revision_id/reused/expires_at을 제공한다. 적중은 원래 estimate/revision ID를 유지하고 effective expires_at=min(원본 만료, 현재 근거 기한)이다. 적중으로 원본 만료·계산 시각·품질 스냅샷을 연장하거나 새 numeric revision을 만들지 않는다.
+- 멱등 재실행은 전체 입력/Context/cache_sources와 저장된 원본 연결을 확인한다. 적중 내역은 ai_executions의 reused_estimates에 최소 연결만 기록한다. 전부 적중이면 model_version/latency_ms/usage=null이며 새 모델 실행으로 집계하지 않는다. 부분 적중은 실제 누락 후보 호출 메타데이터만 기록한다. 원본 연결 삭제/만료 후 재실행은404로 차단한다. 사용자/request_id 및 정렬된 물리 캐시 키의 세션 잠금으로 다른 실행ID의 같은 경로 동시 AI 호출도409 EXECUTION_IN_PROGRESS로 차단한다. 모델 호출 전후 본인/프로필/장소/기한을 재검사한다.
+- Alembic0010_walking_cache는 walking_paths에 nullable cache_key/cache_identity와 인덱스, ai_executions에 reused_estimates 기본 빈 목록을 추가한다. 이전 이력은 확인된 물리 식별자가 없어 역추정/백필하지 않는다. 기존 GET은 단순 조회이므로 reused=false 계약을 유지한다. 현재 실제 도보 근거는 미확인이라 운영 재사용/출발 안내 연결은 아직 불가하다. 기존 클라이언트 응답 호환성 영향 없음.
+- 기준 실수는 F05-03과 같은 rel_tol=1e-12/abs_tol=1e-9로 검산하며 계수/최종 정수 초는 정확히 일치해야 한다. DB NUMERIC에는 검증값의 Decimal 문자열을 전달해 계수 자릿수를 보존한다.
+- 검증 완료: 신규18개·전체 백엔드202개 통과(78.408초, 실제 PostgreSQL 격리 스키마/ASGI·합성 AI). 전체/부분 적중의 호출 생략·현재 ID 연결·원본 기한 유지·물리 조건/버전/소유권·프로필 변경 차단·거리/속도·긴 계수·만료/삭제 재실행·호출 중 원본 만료 롤백·다른 실행ID의 같은 경로 동시 호출·실패 잠금 해제를 확인했다.0009 legacy 행 보존/0010 적용/복구/재적용과 전체 마이그레이션 왕복도 통과.0010 개발DB 적용 후 회원20/장소35/루틴12 및 실제 산정0 유지. 서버 재시작·health200·프론트200·OpenAPI 유지·비인증 GET401 확인. 추가 외부 AI/카카오 호출·실제 사용자 산정 생성·UI 변경 없음.
+### 5.5.5 계수 변경 재계산과 경로 재산정(F05-06)
+- 내부 구현/검증 완료 <mention-date start="2026-10-13"/>. estimate_and_store에서 같은 물리 키의 유효 근거가 있고 `profile.version`/validated_duration_factor만 바뀌면 지도·AI 호출 없이 저장 base_seconds에 새 계수(미제공 기본1.0, 허용0.5\~2.0)를 적용한다. 최종 초는 Decimal 기준 ceil(base_seconds × factor)이다. 이미 개인화가 포함된 공급자 기준은 factor=1로 이중 보정하지 않는다. 이전 개인화 최종값을 다시 곱하지 않는다.
+- 동일 estimate에 증가하는 revision_no·새 프로필 버전·source=profile_recalculation·이전 parent_revision_id를 원자 저장한다. 이전 revision은 불변이며 새 calculated_at과 현재 candidate_id를 기록한다. 만료는 원본 revision/물리 경로/현재 근거 중 이른 기한, 품질 보관도 원본 기한을 넘기지 않는다. 모델 실행 없는 실행 이력은 model_version/latency_ms/usage=null이다. 부분 재사용/재계산/새 산정이 섞이면 AI에는 새 후보만 보낸다.
+- 재계산 결과는 저장된 십진 기준을 사용해 검산한다. 거리/속도 기준의 소수 표현 때문에 새 계수 곱셈의 올림 경계가 달라질 수 있으며, 이전 최종 정수 초나 반올림한 분 단위에서 계산하지 않는다. 다음 조회/동일 실행 재요청은 같은 revision을 반환하고 중복 재계산하지 않는다.
+- 본인/현재 프로필 버전/장소 location_version/물리 키/근거 기한·원본 수치/연결을 호출 전후 검사한다. 만료/경로·입구·방향·조건·필요 속도 변경은 캐시를 무효화하며 호출 서비스가 현재 검증 근거를 제공하면 기존 F05-03 새 산정으로 처리한다. 오래된 Context/삭제·변경 장소는404/409, 미확인 물리 근거는 needs_data로 유지한다. 프로필의 다른 필드가 달라지면서 같은 물리 키인 경우409 PROFILE_RECALCULATION_REQUIRED로 차단한다. F09 계수 학습과 실서비스 물리 근거 확보/지도 재조회 연결은 후속이다.
+- GET 상세는 기존 필드/인증/no-store/reused=false를 유지하고 source에 profile_recalculation을 추가한다. estimate_id는 유지되며 최신 revision_id/계수/최종 초/계산 시각을 반환한다. 내부 estimates도 source를 제공한다. 기존 ai_estimate 값은 유지되지만 클라이언트가 source를 두 값으로 처리해야 한다.
+- Alembic0011_walking_recalculation은 revision source 제약을 확장하고 같은 회원/estimate의 부모 revision FK·재계산 candidate_id를 추가한다. 기존 revision은 부모 null을 유지한다. 품질 보존을 위한 원본 경로/최초 AI 버전 연결을 유지하며 부모/회원 삭제는CASCADE. 공개 쓰기 API/프론트 변경 없음.
+- 검증 완료: 신규19개·전체 백엔드221개 통과(88.249초, 실제 PostgreSQL 격리 스키마/ASGI·합성 AI).300×1.1=330·연속 계수 변경·기본/경계 계수·이미 개인화된 공급자·거리/속도 십진 올림·현재 ID 연결·재사용/재계산/새 산정 혼합·소유권/부모FK·원본 기한·삭제/만료/변경·롤백/잠금·멱등·잘못된 출력502·GET source를 확인했다. 파생 revision을 만든0011→0010→0011 격리 복구에서도 원본360초 보존을 확인했다.0011 개발DB 적용 후 회원20/장소35/루틴12·실제 산정/이력0 유지. Docker/DB와 서버 기동·health200·프론트200·GET401·OpenAPI source enum 확인. 기존 루틴 목록 테스트에 고정 생성시각/UUID 동률 경계를 제공했으며 루틴 API 구현/정렬 계약 변경 없음. 추가 외부 AI/카카오 호출·UI 변경 없음.
 ### 5.6 도보 결과
-`GET /api/v1/walking-estimates/estimate_demo_01`의 data 예시:
+`GET /api/v1/walking-estimates/00000000-0000-4000-8000-000000000101`의 data 예시:
 ```json
 {
-  "estimate_id": "estimate_demo_01",
-  "revision_id": "revision_demo_01",
+  "estimate_id": "00000000-0000-4000-8000-000000000101",
+  "revision_id": "00000000-0000-4000-8000-000000000102",
   "base_seconds": 300,
   "applied_duration_factor": 1.0,
   "estimated_seconds": 300,
   "scope": "place_entrance_to_stop",
   "source": "ai_estimate",
-  "reused": true,
+  "reused": false,
   "calculated_at": "2026-09-29T23:00:00Z",
   "expires_at": "2026-10-29T23:00:00Z",
   "prompt_version": "walking_estimate.v1",
   "policy_version": "walk-policy.v1"
 }
 ```
-`source`는 산정 방식이고 `reused`는 이번 조회에서 저장값을 사용했는지를 뜻한다. source는 ai_estimate 또는 profile_recalculation이다. reused=true여도 실시간 교통 정보까지 저장값이라는 뜻은 아니다.
+`source`는 산정 방식이며 ai_estimate 또는 profile_recalculation이다. GET 상세는 읽기만 수행하며 reused=false를 유지한다. 내부 실행의 최종값 적중은 reused=true, 계수 재계산은 source=profile_recalculation·reused=false이며 다음 동일 프로필의 재사용은 같은 revision_id와 reused=true를 반환한다. 예를 들어 위 원본300초에 새 계수1.1을 적용하면 동일 estimate_id·새 revision_id·estimated_seconds=330·source=profile_recalculation이다. 새 calculated_at을 기록하되 원본 expires_at=2026-10-29T23:00:00Z를 늘리지 않는다. 산정/실시간 교통의 유효기간은 별개다.
 ### 5.7 출발·여유 안내
 `POST /api/v1/guidance-queries`
 ```json
@@ -1424,6 +1449,9 @@ F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프�
 - 기존 경로/응답 객체 유지, 설정 상한·만료·공유 ETA120초·자동 종료/삭제·출시 알림 범위가 변경/확정됐다. 아직 서비스가 미구현이므로 배포된 클라이언트 마이그레이션 없음. 422/404/409 등 기존 오류 사용, 소유권·동시 수락·기한 경계·삭제 사본 검증은 구현 시 수행한다.
 - 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회/수정/삭제 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. F03-04 main0402d67·R01 mainca8cd93 병합 확인, F03-01\~04 구현/검증 완료. F03-05a 수동 확인은main8b4b40b에 병합 완료다. GPS 수치/자동 일치 판정은 보류한다. F04-01은 main0402d67에서codex/journey-search로 시작해최신main8b4b40b를통합한뒤구현/검증, F04-01은main9670281에병합완료, F04-02는main63674ac에병합완료. F04-03은main4f94af1에병합완료, F04-04는사용자요청으로보류. F04-05는codex/journey-unavailable에서F04-03을통합해구현/검증했다. 사용자MR/병합 후 다음F05-01 도보근거수집이며 미확인물리근거를확정값으로채우지않는다.
 ## 변경 이력
+- <mention-date start="2026-10-13"/> v0.56: F05-06 같은 물리 근거의 계수/프로필 버전 변경을 서버 십진 재계산으로 처리. 원본 기준·기한 유지/부모 revision 연결·최초 AI 근거/멱등/혼합 후보 처리와0011 제약을 추가했다. GET source에 profile_recalculation 및 내부 estimates source를 추가하므로 해당 enum 소비자는 두 값을 처리해야 한다. 미확인 실제 근거/지도 연결·F09 학습·F07 출발 안내는 후속. 신규19개/백엔드221개·0011 격리 복구/개발DB 적용·서버 확인 완료.
+- <mention-date start="2026-10-12"/> v0.55: F05-05 확인된 물리 식별자 기반 내부 전체/부분 캐시 재사용 구현. 신규18개/백엔드202개·0010 legacy 보존 왕복/개발DB 적용·기존 회원/장소/루틴 유지·서버 확인. 일시 ID 제외 조건 키/프로필 일치·원본 기한 유지·적중 호출 생략·최소 연결/멱등/동시 실행 정책을 추가했다. 공개 GET/프론트 호환성 유지, 계수 변경/실제 근거/출발 안내 연결은 후속.
+- <mention-date start="2026-10-12"/> v0.54: F05-04 내부 검증 산정/품질 이력 저장 및 본인GET 상세 구현. 신규16개/백엔드184개 통과·0009 개발DB 적용/기존 행 보존·실서버 GET401 확인.30일/근거기한 유효·90일 이력·소유권/버전/불변/실패/동시 실행 정책 확정. 기존 계산/클라이언트 호환성 유지, 신규4테이블/GET 추가. 미확인 물리 근거의 유효 산정 저장 차단·조건별캐시/개인화/사용자서비스 연결은후속.
 - <mention-date start="2026-10-12"/> v0.53: F05-03 내부 AI 산정 입력/응답·호출 차단·검산·실패/재시도 구현. 신규19개/백엔드168개 및 실제 합성1후보360초 검산 완료. max_output_tokens HTTP400을 출력 한도512로 해결. 기존 HTTP/DDL/계산/보관·클라이언트 호환성 유지, 현재 미확인 근거는 AI 전송 차단. 사용자 서비스 연결/저장·운영 품질은 후속.
 - <mention-date start="2026-10-12"/> v0.52: F05-03 연결을 위한 F05-02 서버 내부 프롬프트 블록·버전 로딩과 검증 상태 추가. 기존 문구/프롬프트 버전·API/계산/보관/클라이언트 호환성 유지. 신규8개/백엔드149개 통과, 실제 AI 호출·품질 평가는 후속.
 - <mention-date start="2026-10-08"/> v0.51: F03-02a 지도 선택 좌표를 다시 검색하지 않고 확인 ID로 저장/자동 선택하는 흐름 추가. POST /places source 기본search/map_pin 조건부 입력, 기존 검색/멱등 해시 호환 유지. 새 DDL 없음. 구현/검증 완료(백엔드134개·프론트148개/빌드·합성PC/모바일).

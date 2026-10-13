@@ -4,6 +4,18 @@
 
 ## 실제 기록
 
+### 2026-10-12 — F05-04 산정값·근거 이력 저장 및 본인 조회
+- 목표/기반: 최신 main 2b2e210과 F05-03 미병합 상태를 fetch로 확인했다. 최신 main에서 codex/walking-estimate-history를 생성하고, 필수 선행 커밋513929c를eb958d5로 포함했다. MR 생성이나 main 병합은 하지 않았다. TODO와 기획·개인화·프롬프트·로깅·DB 문서 및 기존 계층 코드를 Notion v0.53과 비교하고, 구현 전에 v0.54의5.5.3에 저장·조회·보관 계약을 확정했다.
+- 구현 파일: 0009_walking_history에 ai_executions, walking_paths, walking_estimates, walking_estimate_revisions를 추가했다. 복합(id,user_id) FK와 숫자 제약, 조회·보관 인덱스를 사용한다. walking/history_dto·history_repository·history_service는 F05-03 결과를 재검산하고, 물리 확인 Context와 회원·프로필·장소 버전을 확인한 뒤 원자적으로 저장한다. GET /walking-estimates/{id}는 본인 쿠키 인증 후 숫자 요약만 반환한다.
+- 실행 처리: estimate_and_store는 모델 호출 전후에 권한·버전·근거 기한을 검사한다. 같은 실행의 동시 요청은 DB 세션 advisory 잠금과 내부409 EXECUTION_IN_PROGRESS로 차단한다. 완료한 실행은 모델을 다시 호출하지 않는다. 모델을 기다리는 동안 장소 수정 잠금을 잡지 않으므로, 저장 직전에 위치 버전을 다시 검사한다. 서로 다른 조건의 캐시 재사용은 F05-05 후속이다.
+- 저장 정책: ok만 유효 산정을 만들고, needs_data/unsupported/허용된 실패는 최소 실행 이력만 보관한다. 산정은30일과 근거 기한 중 이른 때 만료하고, 품질 이력은90일 보관한다. 회원 삭제는 CASCADE, 기간 청소 함수는 제공하되 자동 스케줄은 후속이다. 장소 이름 변경은 유지하고 위치·프로필 변경은409, 삭제는404로 조회를 차단한다. 원문·키·좌표·이름·메모·사고 과정·모델 자유문 reason은 저장하지 않는다. 모르는 사용량/지연과 실행하지 않은 모델은 null이다. 프로필 계수는 내부 검증 스냅샷이며 실제 학습 연결은 F09 후속이다. 현재 미확인 Evidence는 유효 산정 저장을 차단한다.
+- 실제 검증: 신규 test_walking_history16개가9.311초에 통과했다. PostgreSQL 격리 스키마/ASGI와 합성 AI로 정상값·실패·needs_data·중복/충돌·동시 실행·호출 중 위치 변경·본인/타인·프로필/장소 버전·30일/근거 기한·90일 청소·회원 삭제·복합 FK·중간 실패 전체 롤백·OpenAPI를 확인했다. 최종 백엔드 전체184개가82.124초에 통과했다. 마이그레이션 적용/복구/재적용과 기존 장소 보존도 통과했다. AST 검사에서 repository 밖 직접 SQL 실행0건, git diff --check 통과.
+- 회귀 실패와 수정: 최초183개는 통과했다. 동시 실행 보강 후 기존 장소 만료 테스트가 expires_at=now() 경계에서201!=404로 실패했다. 해당 테스트만5초 과거 시각으로 바꾸고 장소12개(7.126초) 통과를 확인했다. 다음 전체 실행에서는 기존 현재 위치 호출 제한 테스트가60초 창을 넘으며503!=429로 실패했다. 해당 테스트의 clock_now를 하나의 실측 창 시각으로 고정하고 현재 위치5개(4.645초) 통과를 확인했다. 장소/현재 위치 API 코드와 정책은 변경하지 않았다. 최종 전체184개는 통과했다.
+- 개발 DB/서버: 실제0008→0009 upgrade와 새 테이블4개를 확인했고, 기존 회원·장소·루틴 행 수는 전후 동일했다. 실제 사용자 산정/품질 자료는 만들지 않았다. 이 채팅에서 시작한 백엔드18056/23176만 확인 후 종료하고 숨김 재시작(worker10420)했다. 시작 완료·health200·OpenAPI 등록·실제 비인증401 AUTH_REQUIRED·프론트5173 HTTP200을 확인했다. UI 변경이 없어 프론트 테스트와 브라우저 시각 검증은 반복하지 않았다. 외부 AI/카카오 추가 호출은 없었다. 임시 테스트 로그는 정리했다.
+- 명세/문서: Notion v0.54의5.5.3, API 목록,5.6 UUID/reused=false 예시, 관련 후속 상태, 상단 구현 상태와 변경 이력을 맞추고 재조회했다. api_contract1488줄 전문 일치를 확인했다. walking_api/database_schema/migrations/planning/personalization/ai_prompts/logging/backend README·TODO·feature_breakdown도 갱신했다. 기존 계산·HTTP 클라이언트 호환성을 유지하며 새 GET/DDL·이력 저장만 추가했다. 프롬프트 문구와 버전은 유지했다.
+- 배운 개념/다음: 사용 가능한30일과 품질 보관90일은 다르다. 만료된 값을 안내에 쓰지 않으면서 검증 이력은 남길 수 있다. 부모 ID와 user_id를 함께 참조하면 DB에서도 타인 자료 연결을 막을 수 있다. DB 중복 저장 방지와 모델 중복 호출 방지는 별도이며, 실행 잠금과 호출 전후 버전 검사가 함께 필요하다. F05-04 내부 저장/본인 조회 완료. 사용자 검토/MR/병합 후 F05-05 조건별 재사용을 진행한다. 실제 물리 근거 확보·사용자 생성/UI 연결·자동 청소·학습/재산정·출발 안내는 후속이다.
+- 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.54).
+
 ### 2026-10-12 — F05-03 최종 실제 합성 검증 및 완료
 - 승인/원인: 사용자가 동일한 개인정보 없는 합성 요청의 추가 진단·수정 검증을 최대3회 승인했다. 추가1회 HTTP400/unclassified, 고정 태그 진단을 보강한 추가2회에서 INVALID/MAX_OUTPUT_TOKENS를 확인했다. 원문을 출력하지 않고 고정 어휘만 진단했으며 HTTP 오류코드/공개503 형식은 유지했다. 첫 실패의 정확 원인은 후속 진단으로 출력 토큰 설정 문제로 좁혔다.
 - 수정/실제 결과: provider.py의 max_output_tokens를4096에서512로 낮추고 전송 계약 테스트를 함께 수정했다. 마지막 추가3회 check_ai_walking.py 실행은 status=ok·prompt_version=walking_estimate.v1·model_matches=true·result_count1·result_statusok·estimated_seconds360·server_validation_passedtrue·2.51초, 종료0. 합성300초×factor1.2의 strict 응답/ID/근거/범위/수식 검산을 확인했다. 실제 모델명은 중계 서버 보고값이며 내부 실제 공급자 증명은 아니다. 승인된 추가3회 모두 사용, 최초 실패까지 구조화 요청 총4회, 이후 외부 호출 없음. 키/URL/응답·오류 원문/개인 위치·카카오 원본은 출력/전송하지 않았다.
@@ -893,3 +905,66 @@
 - 문서/완료: 개발 일지와 TODO/feature_breakdown의 R02 완료 체크를 복원했다. 최신 Notion v0.49를 게시 전 재확인하며 내부 책임 분리이므로 명세 갱신이 불필요하다. 기존 R02 재검토 기록은 당시 발견 근거로 유지한다.
 - 배운 개념/다음: 같은 connection을 repository에 전달하면 SQL 책임만 옮기면서 기존 트랜잭션/잠금 수명을 유지할 수 있다. 서비스가 조회 결과의 업무 규칙을 판단하고 repository는 저장소 접근을 담당한다. 사용자 MR/병합 후 다음 F05-01 도보 근거 수집, 이번 SQL 분리의 미완료 항목 없음.
 - 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa (v0.49, 계약 변경 없음)
+
+## 2026-10-12 — F05-05 같은 조건의 저장값 재사용
+
+### 목표와 명세 확인
+
+검증된 같은 물리 경로의 유효 산정값을 재사용해 AI 호출을 생략한다. 작업 시작 시 todo.md·Notion v0.54 최신5.5.3/5.6·walking_api.md·personalization.md·ai_prompts.md·logging.md·기존 저장/검산/정책 코드를 확인했다. 최신 main2690526에서 codex/walking-cache-reuse를 만들고 아직 main에 없는 F05-04 12d9e99를 d34b3e2로 포함했다. 사용자 지시에 따라 MR 생성/병합은 수행하지 않는다.
+
+### 구현과 변경 파일
+
+- backend/app/walking/cache_service.py, history_dto.py: 호출 서비스가 확인한 공급자/경로/버전·양끝 출입구·조건 식별자를 strict 검증한다. 사용자별 장소 위치 버전/방향/범위·기준/필요 속도·정책/프롬프트/모델 버전을 키에 포함하고 일시 candidate/evidence/request ID는 제외한다. 미확인 근거와 이전 이력은 재사용하지 않는다. 프로필만 변경된 유효 원본은409 PROFILE_RECALCULATION_REQUIRED로 AI 없이 차단한다.
+- history_service.py, history_repository.py: 전체/부분 적중을 검산해 현재 ID로 연결하고 누락 후보만 AI에 전달한다. 원본 estimate/revision ID와 기한을 유지하고 현재 근거 기한이 짧으면 반환 기한만 줄인다. numeric revision 복제/원본 만료 연장 없음. 최소 연결을 실행 이력에 보관하며 전부 적중한 모델/지연/사용량은null이다. 원본 삭제/만료 재실행 차단, 입력/Context/cache_sources/연결 멱등 비교, 사용자/request_id와 정렬된 물리 키의 세션 잠금, 저장 직전 재검사를 구현했다. 긴 계수는 검증된 float의 십진 표현을 Decimal로 DB NUMERIC에 전달한다.
+- backend/migrations/versions/0010_walking_cache.py: nullable cache_key/cache_identity 쌍·조회 인덱스와 reused_estimates 기본[]/배열 제약 추가. 미확인 legacy 이력은 백필하지 않는다. 기존4테이블 소유권FK·90일 청소/회원CASCADE 유지.
+- backend/tests/test_walking_cache.py: 신규18개 실제 격리 PostgreSQL/합성 AI 검증. test_migrations.py:0009 legacy 행을 보존한0010 적용/복구/재적용을 추가했다.
+- api_contract.md, walking_api.md, personalization.md, ai_prompts.md, logging.md, database_schema.md, migrations.md, planning.md, README.md, todo.md, feature_breakdown.md: 내부 입력/응답·재사용/멱등/잠금/프로필 변경·품질/마이그레이션 및 현재/다음 작업 동기화. UI·프롬프트 문구/버전·공개 GET 응답 변화 없음.
+
+### 실제 실행과 결과
+
+- 기존 도보 이력16개 회귀:9.475초 통과. 초기 캐시14개에서 두 번째 회원 fixture 이메일 중복을 고쳤다. 거리/속도 DB 전달의 작은 소수 정밀도 차이는 기존F05-03과 같은 rel_tol=1e-12/abs_tol=1e-9로 검산하며 최종 정수초/계수는 정확히 비교한다.
+- 추가 fallback/버전/호출 중 원본 만료 검증을 포함한17개:11.542초 통과. 긴 계수18번째 검증은 환경의 실제 float 표현을 기준으로 저장 보존을 확인하도록 바로잡았다. 마이그레이션 legacy JSON의 SQLAlchemy 문자열 바인딩 오류는 jsonb_build_object로 해결했다. 실패한 중간 실행을 성공으로 기록하지 않는다.
+- 최종 backend/.venv/Scripts/python.exe -m unittest discover -s backend/tests:202개 전부 통과,78.408초. 신규18개 포함. 전체/부분 적중 AI 생략·ID 재연결·원본 기한·소유권·장소 이름/위치/삭제·경로/출입구/조건/버전 변경·프로필 변경·fallback/긴 계수·만료/삭제 재실행·호출 중 원본 만료 롤백·다른 실행ID의 같은 경로 잠금·실패 잠금 해제를 확인했다. 마이그레이션 격리 왕복/legacy 보존도 통과.
+- AST 검사:history_service.py/cache_service.py/router.py 직접 SQL 실행0건. git diff --check 통과.
+- 실제 개발DB migrate.py upgrade head 성공,0010_walking_cache 확인. 전후 users20/saved_places35/routines12, ai_executions0/walking_paths0 유지. 실제 사용자 산정이나 품질 데이터를 생성하지 않았다.
+- 프로젝트 백엔드 프로세스를 확인 후 재시작. 실제 health200·프론트5173 응답200·OpenAPI GET 유지·비인증 도보 GET401 AUTH_REQUIRED 확인. UI 변경이 없어 PC/모바일 시각 검증은 새로 수행하지 않았다. 추가 AI/카카오 네트워크 호출 없음.
+
+### 명세 동기화·배운 개념·남은 일
+
+구현 전 Notion v0.55에 내부 cache_sources·물리 키·전체/부분 적중·원본 기한·최소 연결/멱등/동시 실행 계약을 기록했다. 최종 검증 상태/예시 설명/변경 이력을 갱신하고 다시 읽어 저장을 확인했다. api_contract.md 전체1498줄과 Notion 본문을 줄별 대조해 일치를 확인했다. 공개 GET의 reused=false는 수동 조회 계약으로 유지하며 내부 실행의 적중은reused=true이다. 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+캐시의 핵심은 일시 요청ID 대신 검증된 물리 식별자와 버전을 쓰는 것이다. 재사용은 원본 숫자/기한을 바꾸는 새 계산과 구분하고, 부분 적중의 멱등 재실행에는 기존/신규 원본 연결이 모두 필요하다. 부동소수 DTO 값과 PostgreSQL NUMERIC의 전달을 구분해 검산 계약과 저장 정밀도를 유지한다.
+
+현재 실제 walking.evidence는 물리 범위/방향 미확인으로 needs_data·reusable=false이며 운영 캐시·사용자 산정 생성·출발 안내 연결은 아직 미구현이다. 완료 범위는 검증된 서버 내부 근거에 대한 F05-05 모듈과 이력이다. 다음은 F05-06 개인 계수만 변경된 기준 시간 재계산이며 F07 화면 내 출발 안내/실제 물리 근거 확보·F09 학습은 후속이다.
+
+## 2026-10-13 — F05-06 개인 계수 변경 재계산
+
+### 목표와 선행 명세
+
+개인 계수/프로필 버전만 변경되면 저장된 기준 초로 재계산하고 원본 숫자와 기한을 보존한다. todo.md F05-06·최신 Notion v0.55의5.5.4/5.6·personalization.md4절·walking_api.md·planning.md·ai_prompts.md·logging.md·저장/캐시/검산 코드를 확인했다. Notion spec-to-implementation 스킬을 읽고 요구와 검증 근거를 연결했다. 최신main2690526에서 codex/walking-profile-recalculation을 생성하고 미병합 F05-04 d34b3e2/ F05-05 a59dab3를 f1c7bf2/ebbb944로 포함했다. 사용자 규칙대로 MR 생성/병합은 하지 않는다.
+
+### 구현 및 파일
+
+- backend/app/walking/cache_service.py: 같은 물리 키의 유효 원본에서 계수/프로필 버전만 변경되면 저장된 Decimal 기준 초 × 새 계수를 올림한다. 기본1.0·허용0.5~2.0, 이미 개인화된 공급자 기준은1로 유지한다. 현재 최종값에 계수를 또 곱하지 않는다. 원본 수치/버전/프로필/키/기한을 검증하며 프로필 다른 필드 변경은 내부409 차단한다. 만료/물리 조건/필요 속도 변경은 현재 검증 근거의 새 산정으로 연결하고 미확인 근거는needs_data를 유지한다.
+- history_service.py, history_repository.py, history_dto.py: 같은 estimate에 revision_no 증가·parent_revision_id·현재 candidate_id·새 프로필·source=profile_recalculation을 저장한다. 원본 숫자/경로/최초 AI 버전과 만료/보관 기한을 보존한다. 재사용/재계산/새 후보가 섞이면 새 후보만 AI 호출. 호출 없는 실행 메타데이터는null. 재계산 전후 확인·멱등·동시 물리 키 잠금·삭제/만료 재실행 차단·롤백 유지. 저장된 십진 기준의 재계산과 신규 AI 검산을 구분하며 결과ID 불일치의502 AI_OUTPUT_INVALID 계약을 유지한다. GET 기존 필드/인증/no-store/reused=false를 유지하고 source enum에 새 값을 추가했다. 내부 estimates에도 source를 제공한다.
+- backend/migrations/versions/0011_walking_recalculation.py: source 제약 확대, 부모의 동일 회원/estimate 복합FK·candidate_id·출처별 부모 제약. 기존 AI 원본은 부모null, 회원/부모삭제CASCADE. downgrade는 파생 revision만 제거하므로 실제DB에서는 실행하지 않았다.
+- backend/tests/test_walking_recalculation.py: 신규19개 실제 격리 PostgreSQL/ASGI·합성 AI. test_walking_cache.py의 기존 계수 변경 차단을 새 재계산 기대값으로 맞췄고 test_migrations.py head0011로 갱신했다. test_routines.py는 기존 생성시각 순서 가정을 고정 시각과 의도적인 동률/UUID 경계로 안정화했다. 루틴 API 구현/정렬 계약은 바꾸지 않았다.
+- api_contract.md, walking_api.md, personalization.md, ai_prompts.md, logging.md, database_schema.md, migrations.md, planning.md, README.md, todo.md, feature_breakdown.md: 새 내부 흐름/계산/이력/호환성·현재/다음 작업 동기화. 프론트/프롬프트 문구·모델 버전 변경 없음.
+
+### 실제 실행 및 검증
+
+- 시작 시 Docker Desktop이 꺼져 PostgreSQL 연결이 실패했고 초기 캐시18개가 connection timeout으로 실패했다(90.308초). 이를 성공으로 기록하지 않는다. Docker를 숨김 기동하고 프로젝트 compose db를 켜 healthy를 확인했다.
+- 초기 신규 재계산15개:8.883초 통과. 캐시18개 회귀:11.084초 통과. 부모FK/마이그레이션 복구/source enum/출력ID 오류502까지 포함한 최신 재계산19개:9.468초 통과.
+- 최초 전체220개에서 기존 루틴 목록 테스트1개가 생성 순서=시간 순서를 가정해 실패했다(89.860초). 고정 시각/UUID 동률 경계를 제공한 뒤220개 통과(89.099초). 최신 출력ID 오류 검증까지 포함한 최종 backend/.venv/Scripts/python.exe -m unittest discover -s backend/tests:221개 전부 통과,88.249초.
+- 기준300×1.1=330·연속 계수 변경 시 기준300 유지·기본/경계 계수/잘못된 입력·이미 개인화된 공급자·거리/속도 십진 올림·현재ID 연결·재사용/재계산/새 산정 혼합(새 후보만AI)·부모FK·기한/소유권/위치/프로필·호출 중 원본 만료 롤백·삭제/멱등·동시 실행/실패 잠금 해제·GET source·출력ID502를 확인했다. 파생을 만든0011→0010→0011 격리 복구에서도 원본360초 보존, 재적용 부모null을 확인했다.
+- AST history_service.py/cache_service.py/router.py 직접SQL 실행0건·git diff --check 통과.
+- 실제 개발DB upgrade head0011_walking_recalculation 성공. 전후 users20/saved_places35/routines12·ai_executions0/walking_paths0 유지. 실제 사용자 산정/이력 생성 없음. Docker 재기동으로 자동 실행된 다른 컨테이너의 데이터/설정은 조작하지 않았다.
+- 꺼져 있던 backend8000/frontend5173을 숨김 기동하고 최종 백엔드를 재시작했다. 실제 health200·프론트200·비인증 GET401 AUTH_REQUIRED·OpenAPI source=[ai_estimate,profile_recalculation] 확인. 추가 외부 AI/카카오 호출 없음. UI 변경이 없어 PC/모바일 시각 검증은 새로 수행하지 않았다.
+
+### 계약·학습·남은 범위
+
+구현 전에 Notion v0.56에 재계산/부모이력/십진 기준/무효화/호환성 초안을 기록했다. 최종 상태·예시·공통 source/변경 이력을 갱신하고 다시 읽어 저장을 확인했다. Notion Markdown의 이스케이프된 물결/구분자 때문에 한 차례 문서 갱신/대조가 실패했으며 실제 저장 표기를 재조회해 반영했다. 최종 api_contract.md 전체1507줄과 Notion 본문이 줄별 대조에서 일치했다. 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+개인화 이전 기준과 개인화 최종값을 분리해야 반복 보정을 막을 수 있다. 저장된 십진 초를 사용하는 계수 재계산은 거리/속도를 다시 나누는 신규 AI 검산과 올림 경계에서1초 차이가 날 수 있어 각각의 계약으로 검증한다. 부분 실행은 모델 호출한 후보만 비용/지연으로 집계하고 부모 이력과 원본 기한을 유지해야 한다. source enum 확장은 신규 소비자가 두 값을 처리해야 하는 호환성 영향이며 현재 프론트는 해당GET을 쓰지 않는다.
+
+완료 범위는 검증된 서버 내부 근거의 재계산과 만료/변경 분기다. 실제 walking.evidence는 물리 범위/방향 미확인으로 needs_data·reusable=false를 유지한다. 호출 서비스의 실제 지도 재조회/물리 검증·사용자 산정 생성 연결·F09 계수 학습·F07 출발 안내는 아직 후속이다. 다음 TODO는 F05-07 AI 실패/근거 부족/역 내부 누락 상태 안내다.

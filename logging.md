@@ -146,3 +146,15 @@ meeting_api.md 11절의 meeting.created/confirmed/closed, invite.accepted/reject
 
 ## F17 자연어 해석 품질 이력
 실행 ID·버전·기준 시각/시간대·비식별 구조화 결과·검증 상태·지연/사용량·사용자 수정 필드·확인/취소를 연결한다. 입력 원문·주소·사람 이름·질문 전문은 일반 로그에서 제외한다. 재현은 합성 데이터 우선이며 실제 원문 보관은 별도 동의/보관 정책 확정 전 도입하지 않는다. 상세 natural_language_schedule.md. 미구현.
+
+## F05-04 권한 관리되는 최소 품질 이력 — 2026-10-12
+
+ai_executions에 검증된 최소 입력/Context·reason 제외 구조화 결과·실패 코드·모델/프롬프트/정책/프로필 버전·실측 지연/확인한 사용량을90일 보관한다. 없는지연/사용량과 실행하지 않은 모델은null이며 숫자를 만들어 채우지 않는다. 손상된 출력/원문/이름/정밀위치/키/내부사고는 비저장, 일반로그는 기존HTTP 메타데이터만 유지한다. record_failure는 허용된실패코드만, 유효산정은revision으로 분리한다. 회원삭제CASCADE·90일 청소함수, 자동스케줄은배포후속이다. walking_api.md·Notion v0.54.
+
+## F05-05 캐시 적용 이력 — 2026-10-12
+
+ai_executions.reused_estimates에 최소 원본 연결(candidate/estimate/revision/effective expiry)만90일 보관한다. 전체 적중은 model_version/latency_ms/usage=null로 모델 실행 집계에서 제외한다. 부분 적중은 누락 후보 호출의 실측값만 기록한다. 재사용으로 숫자 revision과 원본 만료/보관 기한을 연장하지 않는다. 삭제된 원본은 연결 JSON에서 역추정해 복구하지 않고404로 차단한다. 일반 HTTP 로그 필드와 개인 정보 비저장 규칙을 유지한다. walking_api.md·Notion v0.55.
+
+## F05-06 재계산 품질 이력 — 2026-10-13
+
+모델 호출 없는 계수 재계산 실행은 model_version/latency_ms/usage=null이다. 새 revision은 부모 revision·같은 estimate·최초 AI 물리 근거와 연결해 이전 수치를 보존한다. 품질 보관은90일과 원본 기한 중 이른 시각이며 원본 근거를 연장하지 않는다. 부분 실행의 메타데이터는 실제 새 후보 AI 호출만 기록한다. 원문/이름/정밀 위치/키/내부 사고 비저장·HTTP 로그 필드 유지. walking_api.md·Notion v0.56.

@@ -115,7 +115,7 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
         await self.signup_login()
         body, saved = await self.saved(key='retry_key')
         with database() as connection:
-            connection.execute('UPDATE place_searches SET expires_at=now()')
+            connection.execute("UPDATE place_searches SET expires_at=now()-interval '5 seconds'")
         again = await self.create(body, 'retry_key')
         self.assertEqual(again[0], 201)
         self.assertEqual(again[2]['data'], saved[2]['data'])
@@ -124,7 +124,7 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(conflict[2]['error']['code'], 'IDEMPOTENCY_CONFLICT')
         with database() as connection:
             self.assertEqual(connection.execute('SELECT count(*) AS n FROM saved_places').fetchone()['n'], 1)
-            connection.execute('UPDATE place_creation_keys SET expires_at=now()')
+            connection.execute("UPDATE place_creation_keys SET expires_at=now()-interval '5 seconds'")
         self.assertEqual((await self.create(body, 'retry_key'))[0], 404)
 
     async def test_concurrent_sessions_create_one_place_for_same_key(self):

@@ -87,3 +87,11 @@ AI 실패 원문·키·전체 URL·본문은 출력하지 않는다. DTO/JSON Sc
 2026-10-12 실호출 후속: 사용자 승인된 구조화 합성 요청1회를 실행했지만503 PROVIDER_UNAVAILABLE로 실패했다. 키 존재/모델/호스트 설정은 로컬 재확인 정상이며 공급자 인증/요청 형식/가용성 중 원인은 미확정이다. 다음 진단 도구는 upstream_http_status와 허용된 upstream_error_code만 추가 출력한다. 원문/키/URL은 출력하지 않고 공개 오류 형식도 유지한다. 추가 호출은 아직 실행하지 않았다.
 
 2026-10-12 최종: HTTP400의 max_output_tokens 오류 진단 후 출력 한도를512로 낮춰 실제 합성1후보 검산 성공. 응답 미완료는 거부하며 다수 후보/실제 보행 품질·운영 서비스 연결은 후속이다. 공급자 오류 진단에는 상태·허용 오류코드·고정 분류태그만 포함한다.
+
+## F05-04 산정 이력·본인조회 (2026-10-12)
+
+실행 전 backend/.venv/Scripts/python.exe backend/migrate.py upgrade head로0009_walking_history 적용. 신규4테이블과 GET /api/v1/walking-estimates/{estimate_id}, 내부 walking/history_service.py의 persist/estimate_and_store/record_failure/purge_expired_history를 제공한다. 내부 호출자는 Context의 물리경로/방향/범위 확인과 소유권 근거를 먼저 확보해야 하며 공개 쓰기 API는 없다. 현재 미확인Evidence는 유효산정 저장을 차단한다. 일반조회는reused=false, 조건별캐시는F05-05후속.
+
+정상/실패/중복실행·검산·본인/장소/프로필/근거기한·30일유효/90일품질·삭제/청소 계약은 walking_api.md·Notion v0.54 참고. 원문/키/좌표/모델 자유문reason 비저장. 테스트는 실제DB 임시스키마·합성AI로 test_walking_history.py를 실행한다. 서버코드 반영 후 백엔드 재시작이 필요하다.
+
+동시 실행 보강: estimate_and_store는 사용자/request_id별DB 세션advisory 잠금으로 두 번째 AI 호출을 차단하고 내부409 EXECUTION_IN_PROGRESS를 반환한다. 완료한 동일 실행은 모델 재호출 없이 조회한다. 장소 수정 잠금은 모델 호출 동안 유지하지 않고 저장 전 위치 버전을 다시 검사한다.
