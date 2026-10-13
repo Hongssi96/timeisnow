@@ -102,3 +102,10 @@ Notion v0.59. backend/check_gyeonggi_mapping.py에 단순 왕복 노선의 회�
 경기 queryTime은 요청시각이며 공식 도착 명세에 검증된 생성시각 근거가 없어 generated_at/최신성은 계속 미확인이다. 이번 도구도 verified_generation_time_available=false·valid_for_guidance=false를 출력한다. 실조회 승인은 운영 상시 전송이나100m 운영 매핑 정책 승인과 구분한다. F07-01/F07-01b는 미체크이며 다음은 공개 실조회 방향 대조, 신뢰할 원천 시각/공급자와 운영 정책 확정이다.
 
 공식 근거: [경유정류소](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusRouteStation), [노선 상세](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusRouteInfo), [도착 항목](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusArrival). 2026-10-13 웹 확인; routeDestId는 진행방향 마지막 정류소 ID이며 단순 이름/전체 노선 종점을 무조건 대신 넣지 않는다.
+
+
+## F07-01b 공개 실조회 결과 — 2026-10-13
+
+사용자가 공개 판교역→성남시청 좌표와 저장된 키의 공식 HTTPS 최대10회 조회를 명시 승인했다. 기존 진단을 실행한 결과 route_disambiguation_required·candidate_count=12·종료코드1이었다. 카카오 공개 경로1회·경기 동명 노선 검색1회, 총2회만 수행했다. 동명 후보12개가 노선 정차 목록 대조 한도6개를 넘어 중단됐으므로 정차 목록/노선 상세/도착정보는0회다. 이 실행의 방향·매핑·원천 최신성을 확인했다고 기록하지 않는다. 사용자 장소/좌표 DB를 읽거나 키·원문·차량번호를 출력/저장하지 않았다.
+
+승인 대기는 해소됐으며 현재 제한은 동명 후보 초과다. 과거76번5개 사례와 달리 현재 첫 직행 후보 선택 결과12개로, 경로/응답 변화의 상세 원인은 미확정이다. 후보 일부만 골라 유일 매핑으로 인증하지 않는다. 다음은 정류소/지역 등 검증된 기반정보를 이용해 후보를 좁히는 전략과 호출 예산을 정리하는 작업이다. 운영 매핑·신뢰할 생성시각·최신 도착/출발 연결은 계속 미완료다. Notion v0.60에 실행 결과를 갱신하고 저장을 확인했다. 앱 API/계산/DB 계약 변경 없음.
