@@ -48,9 +48,9 @@ class MappingUnitTests(unittest.TestCase):
         with patch.object(mapping,'query',side_effect=query_fixture) as q:
             value=mapping.resolve(context(),at)
         self.assertEqual(q.call_count,4);self.assertEqual(value.route_dest_id,'30')
-        self.assertEqual(value.valid_until,at);self.assertIn('30m.contiguous',value.mapping_version)
+        self.assertEqual(value.valid_until,at);self.assertIn('30m.ordered',value.mapping_version)
 
-    def test_all_stops_must_be_contiguous_and_endpoints_within_thirty_meters(self):
+    def test_extra_public_stops_allowed_and_endpoints_within_thirty_meters(self):
         for mode in ['gap','far']:
             def fake(kind,params,deadline):
                 rows=query_fixture(kind,params,deadline)
@@ -60,7 +60,9 @@ class MappingUnitTests(unittest.TestCase):
                         for i,row in enumerate(rows):row['stationSeq']=i+1;row['turnSeq']=4
                     else:rows[0]['x']+=0.0004
                 return rows
-            with patch.object(mapping,'query',side_effect=fake):self.assertIsNone(mapping.resolve(context(),datetime.now(timezone.utc)+timedelta(seconds=200)))
+            with patch.object(mapping,'query',side_effect=fake):
+                value=mapping.resolve(context(),datetime.now(timezone.utc)+timedelta(seconds=200))
+            self.assertEqual(value is not None,mode=='gap')
 
     def test_ambiguous_route_budget_and_direction_conflict_are_not_selected(self):
         def fake(kind,params,deadline):
@@ -158,7 +160,14 @@ class ConnectedArrivalTests(unittest.IsolatedAsyncioTestCase):
     async def test_full_resolver_connection_with_synthetic_public_sources(self):
         await self.setup_route()
         actual_resolve=REAL_RESOLVE
-        with patch.object(service.public_mapping,'resolve',side_effect=actual_resolve),patch.object(mapping,'query',side_effect=query_fixture) as q,patch.object(provider,'fetch',return_value=[('123',300)]) as fetch:
+        def extra_stops(kind,params,deadline):
+            rows=query_fixture(kind,params,deadline)
+            if kind=='stops':
+                rows.insert(1,dict(rows[0],stationId='77',stationName='추가'))
+                rows.insert(5,dict(rows[2]))
+                for i,row in enumerate(rows):row['stationSeq']=i+1;row['turnSeq']=4
+            return rows
+        with patch.object(service.public_mapping,'resolve',side_effect=actual_resolve),patch.object(mapping,'query',side_effect=extra_stops) as q,patch.object(provider,'fetch',return_value=[('123',300)]) as fetch:
             response=await self.call(self.path)
         self.assertEqual(response[0],200);self.assertEqual(q.call_count,4);self.assertEqual(fetch.call_count,1)
         self.assertEqual(response[2]['data']['source_status'],'unknown')

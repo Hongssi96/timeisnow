@@ -59,13 +59,12 @@ class MatchDiagnosticTests(unittest.TestCase):
         def fake(kind,params,deadline):
             rows=query_fixture(kind,params,deadline)
             if kind=='stops':
-                rows.insert(1,dict(rows[0],stationId='77',stationName='EXTRA'))
-                for i,row in enumerate(rows):row['stationSeq']=i+1;row['turnSeq']=4
+                rows[0]['x']+=0.0004
             return rows
         trace={};expires=datetime.now(timezone.utc)+timedelta(seconds=200)
         with patch.object(mapping,'query',side_effect=fake):
             self.assertIsNone(mapping.resolve(context(),expires,diagnostics=trace))
-        self.assertEqual(trace['match_checks']['detail_reason'],'STOPS_NOT_CONTIGUOUS')
+        self.assertEqual(trace['match_checks']['detail_reason'],'COORDINATE_LIMIT_EXCEEDED')
         with patch.object(mapping,'query',side_effect=fake),patch.object(mapping,'diagnose_match') as diagnostic:
             self.assertIsNone(mapping.resolve(context(),expires))
             diagnostic.assert_not_called()

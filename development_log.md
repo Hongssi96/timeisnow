@@ -1192,3 +1192,52 @@ F07-01b/F07-01 전체 미완료. 다음은 정차/좌표/방문scope 중단의 �
 배운 개념: 복합 매칭 실패는 한 가지 원인의 증명이 아니다. 정차 순서/연속성·공식 방문·좌표를 독립적인 개수로 분리해야 기준 완화 없이 원인을 좁힐 수 있다. 진단 코드 자체의 통과와 실제 실패 원인의 확인은 다르다.
 
 남은 작업: 누적35/승인36회로1회 잔여, 전체실진단에 부족하다. 같은 공개 경로/저장키/공식HTTPS·임시DB check_arrival_connection.py --max-requests 8로 추가최대8회 승인할 구체적 실행을 준비했다. 실제 개별 불일치/도착 연결·원천 최신성은 미완료로 F07-01b/F07-01 체크하지 않는다.
+
+
+## 2026-10-13 — F07-01b 정류소 목록 연속성 차단 실확인
+
+사용자 “위의 추가조회해서 원인 확인해”는 직전 공개 경로/키/카카오·경기HTTPS 추가 최대8회 원인 진단의 명시 승인이다. check_arrival_connection.py --max-requests 8을 실행해 실제6회·종료1이었다. 같은 미완료 F07-01b 브랜치를 유지했다.
+
+실제 결과: HTTP200 mapping_required/unknown·도착후보0·생성/예측시각 없음/guidancefalse, second_get_no_upstream/second_get_same_evidence/stored_search_unchanged=true. station_count=1/route_count=1/matched_count=0·detail_reason=STOPS_NOT_CONTIGUOUS. valid_sequence_routes=1/endpoint_name_pairs=2/ordered_name_pairs=2/scoped_ordered_name_pairs=2지만 contiguous_name_pairs=0/scoped_contiguous_name_pairs=0이다. 이름의 순서와 공식 노선/승차정류소/방문순번은 일치하는 쌍이 있으나 경기 목록 사이에 카카오 제공 목록 외 정류소가 포함되는 형태라 전체 목록 연속성 필수 정책이 차단했다.
+
+최신 Notion v0.68·TODO와 diagnose_match 코드를 읽어 좌표/식별 검사 조건을 대조했다. missing_coordinates/outside_coordinate_limit/missing_station_identity/passing_pairs=0은 연속 일치쌍이 없어 해당검사 미실행임을 확인했다. 좌표가 맞거나 도착/방향/하차 반복방문이 유일하다는 뜻으로 해석하지 않는다. 해당 개별 단계는 아직 미확인이다.
+
+제안/미구현: 전체 목록 연속성 필수 정책을 재검토하고 제공된 이름의 전체순서·공식 승차방문·양끝30m·회차/같은방향/반복방문·공식 방향ID/유일성을 유지하면서 공공 중간 정류소 추가를 처리한다. 이번 요청은 실제 원인 확인이며 코드/매핑 수용정책/공개API/계산/저장을 바꾸지 않았다. 테스트도 재실행하지 않았다.
+
+사용자에게 설명한 것처럼 조회 상한은 검증 승인용 API 호출횟수이며 공급자 잔여쿼터/요금 예산이 아니다. 이번6회+기존35회=누적41회, 승인36+추가8=44회로3회 잔여다. 실제잔여쿼터/비용은 확인하지 않았다. 기존 사용자 데이터/장소를 변경하지 않고 키/좌표/공공ID/차량번호/쿠키/원문을 출력/저장하지 않았다. 도구는 임시스키마/메모리 정리 성공 후 반환했다.
+
+Notion v0.69 및 api_contract.md·arrivals_api.md·provider_plan.md·public_arrivals_plan.md·todo.md·feature_breakdown.md에 실제 원인·미검사 범위·제안 상태·호출상한 의미를 기록하고 저장을 다시 읽었다. API/계산/저장 계약·클라이언트 호환성 변경 없음. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 같은 노선의 정류소 순서는 맞아도 공급자마다 제공 목록의 상세도가 다를 수 있다. 연속성 실패와 잘못된 순서/방문순번은 구분해야 한다. 뒤 단계 검사가 생략돼0개가 나오는 것과 실제 검사 통과는 다르다.
+
+F07-01b/F07-01 전체 미완료. 다음은 연속 목록 조건 재검토·기존 방문/좌표/방향/유일성 검증 유지 구현과 실제 도착 연결 확인이다. 원천 생성시각/최신성 제약도 남았다.
+
+
+## 2026-10-13 — F07-01b 추가 정류소 처리·방향 후 유일성
+
+목표/근거: 실제 STOPS_NOT_CONTIGUOUS 조사 후 사용자 ㄱㄱ에 따라 공급자별 목록 상세도 차이를 처리했다. 최신 TODO·Notion v0.69·arrivals_api.md/provider_plan.md/public_arrivals_plan.md와 기존 매칭/본인GET 코드를 대조하고, 구현 전에 Notion v0.70 정책을 갱신했다. main205c7e3에서 codex/boarding-stop-sequence 생성, 미병합 조사문서9a98246를0b408d3으로 이어 붙였다. 사용자만 MR 생성/병합한다.
+
+구현: backend/app/arrivals/matching.py는 모든 제공이름의 전체순서·양끝30m를 유지한 추가 공공 정류소 허용, 방문 후보32쌍 초과 전체 미확인 처리, 내부 진단의 ordered 정책 선택을 지원한다. backend/app/arrivals/mapping.py는 공식 승차방문scope를 대조한 뒤 서로 다른 노선 복수 매칭을 차단하고, 같은 노선 상세1회로 각 반복 하차방문의 회차/방향을 확인한 뒤 최종 유일한 후보만 연결한다. 공공 연속순번·유일하고 일관된 회차·공식 routeDestId/실제 끝 정류소 검사 유지. 매핑 버전gbis.station-scope.v2.30m.ordered. 기존 GET 입력/응답·조회 상한·소유권/TTL/60초 캐시·보관 정책 유지. 목록 상세도 차이로 차단되던 검증 후보는 새로 공급자를 조회할 수 있다. 원천 생성시각unknown/예측null/guidancefalse 유지로 출발 계산 완료가 아니다.
+
+검증 파일: backend/tests/test_ordered_arrival_mapping.py(신규9개), test_arrival_mapping_connection.py(추가 정류소/회차 뒤 반복 방문 본인GET 연결 등 기대값 갱신), test_match_diagnostics.py(좌표 미확인 진단 기대값 갱신). 신규9개0.013초·진단7개1.183초·연결17개9.303초 통과. 전체 discover 최종306개115.947초 전부 통과. 추가 중간 정류소 허용/제공이름 누락·역순/30m 초과·좌표결측/공식 방문순번·ID 불일치/공공순번 결손·중복/회차·방향 충돌/회차 뒤 반복 방문 제외 후 유일 매칭/방향 후 남은2후보·복수노선 차단/32후보 경계와33후보 전체차단/상세1회 공유를 확인했다. 본인GET→실제 매퍼→합성 도착 어댑터 연결/unknown 유지도 격리DB로 확인했다. 최초 신규 테스트 단독 실행은 import 경로 누락으로 오류1개였고 기존 테스트 설정 import 순서를 수정한 뒤 통과했다. 실제 경기/카카오 키 호출0회, 이번 실제 연결 성공으로 표시하지 않는다. 승인 누적41/44회·3회 잔여는 요금/공급자쿼터가 아니다.
+
+서버: 기존 프로젝트 uvicorn 프로세스 확인 후 재시작해 수정 적용. 초기 /health 검사는 경로 착오로404였고 실제 코드의 /api/v1/health로 재확인200, 프론트5173도200, 비로그인 first-arrivals는401. 프론트 UI 수정 없음/시각 검증 수행 안 함.
+
+문서: api_contract.md·arrivals_api.md·provider_plan.md·public_arrivals_plan.md·todo.md·feature_breakdown.md 갱신. Notion v0.70의 계약/변경이력에 정책·306개 검증·실제키0회/미확인 상태를 기록하고 저장을 재조회, 로컬 API 미러1560줄 전체 일치 확인. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa. 공개 필드 호환성은 유지하되 상세도가 다른 검증 경로의 매핑/조회 가능 범위는 변경됐다.
+
+배운 개념: 공급자의 추가 중간 정류소와 제공이름의 누락/역순은 서로 다른 문제다. 반복 방문 후보가 둘이어도 방향 검증 전에는 유일성을 단정할 수 없다. 하나가 회차를 넘는 경우 제외한 뒤 유일 후보를 확인하고, 검증 후 둘이 남으면 임의 선택하지 않는다. 합성 회귀 성공은 실제 공급자와 최신성 증명이 아니다.
+
+남은 문제/다음: F07-01b/F07-01은 미체크 유지. 변경 후 공개 경로 실제 키 연결 검증과 신뢰할 원천 생성시각/지원 범위가 남았다. 고정 공개 판교역→성남시청/기존 공식 HTTPS/키 비노출 조건의 통합도구 backend/check_arrival_connection.py가 준비돼 있으나 통합1회 최대8호출에는 승인 잔여3회가 부족하다. 추가5회로 승인 누적49회가 되면 --max-requests 8로1회 검증 가능하며 사용자 입력 없이 호출 상한을 늘리지 않았다.
+
+
+## F07-01b 실제 본인조회 연결 확인·원천 최신성 제약 — 2026-10-13
+
+Notion v0.71. 사용자 01b 완료 요청에 따라 앞서 제시한 같은 공개 판교역→성남시청 경로/저장 키/공식 카카오·경기 HTTPS/격리DB 검증을 --max-requests 8로 실행했다. 실제8회·종료0·HTTP200/connection_verified, MAPPING_CONFIRMED·station_count=1/route_count=1/matched_count=1. 재조회 외부 무호출·동일 근거·저장 검색 무변경이 모두true다. 운영 매핑과 본인GET→공공 도착 조회 연결은 실제로 확인했다.
+
+응답은 insufficient_data/source_status=unknown·도착후보0·생성/예측시각 없음·guidancefalse다. 실제 최신 도착 후보 확보나 출발 계산 성공을 뜻하지 않는다. 경기 공식 항목 명세(https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusArrival)를 다시 읽어 queryTime=정보요청시간이고 행별 생성시각 계약이 없음을 확인했다. 수신시각을 생성시각으로 바꾸지 않는다. 오래된 예측을 지금의 대기시간으로 해석하면 이미 지나간 버스에 맞춰 출발할 수 있기 때문이다.
+
+완료 요청으로 추가5회의 앞서 제시한 범위를 실행해 승인 누적49회/실제49회·잔여0이다. 이는 공급자 쿼터나 요금이 아닌 사용자 승인 호출 상한이다. 키/URL/원문/차량번호·사용자 DB 좌표 출력·저장 없음. 구현/공개API/계산/보관 정책 변경 없음·이번 신규 테스트/전체 회귀 재실행 없음(직전306개 통과 유지). 매핑·조회 연결로 F07-01b 범위를 명확히 하고 원천 최신성을 별도 TODO로 분리하는 안은 제안이며, 사용자는 최신성의 중요성을 질문했으나 분리 승인하지 않았다. 기존 F07-01b/F07-01 완료조건을 유지해 미체크로 둔다.
+
+실행: backend/.venv/Scripts/python.exe backend/check_arrival_connection.py --max-requests 8. 이번 수정은 검증 결과/구현 상태 기록으로 기존 codex/boarding-stop-sequence 기능 브랜치에 이어 기록했다. 최신 Notion v0.70·TODO/공공계획·provider/service/검증CLI를 확인하고 결과를 v0.71과 로컬 미러/arrivals_api.md/provider_plan.md/public_arrivals_plan.md/todo.md/feature_breakdown.md에 동기화했다. 계약 변경 없음/전체 완료조건 해제 없음. 결과 저장 재조회와 로컬 미러 전체 일치 확인 후 커밋·푸시한다. MR/병합은 사용자만 수행한다.
+
+배운 개념: 최신성은 서버의 수신 성공과 별개의 성질이다. 공식 요청시각 필드를 데이터 생성시각으로 대체하면 원천 지연을 숨긴다. live connection_verified는 매핑/조회·캐시·보관 검증의 성공이며 최신 예측 확보/출발 안내 완료의 증명이 아니다. 생성시각 또는 믿을 수 있는 공급자 갱신 지연 근거가 필요하다.
