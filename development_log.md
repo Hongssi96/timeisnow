@@ -1032,3 +1032,163 @@ F07-01 최신 도착 후보를 진행하기 위해todo.md·최신 Notion v0.57·
 요청시각/수신시각과원천생성시각은다르다. 정상HTTP/예측초존재만으로최신정보와경로방향이검증됐다고할수없다. 방향/순번매핑은클라이언트의확인플래그나장소이름으로대체할수없으며,알수없는원천정보를그대로차단해야출발시각을만들어내지않는다.
 
 F07-01a만완료다. F07-01전체는실제경로의공공ID/방향운영매핑·생성시각/시간대·실조회연결이없어미완료로유지한다. 경기어댑터만준비했으며서울버스/지하철운영연결·실시간화면·출발/환승/목표도착계산은후속이다. 다음F07-01b에서운영매핑과신뢰가능한원천시간을검증해야한다. 이번작업은준비코드/조회계약으로보고하며실제최신도착연결완료로보고하지않는다.
+
+
+## 2026-10-13 — F07-01b 방향 진단 준비/실조회 승인 대기
+
+목표: 첫 버스의 공공 노선/정류소/순번뿐 아니라 회차·종착 방향을 대조한다. 최신main c4794a6(F07-01a 병합)에서 codex/first-boarding-mapping을 생성했다. 시작 시 TODO·arrivals_api.md·public_arrivals_plan.md·최신 Notion v0.58 및 journeys/service.py/provider.py·기존 진단 코드를 읽었다. 기존 경로 정규화는 원문 좌표를 검증 후 버리고 공공 ID/방향을 null로 두고 있어 공개 GET은 계속 mapping_required다.
+
+변경 파일: backend/route_mapping_probe.py에 방향 가설/도착 ID 대조, backend/check_gyeonggi_mapping.py에 유일 후보 노선 상세 조회와 방향/원천시각 미확인 요약을 추가했다. backend/tests/test_route_mapping_probe.py에 신규7개를 작성했다. arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md·api_contract.md에 승인할 구체적 실행과 미완료 상태를 기록했다. 앱 API/계산/저장 계약·DDL·프론트·AI는 변경하지 않았다. Notion v0.59에는 구현 상태와 승인 대기를 기록하고 저장 내용을 다시 읽었다.
+
+실제 검증: 매핑 합성14개(기존7+신규7) 전부 통과0.001초. 도착 합성/격리DB17개 전부 통과5.054초. 왕복 양방향·회차 통과/승차·회차점 일관성/중복·순번 누락/중복/boolean·노선/정류소/종점 ID 충돌·순환/누락·정확한 유일 도착행을 검사했다. 전체 백엔드/프론트/시각 검증은 이번 변경 범위 밖이라 재실행하지 않았다.
+
+실조회 포함 명령은 자동 승인 검토에서 실행 전에 거부됐다. 이유는 키/좌표를 외부 API로 전송하는 구체적 요청의 재승인 부재다. 거부를 우회하거나 실조회 성공으로 기록하지 않았다. 이후 별도 명령으로 외부 호출 없는 파일 작성과 테스트만 수행했다. 실제 공급자 호출·개인 키 전송은 이번 작업에서0회다. 요청 초안은 공개 판교역→성남시청 WGS84로 카카오1회+경기 최대9회, 총최대10회 HTTPS이며 사용자 저장 장소는 읽지 않는다. 키 전송·응답 제한·비노출 항목은 public_arrivals_plan.md에 상세 기록했다.
+
+배운 개념: 정차 순서 유일성과 운행 방향은 별도 근거다. 회차점을 넘는 구간이나 회차점 승차는 단순 왕복 가설로 확인할 수 없고, 순환/지선/좌표 허용오차 정책도 별도로 검증해야 한다. 공식 routeDestId는 진행방향 마지막 정류소이며 queryTime은 원천 생성시각이 아니다. 진단이 성공해도 운영 전체 매핑/최신성 완료를 뜻하지 않는다.
+
+남은 작업: F07-01b/F07-01 전체 미체크. 공개 실조회 사용자 승인 후 방향 후보 대조, 신뢰할 생성시각/공급자와 운영 매핑 정책을 확정한 뒤 코드 연결이 필요하다. Notion:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa. 기존 F07-01a의 조회/계산 차단 계약과 클라이언트 호환성은 유지한다.
+
+
+## 2026-10-13 — F07-01b 사용자 승인 후 공개 실조회
+
+사용자 “해”는 직전 제시한 공개 판교역→성남시청 좌표/저장 키/카카오·경기 공식 HTTPS 최대10회 조회에 대한 명시 승인이다. 기존 codex/first-boarding-mapping 브랜치에서 backend/check_gyeonggi_mapping.py를1회 실행했다. 신규 기능 브랜치를 만들거나 범위를 확장하지 않았다. 승인 검토를 통과하고 명령은 종료코드1로 끝났다.
+
+실제 출력: route_disambiguation_required, candidate_count=12. 코드상 카카오 경로1회·경기 노선 검색1회 후 후보 개수 검사에서 중단되므로 총2회다. 노선 정차 목록/상세/도착정보 호출은0회. 동명 후보12개가 최대6개 대조 한도를 넘었다. 현재 첫 직행 후보가 과거76번/5개 사례와 같은 노선인지 확인하지 않았으며 이름이나 원문을 추가 출력하지 않았다. 과거 사례를 현재 방향 성공 근거로 대체하지 않는다. 키/원문/차량번호 비노출, 실제 사용자 저장 장소·좌표 읽기 없음.
+
+변경 파일은 api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md·development_log.md의 결과/진행 상태 기록뿐이다. 최신 Notion v0.59를 다시 읽어 v0.60에 승인 해소/실제2회/12개 한도 초과와 방향·도착 미조회를 기록하고 저장 내용을 다시 읽었다. API/계산/저장 계약·코드·DDL·프론트 변경 없음. 이번에 합성 테스트를 재실행하지 않았으며 직전31개 통과를 신규 결과로 표시하지 않는다.
+
+배운 개념: 첫 카카오 후보와 공공 동명 노선 개수는 매 실행 달라질 수 있다. 조회 성공과 유일 경로 매핑 성공은 다르며, 전체 후보를 대조하지 않고 일부만 골라 유일하다고 인증하면 안 된다. 무조건 호출 상한을 늘리는 대신 정류소/지역 등 검증된 기반정보로 후보를 좁혀야 한다.
+
+현재 F07-01b/F07-01 전체 미완료. 승인 부족은 해결됐으나 이번 실행은 후보 초과로 중단되어 방향/실제 도착 연결을 검증하지 못했다. 다음은 근거 있는 후보 축소 전략과 호출 예산 설계, 이어서 원천 시각/공급자·운영 정책 검증이다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+
+## 2026-10-13 — F07-01b 정류소 기반 후보 축소
+
+목표: 동명 노선12개를 일부만 골라 조회하지 않고, 승차 정류소 기반정보로 후보를 좁힌다. 시작 시 TODO·AGENTS·최신 Notion v0.60·arrivals_api.md/public_arrivals_plan.md·planning/logging 관련 정책과 기존 진단/기반정보 도구를 확인했다. git fetch 후 main c4794a6이 유지됐고 동일 미완료 F07-01b의 codex/first-boarding-mapping 브랜치에서 계속했다. 공식 경기 정류소 검색/경유노선 매뉴얼을 웹으로 읽어 순번/진행방향 마지막 정류소 필드를 확인했다.
+
+구현: backend/route_mapping_probe.py의 boarding_candidates/station_route_scopes/scoped_matches는 이름+진단 좌표로 근처 정류소 전체를 최대2개 유지하고 경유 노선 ID/순번/방향을 전체 정차 목록과 대조한다. 중복 ID 좌표 충돌·같은 방문의 종착 충돌·결측/boolean/범위 초과를 거부하고 반복 방문은 별도 순번으로 구분한다. 가장 가까운 후보만 선택하지 않는다. backend/check_gyeonggi_mapping.py는 전역 노선 검색을 제거하고 요청 예산1~10회 옵션·실제 요청 횟수·모든 후보 대조/후속2회 예약·결과4 무결과·권한 실패 무우회와 응답 목록 형태 제한을 추가했다. 방향 진단은 고정된 안전한 실패 사유를 제공한다. API/계산/DB/프론트/AI 변경 없음.
+
+실제 검증: backend/tests/test_station_first_mapping.py14개0.007초, 기존/확장 test_route_mapping_probe.py15개0.002초 전부 통과. 근처 동명 양방향 보존/멀리 있는 이름 제외·결측/중복좌표·정류소 한도·경유노선 이름 정확일치·반복방문/충돌·유일한 station/route/order 매칭·최대10회/남은8회·예산초과 전체 무호출·권한403/무결과4 무우회·키/원문 비노출·실패 사유 보존을 확인했다. 전체 백엔드/프론트는 실행하지 않았다.
+
+실조회 승인 검토: 기본 최대10회 명령은 기존2회 이후 새10회 요청의 구체적 재승인이 없다는 이유로 실행 전에 거부됐다. 명령은 실행되지 않아 호출0회다. 위험을 해소하는 대안으로 --max-requests 8과 합성 검증을 추가하여 최초 승인 누적10회를 넘지 않도록 제한했다. 해당8회 제한 명령은 승인 검토를 통과했다. 공개 판교역→성남시청·동일 고정 공식 HTTPS/키만 사용했고 개인 저장 장소/원문/키/차량번호를 출력·저장하지 않았다.
+
+실제 출력: mapping_status=candidate_unique, candidate_route_count=1, boarding_station_count=2, matched_pair_count=1, start_distance_meters=4.29, end_distance_meters=12.85, board_order=12, alight_order=23, direction_status=direction_unresolved, arrival_rows=1, arrival_identity_matches=true, arrival_direction_matches=false, query_time_present=true, verified_generation_time_available=false, valid_for_guidance=false, request_count=7. 종료코드1. 카카오1/정류소검색1/경유노선2/정차목록1/상세1/도착1=7회, 기존2회 포함누적9회다. 정류소 기반 후보 축소/도착 ID 일치는 확인했으나 방향/원천 최신성을 인증하지 않는다. 이후 direction_reason 보완만 합성 검증했고 실조회 재실행은 하지 않아 이번 실패의 상세 원인은 아직 미확인이다.
+
+문서: api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md에 정책/호출예산/실결과·준비와 운영 연결 구분을 기록했다. Notion v0.61 갱신 후 다시 읽어 저장을 확인했다. 앱 API/계산/저장 계약·클라이언트 호환성 영향 없음, 구현/진단 상태만 갱신했다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 전국의 동명 노선 이름 대신 정류소 경유노선과 실제 방문 순번으로 검색 범위를 좁힐 수 있다. 좌표와 순서 유일성이 확인돼도 단순 왕복 회차 가설과 원천 최신성은 별도로 검증해야 한다. 예산 제한은 실패 호출과 이전 호출을 포함해 관리하고 일부 후보만 대조한 결과를 유일하다고 표시하지 않는다.
+
+남은 문제: F07-01b/F07-01 전체 미완료 유지. 다음은 실제 방향 실패 상세 원인/노선 형태, 신뢰할 생성시각/공급자와 운영 정책 확인이다. 승인 누적9회로1회만 남았고 전체 진단 재실행은 예산 부족이다. 운영 매핑/저장/공개GET/실시간 화면·출발 계산은 이번에 추가하지 않았다.
+
+
+## 2026-10-13 — F07-01b 방향 실패 사유 실확인
+
+사용자 ㄱㄱ는 직전 제시한 동일 공개 경로/키/공식 HTTPS 추가 최대8회 조회의 명시 승인이다. codex/first-boarding-mapping에서 backend/check_gyeonggi_mapping.py --max-requests 8을1회 실행해 승인 검토를 통과했다. 카카오1/정류소검색1/경유노선2/정차목록1/상세1/도착1=7회 수행했다. 새 코드/기능은 추가하지 않아 기존 동일 기능 브랜치를 유지했다.
+
+실제 결과: candidate_unique·노선1개·정류소2개·매칭1개·승차12/하차23·양끝 거리4.29m/12.85m·도착1행 ID/순번 일치. direction_reason=SIMPLE_RETURN_ENDPOINT_UNCONFIRMED·direction_unresolved·arrival_direction_matches=false·query_time_present=true·verified_generation_time_available=false·valid_for_guidance=false·request_count=7·종료1이다. 원문/키/차량번호를 저장·출력하거나 사용자 저장 장소/좌표를 읽지 않았다.
+
+코드를 읽어 해당 실패 사유가 startStationId=endStationId 또는 첫/마지막 정차 stationId의 기점 ID 불일치 묶음 조건임을 확인했다. 어떤 개별 조건이 실패했는지는 출력되지 않아 미확인이다. 실제 운행 방향 오류/반대편 정류소라고 단정하지 않는다. 이번7회+이전9회=누적16회, 승인10+추가8=18회 중2회 잔여다.
+
+최신 Notion v0.61·TODO를 읽고 명세 v0.62와 api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md에 실결과/남은 범위를 기록했다. Notion을 다시 읽어 저장 확인했다. API/계산/저장 계약·코드·DDL·프론트/AI 영향 없음, 테스트도 재실행하지 않았다. 새 테스트 통과로 보고하지 않는다.
+
+배운 개념: 진단 코드의 단순 왕복 가정 실패는 원천 데이터나 실제 운행 방향 오류의 증명이 아니다. 그룹화한 오류 사유를 구체적 필드/전제 검사와 분리해야 다음 조사를 정확히 좁힐 수 있다. 다음은 단순 왕복 전제와 실제 양방향 종점 구조를 분리하고 공식 경유노선 방향을 대조하는 작업이다. F07-01b/F07-01 전체 미완료·원천 최신성/운영 연결도 미완료다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+
+## 2026-10-13 — F07-01b 왕복 전제 분리
+
+목표: 실제 SIMPLE_RETURN_ENDPOINT_UNCONFIRMED 사유와 단순 왕복 가정을 분리하고 공식 경유노선 방향을 실제 끝 정류소와 대조한다. 최신 Notion v0.62/TODO/route_mapping_probe.py·기존 테스트를 읽고 경기 공식 정류소 경유노선/노선 정차 목록 매뉴얼을 웹으로 다시 확인했다. git fetch 후 동일 미완료 기능 codex/first-boarding-mapping에서 계속했다.
+
+변경: backend/route_mapping_probe.py direction_candidate의 선택적 scoped_direction은 공식 경유노선으로 좁힌 station/route/방문순번을 재확인하고 routeDestId와 해당 방향의 실제 마지막 정류소 ID를 대조한다. 기존 scope 없는 단순 왕복 가설은 유지한다. 실제 회차점 ID/노선 상세 routeId·연속 순번/회차 일관성·승하차/방향 경계 검증은 유지하고, 왕복 마지막 물리 정류소 ID를 canonical 기점과 강제로 같게 두지 않는다. canonical 종점의 물리 별칭도 방향 근거로 대체하지 않는다. 순환/회차 통과/회차점 승차·scope 충돌은 계속 차단한다. backend/check_gyeonggi_mapping.py는 해당 scope를 연결하고 고정 direction_basis/boolean return_endpoint_matches_start를 출력한다. 공개 API/운영 매핑/저장에는 연결하지 않는다.
+
+실제 검증: backend/tests/test_route_mapping_probe.py21개0.003초, test_station_first_mapping.py15개0.009초 총36개 통과. 신규7개는 다른 왕복 끝 ID·canonical 종점 별칭·종착/방문 scope 충돌·회차 통과/승차·결측/boolean/순환·CLI 방향 대조와 guidance/production false 유지다. 이전 합성 회귀 포함 통과, 전체 백엔드/프론트는 재실행하지 않았다. 수정 후 외부 키 실조회0회이며 이전 실제 실패가 해결됐다고 보고하지 않는다.
+
+문서: 최신 명세 v0.63·api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md를 갱신하고 Notion 저장을 다시 읽었다. API/계산/저장 계약·DDL·프론트/AI·클라이언트 호환성 변경 없음. 진단/검증 구현 상태와 남은 실제 대조만 기록했다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 왕복 양방향의 물리 정류소 ID는 같다고 가정할 수 없다. 공식 정류소 방문 방향 ID와 실제 정차 목록의 해당 방향 끝 정류소를 비교해야 하며 이름/노선 전체 종점을 대신 쓰면 안 된다. 합성 검증 통과와 실제 공급자 사례 해결은 별도다.
+
+남은 작업: 누적16회/승인18회로2회 잔여, 전체 진단 재실행에는 부족하다. 동일 공개 경로/키/공식 HTTPS --max-requests 8로 추가 최대8회 검증 초안을 문서에 준비했다. 실제 방향/원천 시각·운영 매핑/출발 연결은 미완료라 F07-01b/F07-01 체크하지 않는다. 다음은 수정 진단의 실제 방향 대조다.
+
+
+## 2026-10-13 — F07-01b 공개 방향 진단 성공
+
+사용자 진행해는 직전 동일 공개 경로/키/공식 HTTPS 추가 최대8회 조회의 명시 승인이다. codex/first-boarding-mapping에서 backend/check_gyeonggi_mapping.py --max-requests 8을 실행해 승인 검토를 통과했다. 카카오1/정류소검색1/경유노선2/정차목록1/상세1/도착1=7회, 종료코드0이었다. 새 코드/기능은 추가하지 않아 동일 기능 브랜치를 유지했다.
+
+실제 출력: candidate_unique·노선1개·정류소2개·매칭1개·승차12/하차23·거리4.29m/12.85m·도착1행. arrival_identity_matches=true, arrival_direction_matches=true, direction_status=direction_candidate, direction_reason=null, direction_basis=station_route_scope, return_endpoint_matches_start=false다. 왕복 끝 정류소 ID가 canonical 기점과 다름을 확인했으며 이전 단순 왕복 가정의 이 사례 차단이 수정 진단으로 해소됐다. 물리적 반대편 여부나 모든 노선 형태 지원을 단정하지 않는다.
+
+query_time_present=true이지만 verified_generation_time_available=false·valid_for_guidance=false·production_mapping_validated=false를 유지한다. 경기 queryTime을 생성시각으로 대체하지 않는다. 이번7회+이전16회=누적23회, 승인10+8+8=26회 중3회 잔여다. 사용자 저장 장소/좌표 읽기·키/원문/차량번호 저장/출력 없음.
+
+최신 Notion v0.63·TODO/arrivals_api.md의 남은 범위를 대조하고 v0.64와 api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md를 갱신했다. Notion을 다시 읽어 저장 확인했다. API/계산/저장 계약·코드/DDL·프론트/AI·클라이언트 호환성 변경 없음. 테스트는 재실행하지 않았고 기존36개 결과를 신규 실행으로 보고하지 않는다.
+
+배운 개념: 실제 정류소 방문 순번·공식 진행 방향 ID·해당 방향의 마지막 정류소를 함께 대조하면 canonical 노선 기점 ID의 왕복 동일성 가정을 제거할 수 있다. 한 사례의 방향 일치와 운영 전체 매핑/교통 정보 최신성은 별도 완료 조건이다.
+
+F07-01b/F07-01 전체 미완료.100m 운영 허용오차·자동 매핑 저장/공개GET 호출 연결·원천 생성시각 확보가 남았다. 다음은 운영 매핑 정책/조회 연결 설계와 신뢰할 원천 시각 확보다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+
+## 2026-10-13 — F07-01b 경기 운영 매핑/본인 조회 연결
+
+목표: 검증된 경로 근거를 실제 조회 API와 연결하며 경기 원천 생성시각 unknown은 출발 계산에 쓰지 않는다. 시작 시 TODO·최신 Notion v0.64·journeys/provider/service/repository 및 arrivals/provider/service/dto·연결 테스트를 확인했다. git fetch 후 main c4794a6 유지, 동일 F07-01b codex/first-boarding-mapping에서 계속했다. 사전 Notion v0.65에30m/연속 정차/공식 방향·메모리 수명/용량·GET 호출/오류/60초 재사용/갱신 제한과 이전 호환성 영향을 기록한 후 구현했다.
+
+변경 파일: backend/app/arrivals/matching.py는 기존 진단 매칭을 공유 모듈로 옮기고 require_contiguous를 추가했다. backend/route_mapping_probe.py는 기존 진단 호환 import를 유지한다. cache.py는 본인/검색/후보/fingerprint·공개 버스 이름/양끝 점을 최근32검색/20후보·검색 기한으로 묶는다. 입력GPS/도보geometry·원문/키는 저장하지 않는다. 만료는 사용을 차단하고 다음 접근에 메모리를 정리한다. 재시작/다중프로세스/퇴출은 미매핑 복구다.
+
+mapping.py는 고정 경기 HTTPS·3초/1MiB·매핑5초 예산·중복JSON/비정상상수/전송 오류/무결과4 구분과 정류소≤2/노선≤2·30m·전체 연속 이름/순번·공식 방향/회차/실제 끝 정류소를 검증한다. 총최대6회 매핑+1회 도착이다. journeys/provider.py는 선택적으로 첫BUS/단일차량의 최소 공개 근거를 추출하고 최종20후보만 남긴다. journeys/service.py는 DB 경로 저장 성공 후 메모리 근거를 게시한다. 실패/만료/검색 탈락이면 게시하지 않는다.
+
+arrivals/service.py는 본인GET을 cache/자동매핑/기존 엄격 도착 어댑터와 연결했다. 동시 동일 후보는lock429/Retry-After2, 실제 갱신10회/분 HMAC 버킷·60초 수신 재사용·TTL/수신 시각 무연장·기한 단축을 적용한다. 매핑/도착/캐시 전후 회원/본인/장소·검색/후보 fingerprint/매핑 기한을 재검사하고 매핑 중 후보 변화는 도착 호출 전에409로 차단한다. 공개정류소ID/검증플래그를 받지 않고 생성시각unknown이면 ETA null/guidancefalse다. API 필드/CSRF/no-store·DB 경로/루틴 저장은 유지, 새DDL/프론트/AI/출발 계산 없음.
+
+테스트: backend/tests/test_arrival_mapping_connection.py 신규16개9.167초 전부 통과. 첫 실행은 mock 원함수 참조/URL 문자열 타입/계정 중복 테스트 도우미 오류였고 수정했다. 스냅샷 테스트의 total_seconds만 변경하면 공통 모델 검증에서502가 나오는 것을 확인해 유효한 missing_segments 변화로 교체했다. 이후 호출 중 스냅샷 변화/검색 기한 단축 검사와30m 초과100m 이내·정류소 중간 누락을 엄밀하게 보강했다. 기존 도착17개/정류소15개도 통과. 중간 전체281개/282개 통과 후 최종 전체283개119.790초 전부 통과했다. 최종은 실제 격리 PostgreSQL/ASGI·합성 공급자이며 새로운 실제 키 조회0회다. 캐시 재시작/용량/소유권/fingerprint·스냅샷/장소/검색 만료·연속 정차/좌표/방향 충돌·전송/JSON/크기/누락 키/시간초과·쿼터/병렬·TTL/수신 무연장·응답/DB 경로 비변경·원문 비노출을 확인했다.
+
+실행: 최종 코드로 기존 프로젝트 백엔드만 확인 후 재시작, launcher29912·health200·프론트200·비인증 first-arrivals401 확인. DB head0011_walking_recalculation·회원20/장소35/루틴12/ai_executions0/walking_paths0을 적용 전후 확인했다. 마이그레이션 없음. AST service/router/provider 영역 SQL 직접 실행0건·git diff --check 확인. 프론트 변경이 없어 시각 검증/프론트 테스트는 수행하지 않았다.
+
+문서: API 목록/5.9 공통 조회와 구현 상태·오류/캐시/메모리/계산 차단·이전 API 호환성을 Notion v0.65에 맞췄다. api_contract.md·arrivals_api.md·planning.md·provider_plan.md·public_arrivals_plan.md·logging.md·README.md·todo.md·feature_breakdown.md를 동기화하고 Notion 저장을 다시 읽었다. 응답 필드/입력은 유지하지만 근거가 있는 새 검색의 GET은 공급자를 조회할 수 있어 이전 항상미매핑 동작은 변경됐다. 생성시각unknown으로 최신 도착/출발 안내 완료라고 표시하지 않는다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 좌표를 DB에 영구 저장하지 않아도 검증한 최소 공개 교통 근거를 검색 수명에 묶어 매핑할 수 있다. 재시작/다중프로세스에서 메모리 근거가 없어지면 새 검색을 요구하는 제약이 있다. 수신 결과 재사용은 최초 수신/검색 기한을 연장하면 안 되고, 긴 매핑 조회 전후의 후보/장소 변화도 확인해야 한다.
+
+남은 문제: F07-01b/F07-01 전체 미완료. 원천 생성시각/최신성·새30m/연속 정책과GET의 실제 키 통합검증·지원 범위 확대가 남았다. 이번 실제 키 사용0회, 기존 공개 진단 예산 누적23회/승인26회·3회 잔여다. 이전 공개 진단을 신규 정책/GET 실검증으로 대체하지 않는다. 다음은 신뢰할 원천 시각/공급자 확인과 새 운영 연결 실검증이다.
+
+
+## 2026-10-13 — F07-01b 실제 키 통합검증 준비/원천 제약 확인
+
+목표: 구현된 실제 경로 검색/자동 매핑/본인GET을 실제 키로 검증할 구체적 도구를 만들고 신뢰할 생성시각 공급자 근거를 확인한다. 시작 시 TODO·최신 Notion v0.65·check_public_arrivals.py·운영 mapping.py를 읽었다. 같은 미완료 F07-01b codex/first-boarding-mapping에서 계속했다.
+
+변경 파일: backend/check_arrival_connection.py, backend/tests/test_connected_arrival_probe.py. 도구는 고정 공개 판교역→성남시청 입력·기존 격리DB/ASGI 인증 도우미로 임시 auth_test UUID 스키마에 합성 회원/경로를 만들고 실제 자동 매핑/본인GET·재조회/DB 무변경을 검증한다. 실제회원/장소/루틴을 변경하지 않으며 종료/실패 시 메모리/임시 스키마를 정리한다. 호출 예산1~10회·최대10회는 카카오 지역2/경로1+경기 매핑최대6/도착1, 실패 시도 포함이고 고정2호스트HTTPS만 허용한다. 원문/키/좌표/공공ID/차량번호/쿠키/예외 메시지는 출력하지 않는다. 운영 runtime/API/계산/저장 변경 없음.
+
+검증: 처음 독립 테스트는 backend 모듈 경로가 없어 import 실패했고 경로를 명시해 수정했다. 초기4개0.001초 통과 후 전체 격리 흐름/정리·실패횟수/비노출까지 최종6개1.793초 전부 통과했다. 실제 PostgreSQL/ASGI·합성 공급자·외부 요청 강제 차단으로 원문 비노출/예산/대상/직행 선택/고정 입력·재조회 무호출/동일근거·검색 무변경·임시스키마 정리/기존 회원 개수 보존을 확인했다. 이번 전체283개를 재실행하지 않았으며 기존 결과와 구분한다. 실제 키 통합 실행0회/개인 키 전송0회다. 기존 공개 카카오/경기 예산은23/26회·3회 잔여라 전체실행 부족, 추가 최대10회 승인할 구체적 명령/목적을 public_arrivals_plan.md에 기록했다.
+
+원천 연구: 경기 공식 항목 매뉴얼을 웹으로 다시 읽어 queryTime=정보요청시간과 행별 생성시각 계약 부재를 확인했다. 서울 지하철 공식 openApiView는 recptnDt=열차도착정보 생성시각/barvlDt=초 단위로 명시한다. 웹도구 HTTPS sample URL은 접근 불가로 나왔지만 로컬 연결 상태로 단정하지 않았다. 로컬 환경에서 공식 swopenapi.seoul.go.kr의 키/역명 없는 HTTPS HEAD1회·3초 timeout을 확인했다. 이 별도 무자격정보 전송 진단은 기존 개인키 카카오/경기 예산과 구분하며 서울키/HTTP 전송은0회다. 키 인증 오류나 모든 HTTPS 미지원으로 단정하지 않는다. 서울 역/노선/방향/시간대·지원범위·운영 전송 정책은 미확인이고 자동 공급자 대체/HTTP 전환을 하지 않았다.
+
+문서: Notion v0.66·api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md에 도구/검증/승인 대기·원천 제약·공식 링크를 갱신하고 Notion 저장을 다시 읽었다. API/계산/저장 계약·클라이언트 호환성 변경 없음, 개발 서버/프론트/DDL 변경 없음. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: provider 단일 진단 성공과 실제 서버의 인증/검색/캐시/도착 흐름 통합 성공은 다르다. 실제 키 검증도 임시 스키마와 공개 입력으로 기존 개인 데이터와 분리할 수 있다. 생성시각 없는 응답은 정상 연결만으로 최신성을 확보할 수 없고, 다른 공급자의 생성시각 필드가 있어도 전송/시간대/방향을 검증해야 한다.
+
+남은 작업: F07-01b/F07-01 미완료. 추가 조회 예산 승인 후 실제 연결 실행, 경기 원천 생성시각 제약을 해소할 공급자/전송 정책 확인이 필요하다. 도구 준비/합성 검증을 실제키 통합 성공으로 표시하지 않는다.
+
+
+## 2026-10-13 — F07-01b 실제 키 연결 미매핑/중단 단계 확인
+
+사용자 응은 직전 공개 판교역→성남시청·동일 저장 키/공식 HTTPS 추가 최대10회·임시DB 통합검증의 명시 승인이다. check_arrival_connection.py --max-requests 10을 실행해 실제6회·종료1이었다. HTTP200 mapping_required/unknown·후보0·generated_at_present=false/predicted_arrival_available=false/valid_for_guidance=false, second_get_no_upstream/second_get_same_evidence/stored_search_unchanged=true였다. 연결 성공이라고 기록하지 않았다.
+
+현재 TODO·최신 Notion v0.66·mapping.py/CLI의 중단 조건을 대조하고 backend/app/arrivals/mapping.py에 선택적diagnostics를 추가했다. 고정 stage/reason와station/route/matched count만 수집하고 공개API/로그에 키/공공ID/좌표/원문을 노출하지 않는다. backend/check_arrival_connection.py는 임시DB에서만 trace를 연결한다. backend/tests/test_arrival_mapping_connection.py에 무노선/성공 trace의 안전한 키/사유·개수 검증을 추가했다. 관련17개9.095초·CLI6개1.629초 전부 통과, 전체회귀는 이번 재실행하지 않았다. 공개GET 정책/응답·계산/저장·프론트/AI 변경 없음.
+
+당시 총승인36회=기존26+추가10, 실제누적29회=기존23+첫6회로7회 잔여였다. 이를 코드상 --max-requests 7로 강제해 승인 검토 통과 후 재검증했다. 실제6회/종료1: mapping_diagnostics stage=route_stations/reason=ROUTE_SEQUENCE_UNCONFIRMED/station_count=1/route_count=1/matched_count=0, HTTP200 mapping_required/unknown·후보0/생성·예측시각 없음/guidancefalse였다. 재조회 무호출/동일근거·검색무변경true 재확인. 누적35/승인36회로1회 잔여다. 생성시각에 도달하지 못한 도착 응답을 검증했다고 주장하지 않는다.
+
+복합 매칭은 모든 정차 이름의 연속 순서·양끝30m·공식 방문scope를 함께 대조한다. 개별 실패 원인/실제 정류소 오류/경로 변경 여부는 이번 출력으로 단정할 수 없다. 매핑 정책을 낮추거나 미대조 후보를 선택하지 않았다. 임시스키마/프로세스 메모리는 두 실행이 정리 성공 후 반환했다. 실제DB head0011·회원20/장소35/루틴12·산정0을 확인했다. auth_test 패턴 스키마 총75개가 존재하는 것도 확인했다; 직전 격리 도구 테스트는 기존/종료후 스키마 개수 동일을 검증했으나 이75개의 생성 이력/원인은 이번 조사하지 않았고 무관한 기존 스키마를 삭제하지 않았다. 현재 도구의 임시 스키마 정리 성공과 전체 인스턴스에 임시 스키마가 없음을 혼동하지 않는다.
+
+Notion v0.67 및 api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md에 실제 실패/단계/개수·검증/예산을 갱신하고 저장을 다시 읽었다. API/계산/저장 계약·호환성 변경 없음. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 실제 카카오 후보 정렬/내용과 공식 정차 목록은 진단의 한 사례와 다를 수 있다. HTTP200 미매핑과 캐시 재사용 성공이 최신 도착 연결 성공을 뜻하지 않는다. 부족한 근거는 차단하고 내부 단계/개수를 통해 원인을 좁혀야 한다.
+
+F07-01b/F07-01 전체 미완료. 다음은 정차/좌표/방문scope 중단의 개별 근거 확인과 신뢰할 원천 생성시각/공급자 확보다. 이번 실제키 통합검증은 실패(도착 미조회)로 보고하며 완료 체크하지 않는다.
+
+
+## 2026-10-13 — F07-01b 매칭 불일치 원인 분리
+
+목표: ROUTE_SEQUENCE_UNCONFIRMED 복합 검사를 이름/정차 순서/연속성/공식 방문scope/좌표/데이터로 나눈다. 시작 시 TODO·최신 Notion v0.67·mapping.py/matching.py를 읽었다. 같은 미완료 F07-01b codex/first-boarding-mapping에서 계속했다.
+
+변경 파일: backend/app/arrivals/matching.py diagnose_match는 값 대신 고정 사유/개수만 반환한다. 순번 데이터·승하차 이름쌍·중간이름 순서/전체연속이름·공식 방문scope·좌표 결측/30m 초과·정류소ID 결측/통과쌍을 구분한다. 정류소200개/노선당500행 초과는 상세진단만 생략한다. mapping.py는 미매칭 실패이고 명시적diagnostics가 있을 때만 추가한다. 공개GET/매핑 수용결과/캐시/시간/저장 정책은 그대로며 추가 공급자 호출0회다. 원문/키/정류소 이름/좌표/공공ID를 반환하지 않는다.
+
+검증: test_match_diagnostics.py 초기 독립 실행은 backend 경로 누락으로 import 실패했고 명시적 sys.path로 수정했다. 신규7개1.382초 통과 후 빈 정차 목록도 순번 데이터 부족으로 분리해7개1.273초 재확인했다. 기존연결17개9.280초·검증도구6개1.634초와 합계30개 전부 통과. 이름·중간 순서·비연속·방문scope의 노선/정류소/순번 충돌·좌표30m/결측·빈/중복순번·안전한 원인/개수/크기 제한·내부 진단에만 실행됨을 확인했다. 전체 회귀는 재실행하지 않았다. 이번 실제 키 호출0회로 실제 개별 원인이 확인됐다고 기록하지 않는다.
+
+문서: Notion v0.68·api_contract.md·arrivals_api.md·provider_plan.md·public_arrivals_plan.md·todo.md·feature_breakdown.md에 진단/검증과 실제 재검증 대기를 동기화하고 저장을 다시 읽었다. 공개API/계산/저장 계약·프론트/DDL/AI/호환성 변경 없음. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 복합 매칭 실패는 한 가지 원인의 증명이 아니다. 정차 순서/연속성·공식 방문·좌표를 독립적인 개수로 분리해야 기준 완화 없이 원인을 좁힐 수 있다. 진단 코드 자체의 통과와 실제 실패 원인의 확인은 다르다.
+
+남은 작업: 누적35/승인36회로1회 잔여, 전체실진단에 부족하다. 같은 공개 경로/저장키/공식HTTPS·임시DB check_arrival_connection.py --max-requests 8로 추가최대8회 승인할 구체적 실행을 준비했다. 실제 개별 불일치/도착 연결·원천 최신성은 미완료로 F07-01b/F07-01 체크하지 않는다.

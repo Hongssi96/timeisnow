@@ -95,7 +95,12 @@ class ParserTests(unittest.TestCase):
 
 
 class ArrivalApiTests(unittest.IsolatedAsyncioTestCase):
-    setUp=walking.WalkingTests.setUp
+    def setUp(self):
+        walking.WalkingTests.setUp(self)
+        from app.arrivals import cache
+        cache.clear()
+        guard=patch.object(service.public_mapping,'resolve',return_value=None)
+        guard.start();self.addCleanup(guard.stop);self.addCleanup(cache.clear)
     tearDown=walking.WalkingTests.tearDown
     call=walking.WalkingTests.call
     prepare=walking.WalkingTests.prepare
