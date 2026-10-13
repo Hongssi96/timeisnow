@@ -22,9 +22,11 @@ def distance_meters(a, b):
         return None
 
 
-def match_route(stops, points, routes, max_endpoint_meters, *, require_contiguous=False):
+def match_route(stops, points, routes, max_endpoint_meters, *, require_contiguous=False, max_matches=None):
     if type(max_endpoint_meters) not in (float, int) or not math.isfinite(max_endpoint_meters) or max_endpoint_meters <= 0:
         raise ValueError("Explicit diagnostic coordinate tolerance required")
+    if max_matches is not None and (type(max_matches) is not int or max_matches < 1):
+        raise ValueError("Positive candidate limit required")
     names = [normalize_name(stop.get("name")) for stop in stops]
     if len(names) < 2 or not all(names) or not points:
         return {"status": "insufficient_data", "matches": []}
@@ -50,6 +52,8 @@ def match_route(stops, points, routes, max_endpoint_meters, *, require_contiguou
                 for observed in normalized[i:j + 1]:
                     if cursor < len(names) and observed == names[cursor]:
                         cursor += 1
+                        if cursor == len(names):
+                            break
                 if cursor != len(names):
                     continue
                 start_dist = distance_meters(points[0], (rows[i].get("x"), rows[i].get("y")))
@@ -62,6 +66,8 @@ def match_route(stops, points, routes, max_endpoint_meters, *, require_contiguou
                                 "board_order": seqs[i], "alight_station_id": str(rows[j]["stationId"]),
                                 "alight_order": seqs[j], "start_distance_meters": round(start_dist, 2),
                                 "end_distance_meters": round(end_dist, 2)})
+                if max_matches is not None and len(matches) > max_matches:
+                    return {"status": "candidate_limit", "matches": []}
     # Repeated station visits remain separate because their sequence is different.
     unique = {tuple(sorted(item.items())): item for item in matches}
     matches = list(unique.values())
@@ -216,7 +222,7 @@ def scoped_matches(result, scopes):
             'matches': matches}
 
 
-def diagnose_match(stops, points, routes, scopes, tolerance=30):
+def diagnose_match(stops, points, routes, scopes, tolerance=30, *, require_contiguous=True):
     """Counts only. Does not relax policy or return any source identity/name/coordinate."""
     if len(stops)>200 or any(len(rows)>500 for _,rows in routes):
         return {'detail_reason':'DIAGNOSTIC_SIZE_LIMIT'}
@@ -249,7 +255,7 @@ def diagnose_match(stops, points, routes, scopes, tolerance=30):
                            and scope['board_order']==seqs[i] for scope in scopes)
                 counts['scoped_ordered_name_pairs']+=int(scoped and ordered)
                 counts['scoped_contiguous_name_pairs']+=int(scoped and contiguous)
-                if not scoped or not contiguous:continue
+                if not scoped or not ordered or (require_contiguous and not contiguous):continue
                 first=distance_meters(points[0],(rows[i].get('x'),rows[i].get('y')))
                 last=distance_meters(points[-1],(rows[j].get('x'),rows[j].get('y')))
                 if first is None or last is None:counts['missing_coordinates']+=1
@@ -260,7 +266,7 @@ def diagnose_match(stops, points, routes, scopes, tolerance=30):
             'ENDPOINT_NAMES_UNMATCHED' if not counts['endpoint_name_pairs'] else
             'INTERMEDIATE_ORDER_UNMATCHED' if not counts['ordered_name_pairs'] else
             'VISIT_SCOPE_UNMATCHED' if not counts['scoped_ordered_name_pairs'] else
-            'STOPS_NOT_CONTIGUOUS' if not counts['scoped_contiguous_name_pairs'] else
+            'STOPS_NOT_CONTIGUOUS' if require_contiguous and not counts['scoped_contiguous_name_pairs'] else
             'COORDINATES_UNCONFIRMED' if counts['missing_coordinates'] and not counts['passing_pairs'] else
             'COORDINATE_LIMIT_EXCEEDED' if counts['outside_coordinate_limit'] and not counts['passing_pairs'] else
             'STATION_IDENTITY_UNCONFIRMED' if counts['missing_station_identity'] and not counts['passing_pairs'] else
