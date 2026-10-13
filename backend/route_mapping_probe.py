@@ -65,3 +65,60 @@ def match_route(stops, points, routes, max_endpoint_meters):
     matches = list(unique.values())
     return {"status": "candidate_unique" if len(matches) == 1 else "ambiguous" if matches else "no_match",
             "matches": matches}
+
+
+def direction_candidate(match, supplied_rows, route_info):
+    """Diagnostic hypothesis for simple out-and-back routes, never production approval."""
+    import re
+
+    def positive(value):
+        if type(value) not in (int, str) or not re.fullmatch(r"[1-9][0-9]{0,19}", str(value)):
+            raise ValueError()
+        return str(value)
+
+    try:
+        rid = positive(match['route_id'])
+        if positive(route_info['routeId']) != rid:
+            raise ValueError()
+        rows = sorted(supplied_rows, key=lambda row: int(positive(row['stationSeq'])))
+        seqs = [int(positive(row['stationSeq'])) for row in rows]
+        if len(rows) < 3 or seqs != list(range(1, len(rows) + 1)):
+            raise ValueError()
+        turns = {int(positive(row['turnSeq'])) for row in rows}
+        if len(turns) != 1:
+            raise ValueError()
+        turn = turns.pop()
+        if not 1 < turn < len(rows):
+            raise ValueError()
+        marked = [int(positive(row['stationSeq'])) for row in rows if row.get('turnYn') == 'Y']
+        if marked != [turn] or any(row.get('turnYn') not in ('Y', 'N') for row in rows):
+            raise ValueError()
+        start, end = positive(route_info['startStationId']), positive(route_info['endStationId'])
+        if start == end or positive(rows[0]['stationId']) != start or positive(rows[-1]['stationId']) != start:
+            raise ValueError()
+        if positive(rows[turn - 1]['stationId']) != end or positive(route_info['turnStID']) != end:
+            raise ValueError()
+        board, alight = int(positive(match['board_order'])), int(positive(match['alight_order']))
+        if not 1 <= board < alight <= len(rows):
+            raise ValueError()
+        if positive(rows[board - 1]['stationId']) != positive(match['board_station_id']):
+            raise ValueError()
+        if positive(rows[alight - 1]['stationId']) != positive(match['alight_station_id']):
+            raise ValueError()
+        if board < turn < alight or board == turn:
+            return {'status': 'turnaround_unresolved', 'route_dest_id': None}
+        destination = end if alight <= turn else start
+        return {'status': 'direction_candidate', 'route_dest_id': destination}
+    except (KeyError, ValueError, TypeError, IndexError, AttributeError):
+        return {'status': 'direction_unresolved', 'route_dest_id': None}
+
+
+def arrival_direction_matches(match, direction, rows):
+    """Only one exact identity row may corroborate the diagnostic direction."""
+    if direction.get('status') != 'direction_candidate' or len(rows) != 1:
+        return False
+    row = rows[0]
+    expected = {'stationId': match['board_station_id'], 'routeId': match['route_id'],
+                'staOrder': str(match['board_order']), 'routeDestId': direction['route_dest_id']}
+    return all(type(row.get(key)) in (int, str) and str(row[key]) == str(value)
+               for key, value in expected.items())

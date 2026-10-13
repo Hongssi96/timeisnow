@@ -7,7 +7,7 @@ import urllib.request
 
 from dotenv import dotenv_values
 from check_kakao import NoRedirect
-from route_mapping_probe import match_route, normalize_name
+from route_mapping_probe import match_route, normalize_name, direction_candidate, arrival_direction_matches
 
 
 class ProbeError(Exception):
@@ -35,12 +35,15 @@ def main():
     if not kakao_key or not public_key:
         print(json.dumps({"status": "missing_keys"}))
         return 1
+    query_time_present = [False]
     def gg(service, operation, params, field):
         query = {**params, "serviceKey": urllib.parse.unquote(public_key), "format": "json"}
         data = fetch("https://apis.data.go.kr/6410000/" + service + "/v2/" + operation + "?"
                      + urllib.parse.urlencode(query), operation).get("response", {})
         if str((data.get("msgHeader") or {}).get("resultCode")) != "0":
             raise ProbeError(operation)
+        if operation == "getBusArrivalItemv2":
+            query_time_present[0] = bool((data.get("msgHeader") or {}).get("queryTime"))
         rows = (data.get("msgBody") or {}).get(field) or []
         return [rows] if isinstance(rows, dict) else rows
     try:
@@ -78,6 +81,11 @@ def main():
             summary.update({"start_distance_meters": match["start_distance_meters"],
                             "end_distance_meters": match["end_distance_meters"],
                             "board_order": match["board_order"], "alight_order": match["alight_order"]})
+            info = gg("busrouteservice", "getBusRouteInfoItemv2",
+                      {"routeId": match["route_id"]}, "busRouteInfoItem")
+            route_rows = dict(routes)[match["route_id"]]
+            direction = direction_candidate(match, route_rows, info[0] if len(info) == 1 else {})
+            summary["direction_status"] = direction["status"]
             rows = gg("busarrivalservice", "getBusArrivalItemv2",
                       {"stationId": match["board_station_id"], "routeId": match["route_id"],
                        "staOrder": str(match["board_order"])}, "busArrivalItem")
@@ -86,8 +94,12 @@ def main():
                 str(row.get("stationId")) == match["board_station_id"]
                 and str(row.get("routeId")) == match["route_id"]
                 and str(row.get("staOrder")) == str(match["board_order"]) for row in rows)
+            summary["arrival_direction_matches"] = arrival_direction_matches(match, direction, rows)
+            summary["query_time_present"] = query_time_present[0]
+            summary["verified_generation_time_available"] = False
+            summary["valid_for_guidance"] = False
         print(json.dumps(summary))
-        return 0 if summary.get("arrival_identity_matches") else 1
+        return 0 if summary.get("arrival_identity_matches") and summary.get("arrival_direction_matches") else 1
     except ProbeError as error:
         print(json.dumps({"status": "probe_failed", "stage": error.stage, "http_status": error.code}))
     except Exception as error:

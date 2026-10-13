@@ -24,3 +24,16 @@ first_arrivals(user_id,search_id,candidate_id,verified_mapping=...)는 호출 �
 ## 남은 범위
 
 F07-01 전체 완료에는 실제 경로의 공공 정류소/노선/순번/방향 운영 매핑, 공급자 생성시각/시간대와 실조회 확인, 서울 버스/지하철 등 지원 확대가 필요하다. 현재 검색 모델의 public_id/public_direction_id는null이다. 자동 매핑·실제 공급자 호출·프론트·출발 시각/환승/목표 도착 계산은 이번 단계에서 수행하지 않았다. 다음은 F07-01b 운영 매핑과 신뢰 가능한 시간 근거 연결이다.
+
+
+## F07-01b 방향 진단 준비/실조회 승인 대기 — 2026-10-13
+
+Notion v0.59. backend/check_gyeonggi_mapping.py에 단순 왕복 노선의 회차/종착 방향 진단을 추가했다. 노선 상세 startStationId/endStationId/turnStID, 정차 목록 stationSeq/turnSeq/turnYn과 승하차 ID를 대조한다. 연속 순번·유일하고 일관된 회차점·기점 복귀가 확인된 후보만 방향 가설을 만들며 회차 경유/회차점 승차·순환/누락/충돌은 미확인으로 둔다. 도착 행의 stationId/routeId/staOrder/routeDestId가 모두 일치하는 유일 행인지 추가 검사한다. 이는 운영 정책 확정이나 자동 매핑/저장/API 연결이 아니다. 기존100m는 진단용으로 유지한다.
+
+합성 신규7개+기존 매핑7개(0.001초), 도착17개(5.054초) 통과. 전체 백엔드는 이번에 재실행하지 않았다. 실조회 포함 명령은 자동 승인 검토가 외부 키/좌표 전송 승인 부재로 거부하여 실행하지 못했다. 이후 외부 호출을 제거한 별도 명령으로 테스트만 실행했다. 과거 성공 사례를 이번 성공으로 재사용하지 않는다.
+
+승인할 실행: backend/.venv/Scripts/python.exe backend/check_gyeonggi_mapping.py. 고정 공개 판교역(127.11119217,37.39477123)→성남시청(127.12628814,37.41993056) WGS84만 dapi.kakao.com HTTPS 경로 API에1회, 저장 KAKAO_REST_API_KEY는 Authorization 헤더로 전송한다. apis.data.go.kr HTTPS 경기 서비스에는 저장 DATA_GO_KR_SERVICE_KEY를 쿼리로 전송하여 노선 검색1회·동명 노선 정차 목록 최대6회·유일 노선 상세1회·도착 항목1회, 전체 최대10회다. 리다이렉트/HTTP 전환 없음, 응답별25초/2MB 제한. 사용자 DB의 장소/좌표는 읽지 않고 키/URL/원문/차량번호는 출력·저장하지 않는다. 출력은 개수/일치 여부/진단 거리/순번/고정 상태만 제공한다.
+
+경기 queryTime은 요청시각이며 공식 도착 명세에 검증된 생성시각 근거가 없어 generated_at/최신성은 계속 미확인이다. 이번 도구도 verified_generation_time_available=false·valid_for_guidance=false를 출력한다. 실조회 승인은 운영 상시 전송이나100m 운영 매핑 정책 승인과 구분한다. F07-01/F07-01b는 미체크이며 다음은 공개 실조회 방향 대조, 신뢰할 원천 시각/공급자와 운영 정책 확정이다.
+
+공식 근거: [경유정류소](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusRouteStation), [노선 상세](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusRouteInfo), [도착 항목](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusArrival). 2026-10-13 웹 확인; routeDestId는 진행방향 마지막 정류소 ID이며 단순 이름/전체 노선 종점을 무조건 대신 넣지 않는다.
