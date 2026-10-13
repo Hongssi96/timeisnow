@@ -1079,3 +1079,16 @@ F07-01a만완료다. F07-01전체는실제경로의공공ID/방향운영매핑·
 배운 개념: 전국의 동명 노선 이름 대신 정류소 경유노선과 실제 방문 순번으로 검색 범위를 좁힐 수 있다. 좌표와 순서 유일성이 확인돼도 단순 왕복 회차 가설과 원천 최신성은 별도로 검증해야 한다. 예산 제한은 실패 호출과 이전 호출을 포함해 관리하고 일부 후보만 대조한 결과를 유일하다고 표시하지 않는다.
 
 남은 문제: F07-01b/F07-01 전체 미완료 유지. 다음은 실제 방향 실패 상세 원인/노선 형태, 신뢰할 생성시각/공급자와 운영 정책 확인이다. 승인 누적9회로1회만 남았고 전체 진단 재실행은 예산 부족이다. 운영 매핑/저장/공개GET/실시간 화면·출발 계산은 이번에 추가하지 않았다.
+
+
+## 2026-10-13 — F07-01b 방향 실패 사유 실확인
+
+사용자 ㄱㄱ는 직전 제시한 동일 공개 경로/키/공식 HTTPS 추가 최대8회 조회의 명시 승인이다. codex/first-boarding-mapping에서 backend/check_gyeonggi_mapping.py --max-requests 8을1회 실행해 승인 검토를 통과했다. 카카오1/정류소검색1/경유노선2/정차목록1/상세1/도착1=7회 수행했다. 새 코드/기능은 추가하지 않아 기존 동일 기능 브랜치를 유지했다.
+
+실제 결과: candidate_unique·노선1개·정류소2개·매칭1개·승차12/하차23·양끝 거리4.29m/12.85m·도착1행 ID/순번 일치. direction_reason=SIMPLE_RETURN_ENDPOINT_UNCONFIRMED·direction_unresolved·arrival_direction_matches=false·query_time_present=true·verified_generation_time_available=false·valid_for_guidance=false·request_count=7·종료1이다. 원문/키/차량번호를 저장·출력하거나 사용자 저장 장소/좌표를 읽지 않았다.
+
+코드를 읽어 해당 실패 사유가 startStationId=endStationId 또는 첫/마지막 정차 stationId의 기점 ID 불일치 묶음 조건임을 확인했다. 어떤 개별 조건이 실패했는지는 출력되지 않아 미확인이다. 실제 운행 방향 오류/반대편 정류소라고 단정하지 않는다. 이번7회+이전9회=누적16회, 승인10+추가8=18회 중2회 잔여다.
+
+최신 Notion v0.61·TODO를 읽고 명세 v0.62와 api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md에 실결과/남은 범위를 기록했다. Notion을 다시 읽어 저장 확인했다. API/계산/저장 계약·코드·DDL·프론트/AI 영향 없음, 테스트도 재실행하지 않았다. 새 테스트 통과로 보고하지 않는다.
+
+배운 개념: 진단 코드의 단순 왕복 가정 실패는 원천 데이터나 실제 운행 방향 오류의 증명이 아니다. 그룹화한 오류 사유를 구체적 필드/전제 검사와 분리해야 다음 조사를 정확히 좁힐 수 있다. 다음은 단순 왕복 전제와 실제 양방향 종점 구조를 분리하고 공식 경유노선 방향을 대조하는 작업이다. F07-01b/F07-01 전체 미완료·원천 최신성/운영 연결도 미완료다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.

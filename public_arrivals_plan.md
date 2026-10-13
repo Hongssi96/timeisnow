@@ -124,3 +124,12 @@ backend/check_gyeonggi_mapping.py --max-requests 8: 요청 예산은1~10회 정�
 검증: 새 정류소/경유노선·예산·권한 실패·비노출14개(0.007초), 매핑/방향15개(0.002초) 전부 통과. 전체 백엔드/프론트 검증은 재실행하지 않았다. 고정 실패 사유는 ROUTE_ID_MISMATCH/STATION_SEQUENCE_INCOMPLETE/TURN_SEQUENCE_CONFLICT/TURN_SEQUENCE_OUT_OF_RANGE/TURN_MARKERS_UNCONFIRMED/SIMPLE_RETURN_ENDPOINT_UNCONFIRMED/TURN_DESTINATION_UNCONFIRMED/DIRECTION_FIELDS_UNCONFIRMED 및 경유노선 종착 충돌로 구분하며 값/예외 원문을 반환하지 않는다.
 
 [정류소 검색 공식 문서](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusStation)와 [경유노선 공식 문서](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusStationRoute)를2026-10-13 읽었다. 정류소 후보 축소는 실제 확인했지만 운영 매핑/저장/공개GET 연결은 없고 F07-01b/F07-01 전체 미완료다. 다음은 방향 실패 상세 원인·노선 형태를 확인하고 신뢰할 생성시각/공급자·운영 정책을 정하는 작업이다.
+
+
+## F07-01b 방향 실패 사유 실확인 — 2026-10-13
+
+사용자가 추가 최대8회 조회를 승인해 --max-requests 8로7회 실행했다. 이번 결과도 근처 정류소2개·노선 후보1개·매칭1개·승차12/하차23·거리4.29m/12.85m·도착1행의 정류소/노선/순번 일치다. direction_reason=SIMPLE_RETURN_ENDPOINT_UNCONFIRMED, direction_status=direction_unresolved·arrival_direction_matches=false·verified_generation_time_available=false·valid_for_guidance=false·종료코드1을 실제 확인했다.
+
+해당 사유는 startStationId=endStationId 또는 정차 목록의 첫/마지막 stationId가 startStationId와 불일치할 때 반환하는 묶음 검사다. 출력만으로 어느 개별 조건이 실패했는지 구분되지 않는다. 실제 노선 오류·반대편 정류소·특정 입력 필드 문제로 단정하지 않으며 단순 왕복 전제와 실제 양방향 종점 구조를 분리해 다음 단계에서 대조해야 한다. 원천 최신성/운영 매핑·출발 연결은 미완료다.
+
+이번7회+이전9회=누적16회, 승인10+추가8=18회 중2회 잔여. 승인 검토를 통과했으며 사용자 저장 장소/좌표를 읽거나 키/원문/차량번호를 출력·저장하지 않았다. 코드/테스트/API/저장/계산 변경 없음, 테스트를 새로 실행했다고 기록하지 않는다. Notion v0.62 저장 확인·F07-01b/F07-01 미체크 유지.
