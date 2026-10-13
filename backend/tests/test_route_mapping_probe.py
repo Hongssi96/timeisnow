@@ -99,6 +99,14 @@ class DirectionProbeTests(unittest.TestCase):
         match, rows, info = self.fixture(); info['endStationId'] = '10'
         self.assertEqual(direction_candidate(match, rows, info)['status'], 'direction_unresolved')
 
+    def test_direction_failure_uses_only_fixed_reason_without_input(self):
+        match, rows, info = self.fixture(); info['routeId'] = '100'
+        self.assertEqual(direction_candidate(match,rows,info)['reason'],'ROUTE_ID_MISMATCH')
+        info = {'unexpected-private-field':'private-input'}
+        result = direction_candidate(match,rows,info)
+        self.assertEqual(result['reason'],'DIRECTION_FIELDS_UNCONFIRMED')
+        self.assertNotIn('private',str(result))
+
     def test_exact_unique_arrival_direction_is_required(self):
         match, rows, info = self.fixture(); direction = direction_candidate(match, rows, info)
         arrival = {'stationId': '10', 'routeId': '99', 'staOrder': 1, 'routeDestId': '30'}

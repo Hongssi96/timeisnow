@@ -1060,3 +1060,22 @@ F07-01a만완료다. F07-01전체는실제경로의공공ID/방향운영매핑·
 배운 개념: 첫 카카오 후보와 공공 동명 노선 개수는 매 실행 달라질 수 있다. 조회 성공과 유일 경로 매핑 성공은 다르며, 전체 후보를 대조하지 않고 일부만 골라 유일하다고 인증하면 안 된다. 무조건 호출 상한을 늘리는 대신 정류소/지역 등 검증된 기반정보로 후보를 좁혀야 한다.
 
 현재 F07-01b/F07-01 전체 미완료. 승인 부족은 해결됐으나 이번 실행은 후보 초과로 중단되어 방향/실제 도착 연결을 검증하지 못했다. 다음은 근거 있는 후보 축소 전략과 호출 예산 설계, 이어서 원천 시각/공급자·운영 정책 검증이다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+
+## 2026-10-13 — F07-01b 정류소 기반 후보 축소
+
+목표: 동명 노선12개를 일부만 골라 조회하지 않고, 승차 정류소 기반정보로 후보를 좁힌다. 시작 시 TODO·AGENTS·최신 Notion v0.60·arrivals_api.md/public_arrivals_plan.md·planning/logging 관련 정책과 기존 진단/기반정보 도구를 확인했다. git fetch 후 main c4794a6이 유지됐고 동일 미완료 F07-01b의 codex/first-boarding-mapping 브랜치에서 계속했다. 공식 경기 정류소 검색/경유노선 매뉴얼을 웹으로 읽어 순번/진행방향 마지막 정류소 필드를 확인했다.
+
+구현: backend/route_mapping_probe.py의 boarding_candidates/station_route_scopes/scoped_matches는 이름+진단 좌표로 근처 정류소 전체를 최대2개 유지하고 경유 노선 ID/순번/방향을 전체 정차 목록과 대조한다. 중복 ID 좌표 충돌·같은 방문의 종착 충돌·결측/boolean/범위 초과를 거부하고 반복 방문은 별도 순번으로 구분한다. 가장 가까운 후보만 선택하지 않는다. backend/check_gyeonggi_mapping.py는 전역 노선 검색을 제거하고 요청 예산1~10회 옵션·실제 요청 횟수·모든 후보 대조/후속2회 예약·결과4 무결과·권한 실패 무우회와 응답 목록 형태 제한을 추가했다. 방향 진단은 고정된 안전한 실패 사유를 제공한다. API/계산/DB/프론트/AI 변경 없음.
+
+실제 검증: backend/tests/test_station_first_mapping.py14개0.007초, 기존/확장 test_route_mapping_probe.py15개0.002초 전부 통과. 근처 동명 양방향 보존/멀리 있는 이름 제외·결측/중복좌표·정류소 한도·경유노선 이름 정확일치·반복방문/충돌·유일한 station/route/order 매칭·최대10회/남은8회·예산초과 전체 무호출·권한403/무결과4 무우회·키/원문 비노출·실패 사유 보존을 확인했다. 전체 백엔드/프론트는 실행하지 않았다.
+
+실조회 승인 검토: 기본 최대10회 명령은 기존2회 이후 새10회 요청의 구체적 재승인이 없다는 이유로 실행 전에 거부됐다. 명령은 실행되지 않아 호출0회다. 위험을 해소하는 대안으로 --max-requests 8과 합성 검증을 추가하여 최초 승인 누적10회를 넘지 않도록 제한했다. 해당8회 제한 명령은 승인 검토를 통과했다. 공개 판교역→성남시청·동일 고정 공식 HTTPS/키만 사용했고 개인 저장 장소/원문/키/차량번호를 출력·저장하지 않았다.
+
+실제 출력: mapping_status=candidate_unique, candidate_route_count=1, boarding_station_count=2, matched_pair_count=1, start_distance_meters=4.29, end_distance_meters=12.85, board_order=12, alight_order=23, direction_status=direction_unresolved, arrival_rows=1, arrival_identity_matches=true, arrival_direction_matches=false, query_time_present=true, verified_generation_time_available=false, valid_for_guidance=false, request_count=7. 종료코드1. 카카오1/정류소검색1/경유노선2/정차목록1/상세1/도착1=7회, 기존2회 포함누적9회다. 정류소 기반 후보 축소/도착 ID 일치는 확인했으나 방향/원천 최신성을 인증하지 않는다. 이후 direction_reason 보완만 합성 검증했고 실조회 재실행은 하지 않아 이번 실패의 상세 원인은 아직 미확인이다.
+
+문서: api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md에 정책/호출예산/실결과·준비와 운영 연결 구분을 기록했다. Notion v0.61 갱신 후 다시 읽어 저장을 확인했다. 앱 API/계산/저장 계약·클라이언트 호환성 영향 없음, 구현/진단 상태만 갱신했다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 전국의 동명 노선 이름 대신 정류소 경유노선과 실제 방문 순번으로 검색 범위를 좁힐 수 있다. 좌표와 순서 유일성이 확인돼도 단순 왕복 회차 가설과 원천 최신성은 별도로 검증해야 한다. 예산 제한은 실패 호출과 이전 호출을 포함해 관리하고 일부 후보만 대조한 결과를 유일하다고 표시하지 않는다.
+
+남은 문제: F07-01b/F07-01 전체 미완료 유지. 다음은 실제 방향 실패 상세 원인/노선 형태, 신뢰할 생성시각/공급자와 운영 정책 확인이다. 승인 누적9회로1회만 남았고 전체 진단 재실행은 예산 부족이다. 운영 매핑/저장/공개GET/실시간 화면·출발 계산은 이번에 추가하지 않았다.

@@ -79,25 +79,25 @@ def direction_candidate(match, supplied_rows, route_info):
     try:
         rid = positive(match['route_id'])
         if positive(route_info['routeId']) != rid:
-            raise ValueError()
+            raise ValueError('ROUTE_ID_MISMATCH')
         rows = sorted(supplied_rows, key=lambda row: int(positive(row['stationSeq'])))
         seqs = [int(positive(row['stationSeq'])) for row in rows]
         if len(rows) < 3 or seqs != list(range(1, len(rows) + 1)):
-            raise ValueError()
+            raise ValueError('STATION_SEQUENCE_INCOMPLETE')
         turns = {int(positive(row['turnSeq'])) for row in rows}
         if len(turns) != 1:
-            raise ValueError()
+            raise ValueError('TURN_SEQUENCE_CONFLICT')
         turn = turns.pop()
         if not 1 < turn < len(rows):
-            raise ValueError()
+            raise ValueError('TURN_SEQUENCE_OUT_OF_RANGE')
         marked = [int(positive(row['stationSeq'])) for row in rows if row.get('turnYn') == 'Y']
         if marked != [turn] or any(row.get('turnYn') not in ('Y', 'N') for row in rows):
-            raise ValueError()
+            raise ValueError('TURN_MARKERS_UNCONFIRMED')
         start, end = positive(route_info['startStationId']), positive(route_info['endStationId'])
         if start == end or positive(rows[0]['stationId']) != start or positive(rows[-1]['stationId']) != start:
-            raise ValueError()
+            raise ValueError('SIMPLE_RETURN_ENDPOINT_UNCONFIRMED')
         if positive(rows[turn - 1]['stationId']) != end or positive(route_info['turnStID']) != end:
-            raise ValueError()
+            raise ValueError('TURN_DESTINATION_UNCONFIRMED')
         board, alight = int(positive(match['board_order'])), int(positive(match['alight_order']))
         if not 1 <= board < alight <= len(rows):
             raise ValueError()
@@ -109,8 +109,12 @@ def direction_candidate(match, supplied_rows, route_info):
             return {'status': 'turnaround_unresolved', 'route_dest_id': None}
         destination = end if alight <= turn else start
         return {'status': 'direction_candidate', 'route_dest_id': destination}
-    except (KeyError, ValueError, TypeError, IndexError, AttributeError):
-        return {'status': 'direction_unresolved', 'route_dest_id': None}
+    except (KeyError, ValueError, TypeError, IndexError, AttributeError) as error:
+        safe_reasons = {'ROUTE_ID_MISMATCH', 'STATION_SEQUENCE_INCOMPLETE', 'TURN_SEQUENCE_CONFLICT',
+                        'TURN_SEQUENCE_OUT_OF_RANGE', 'TURN_MARKERS_UNCONFIRMED',
+                        'SIMPLE_RETURN_ENDPOINT_UNCONFIRMED', 'TURN_DESTINATION_UNCONFIRMED'}
+        reason = str(error) if isinstance(error, ValueError) and str(error) in safe_reasons else 'DIRECTION_FIELDS_UNCONFIRMED'
+        return {'status': 'direction_unresolved', 'route_dest_id': None, 'reason': reason}
 
 
 def arrival_direction_matches(match, direction, rows):
@@ -122,3 +126,70 @@ def arrival_direction_matches(match, direction, rows):
                 'staOrder': str(match['board_order']), 'routeDestId': direction['route_dest_id']}
     return all(type(row.get(key)) in (int, str) and str(row[key]) == str(value)
                for key, value in expected.items())
+
+
+def boarding_candidates(stop_name, point, rows, tolerance):
+    """Keep every same-name nearby stop; never pick the nearest as proof."""
+    import re
+    if type(tolerance) not in (int, float) or not math.isfinite(tolerance) or tolerance <= 0:
+        raise ValueError('Explicit diagnostic tolerance required')
+    if not normalize_name(stop_name) or not isinstance(rows, list) or len(rows) > 2000:
+        return {'status': 'station_unresolved', 'station_ids': []}
+    stations = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            return {'status': 'station_unresolved', 'station_ids': []}
+        if normalize_name(row.get('stationName')) != normalize_name(stop_name):
+            continue
+        sid = row.get('stationId')
+        distance = distance_meters(point, (row.get('x'), row.get('y')))
+        if type(sid) not in (int, str) or not re.fullmatch(r'[1-9][0-9]{0,19}', str(sid)) or distance is None:
+            return {'status': 'station_unresolved', 'station_ids': []}
+        identity = (float(row['x']), float(row['y']))
+        if str(sid) in stations and stations[str(sid)][0] != identity:
+            return {'status': 'station_unresolved', 'station_ids': []}
+        stations[str(sid)] = (identity, distance)
+    nearby = sorted(sid for sid, (_, distance) in stations.items() if distance <= tolerance)
+    if not nearby or len(nearby) > 2:
+        return {'status': 'station_disambiguation_required', 'station_ids': [], 'candidate_count': len(nearby)}
+    return {'status': 'station_candidates', 'station_ids': nearby, 'candidate_count': len(nearby)}
+
+
+def station_route_scopes(vehicle_name, station_routes):
+    """Authoritative per-stop route order/destination, diagnostic use only."""
+    import re
+    def positive(value):
+        if type(value) not in (int, str) or not re.fullmatch(r'[1-9][0-9]{0,19}', str(value)):
+            raise ValueError('Invalid public identity')
+        return str(value)
+    if not normalize_name(vehicle_name):
+        raise ValueError('Missing vehicle name')
+    scopes = {}
+    for sid, rows in station_routes:
+        sid = positive(sid)
+        if not isinstance(rows, list) or len(rows) > 2000:
+            raise ValueError('Invalid route list')
+        for row in rows:
+            if not isinstance(row, dict):
+                raise ValueError('Invalid route row')
+            if normalize_name(row.get('routeName')) != normalize_name(vehicle_name):
+                continue
+            rid, order, dest = positive(row.get('routeId')), int(positive(row.get('staOrder'))), positive(row.get('routeDestId'))
+            if order > 1000:
+                raise ValueError('Invalid station order')
+            key = (sid, rid, order)
+            if key in scopes and scopes[key]['route_dest_id'] != dest:
+                raise ValueError('Conflicting direction')
+            scopes[key] = {'board_station_id': sid, 'route_id': rid, 'board_order': order, 'route_dest_id': dest}
+    return list(scopes.values())
+
+
+def scoped_matches(result, scopes):
+    matches = []
+    for match in result['matches']:
+        found = [s for s in scopes if all(match[key] == s[key]
+                 for key in ('board_station_id', 'route_id', 'board_order'))]
+        if len(found) == 1:
+            matches.append(dict(match, route_dest_id=found[0]['route_dest_id']))
+    return {'status': 'candidate_unique' if len(matches) == 1 else 'ambiguous' if matches else 'no_match',
+            'matches': matches}
