@@ -1107,3 +1107,18 @@ F07-01a만완료다. F07-01전체는실제경로의공공ID/방향운영매핑·
 배운 개념: 왕복 양방향의 물리 정류소 ID는 같다고 가정할 수 없다. 공식 정류소 방문 방향 ID와 실제 정차 목록의 해당 방향 끝 정류소를 비교해야 하며 이름/노선 전체 종점을 대신 쓰면 안 된다. 합성 검증 통과와 실제 공급자 사례 해결은 별도다.
 
 남은 작업: 누적16회/승인18회로2회 잔여, 전체 진단 재실행에는 부족하다. 동일 공개 경로/키/공식 HTTPS --max-requests 8로 추가 최대8회 검증 초안을 문서에 준비했다. 실제 방향/원천 시각·운영 매핑/출발 연결은 미완료라 F07-01b/F07-01 체크하지 않는다. 다음은 수정 진단의 실제 방향 대조다.
+
+
+## 2026-10-13 — F07-01b 공개 방향 진단 성공
+
+사용자 진행해는 직전 동일 공개 경로/키/공식 HTTPS 추가 최대8회 조회의 명시 승인이다. codex/first-boarding-mapping에서 backend/check_gyeonggi_mapping.py --max-requests 8을 실행해 승인 검토를 통과했다. 카카오1/정류소검색1/경유노선2/정차목록1/상세1/도착1=7회, 종료코드0이었다. 새 코드/기능은 추가하지 않아 동일 기능 브랜치를 유지했다.
+
+실제 출력: candidate_unique·노선1개·정류소2개·매칭1개·승차12/하차23·거리4.29m/12.85m·도착1행. arrival_identity_matches=true, arrival_direction_matches=true, direction_status=direction_candidate, direction_reason=null, direction_basis=station_route_scope, return_endpoint_matches_start=false다. 왕복 끝 정류소 ID가 canonical 기점과 다름을 확인했으며 이전 단순 왕복 가정의 이 사례 차단이 수정 진단으로 해소됐다. 물리적 반대편 여부나 모든 노선 형태 지원을 단정하지 않는다.
+
+query_time_present=true이지만 verified_generation_time_available=false·valid_for_guidance=false·production_mapping_validated=false를 유지한다. 경기 queryTime을 생성시각으로 대체하지 않는다. 이번7회+이전16회=누적23회, 승인10+8+8=26회 중3회 잔여다. 사용자 저장 장소/좌표 읽기·키/원문/차량번호 저장/출력 없음.
+
+최신 Notion v0.63·TODO/arrivals_api.md의 남은 범위를 대조하고 v0.64와 api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md를 갱신했다. Notion을 다시 읽어 저장 확인했다. API/계산/저장 계약·코드/DDL·프론트/AI·클라이언트 호환성 변경 없음. 테스트는 재실행하지 않았고 기존36개 결과를 신규 실행으로 보고하지 않는다.
+
+배운 개념: 실제 정류소 방문 순번·공식 진행 방향 ID·해당 방향의 마지막 정류소를 함께 대조하면 canonical 노선 기점 ID의 왕복 동일성 가정을 제거할 수 있다. 한 사례의 방향 일치와 운영 전체 매핑/교통 정보 최신성은 별도 완료 조건이다.
+
+F07-01b/F07-01 전체 미완료.100m 운영 허용오차·자동 매핑 저장/공개GET 호출 연결·원천 생성시각 확보가 남았다. 다음은 운영 매핑 정책/조회 연결 설계와 신뢰할 원천 시각 확보다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.

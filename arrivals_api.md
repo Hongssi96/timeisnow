@@ -79,3 +79,12 @@ Notion v0.63. direction_candidate에 서버 진단 내부 scoped_direction을 �
 합성 신규7개 포함 test_route_mapping_probe.py21개0.003초/test_station_first_mapping.py15개0.009초 총36개 통과. 다른 왕복 끝 ID·canonical 종점 별칭·scope 방문/종착 충돌·회차 통과/승차·결측/boolean/순환·CLI 공식 방향 대조와 guidance 차단 유지까지 검증했다. 수정 후 키 실조회0회이므로 이전 실제 사례 해결을 주장하지 않는다. 전체 백엔드/프론트 테스트 재실행 없음.
 
 누적16회/승인18회로2회만 남아 전체 공개 진단 재실행에는 부족하다. 검토할 다음 실행은 동일 공개 판교역→성남시청/동일 키/고정 카카오·경기 HTTPS로 --max-requests 8이며, 추가 최대8회 예산을 받아 수정 후 실제 방향 일치를 확인하는 것이다. 원문·키·차량번호 저장/출력과 사용자 저장 장소 읽기 없음. F07-01b/F07-01 전체 미완료이며 API/저장/계산/클라이언트 호환성 변경 없음.
+
+
+## F07-01b 공개 방향 진단 성공 — 2026-10-13
+
+사용자 추가 최대8회 승인 후 --max-requests 8을 실행해7회·종료코드0을 실제 확인했다. 노선 후보1개·근처 정류소2개·유일 매칭1개·승차12/하차23·양끝 거리4.29m/12.85m·도착1행의 stationId/routeId/staOrder/routeDestId가 모두 일치했다. direction_status=direction_candidate, direction_basis=station_route_scope, direction_reason=null, arrival_identity_matches=true, arrival_direction_matches=true, return_endpoint_matches_start=false다. 왕복 끝 정류소 ID가 canonical 기점과 달랐음을 확인했으나 물리적 반대편 여부는 단정하지 않는다.
+
+이번7회+이전16회=누적23회, 승인10+8+8=26회 중3회 잔여다. queryTime 존재는 확인했지만 verified_generation_time_available=false·valid_for_guidance=false·production_mapping_validated=false를 유지한다. 원문·키·차량번호 저장/출력·사용자 저장 장소/좌표 읽기 없음. 코드/테스트/API/계산/저장 변경 없고 이번 테스트 재실행도 없다.
+
+이는 공개 한 사례의 방향 진단 성공이다.100m는 진단 정책이며 운영 허용오차/자동 매핑 저장·공개GET 연결은 미확인이다. 경기 원천 생성시각도 없어 최신 도착/출발 계산 완료가 아니다. Notion v0.64 저장 확인·F07-01b/F07-01 미체크 유지. 다음은 운영 매핑 정책/조회 연결 설계와 신뢰할 원천 시각 확보다.
