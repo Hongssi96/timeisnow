@@ -1,3 +1,4 @@
+import WalkingGuidance from '../components/WalkingGuidance';
 import React, { useState, useRef, useEffect } from 'react';
 
 import { ArrowUpRight, ArrowRight, Home, Repeat2, History, SlidersHorizontal, Footprints, X, Check, Clock3, ChevronRight, CircleHelp, Navigation, Leaf, Sun, RefreshCw, LogIn } from 'lucide-react';
@@ -65,7 +66,7 @@ export default function App() {
             <div className="button-row"><button className="primary" onClick={()=>setModal('location')}>출발지 다시 선택</button><button className="secondary" onClick={()=>{setOrigin(null);setOriginExpired(false);}}>저장한 루틴으로 돌아가기</button></div>
           </section> : <>
             <RoutineStatus state={routineState} onRetry={()=>loadRoutines()} onLogin={()=>setModal('account')} onAdd={addRoutine}/>
-            {routine && <section className="card routine-home"><div className="section-heading"><h2>{routine.name}</h2><span className="tag">저장한 루틴</span></div><RoutineSummary routine={routine}/><div className="info-box">실시간 차량 도착과 출발 시각 안내는 준비 중이에요. 저장된 경로의 예상 시간과 반복 일정을 확인할 수 있어요.</div><div className="button-row"><button className="primary" onClick={()=>navigate('routines')}>내 루틴 관리 <ArrowRight size={16}/></button><button className="secondary" onClick={()=>changeRoute(routine)}>{needsRoutineRecovery(routine)?'루틴 복구하기':'경로 다시 선택'}</button></div></section>}
+            {routine && <section className="card routine-home"><div className="section-heading"><h2>{routine.name}</h2><span className="tag">저장한 루틴</span></div><RoutineSummary routine={routine}/><WalkingGuidance route={routine.route} source="routine" phase={needsRoutineRecovery(routine)?'expired':'needs_data'}/><div className="info-box">실시간 차량 도착과 출발 시각 안내는 준비 중이에요. 저장된 경로의 예상 시간과 반복 일정을 확인할 수 있어요.</div><div className="button-row"><button className="primary" onClick={()=>navigate('routines')}>내 루틴 관리 <ArrowRight size={16}/></button><button className="secondary" onClick={()=>changeRoute(routine)}>{needsRoutineRecovery(routine)?'루틴 복구하기':'경로 다시 선택'}</button></div></section>}
             {routineState.next && <button className="secondary" disabled={routineState.phase==='more'} onClick={()=>loadRoutines(true)}>루틴 더 보기</button>}
           </>}
         </>}

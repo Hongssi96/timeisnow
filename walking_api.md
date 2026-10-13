@@ -88,3 +88,9 @@ Notion v0.56. 내부 estimate_and_store는 같은 물리 키의 유효 원본에
 GET 상세는 인증/no-store/기존 필드/reused=false를 유지하고 source enum에 profile_recalculation을 추가한다. 최신 revision의 계수/초/계산 시각을 반환한다. 내부 estimates도 source를 추가한다. 프론트는 해당GET을 아직 쓰지 않아 UI 변경은 없지만 신규 소비자는 source 두 값을 처리해야 한다.0011_walking_recalculation은 부모 revision의 회원/estimate 복합FK·candidate_id·source 제약을 추가하며 기존AI revision의 부모는null이다. downgrade는 파생 revision만 제거하고 원본을 보존하므로 실제 개발DB에서 수행하지 않는다.
 
 F09 계수 학습·실제 물리 근거 확보/사용자 생성 연결·F07 출발 안내는 후속이다. 현재 walking.evidence의 needs_data/ready_for_estimation=false/reusable=false를 유지한다.
+
+## F05-07 도보 상태 화면 안내 — 2026-10-13
+
+Notion v0.57. 루틴 선택 카드와 유효 후보 상세에 WalkingGuidance를 표시한다. 실제 개인 도보 AI는 해당 루틴/후보에서 아직 실행하지 않았음을 명시한다. 루틴 요약에는 세부 근거가 없으므로 접근/환승/마지막 구간 누락 여부를 추측하지 않는다. 후보는 기존 missing_segments로 누락을 구분하고 지하철/혼합·실내 누락 코드로 입구부터 승강장까지 확인 필요를 안내한다. 공급자0초도 실제 이동 없음으로 확정하지 않는다.
+
+조회 실패/만료는 기존 재시도·위치/경로 재선택 동작을 유지하면서 확인되지 않은 시간을 사용하지 않음을 설명한다. 알려진 AI 검증/준비 실패 코드와 공급자 연결/시간초과 코드는 고정 문구로 표시하고 원문·키·주소·코드·요청ID를 공통 안내에 출력하지 않는다. 공급자 오류를 AI 실행 증거로 표시하지 않는다. 기존 alert는 한 번만 알리고 보조 설명은 중복 알림을 만들지 않는다. 추가 HTTP/API/AI 호출 없이 기존 응답 상태만 사용한다. 현재 실제 AI 생성 공개 API 연결은 후속이며 이번 검증은 합성 오류 응답을 사용했다. 계산·근거 준비/재사용·보관·인증 계약 변경 없음.

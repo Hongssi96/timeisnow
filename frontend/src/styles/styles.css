@@ -54,3 +54,5 @@
 .origin-place-create .places-card{margin-top:16px}.origin-place-create>.info-box{font-size:14px;color:var(--ink)}.origin-place-create .place-form{margin-top:10px}
 .journey-methods{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 10px}.journey-methods button{min-height:44px;padding:10px 16px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);font:inherit}.journey-methods button[aria-pressed=true]{background:var(--green);border-color:var(--green);color:white}
 .routine-recovery-notice{font-size:14px;color:var(--ink)}
+
+.walking-guidance{color:var(--ink);font-size:14px;overflow-wrap:anywhere}.walking-guidance h3{display:flex;align-items:center;gap:8px;font-size:16px;margin:0 0 10px}.walking-guidance h3 svg{flex-shrink:0}.walking-guidance p{margin:8px 0}.walking-guidance ul{padding-left:20px;margin:10px 0}.walking-guidance li{margin:7px 0;line-height:1.6}

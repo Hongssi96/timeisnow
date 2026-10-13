@@ -968,3 +968,35 @@
 개인화 이전 기준과 개인화 최종값을 분리해야 반복 보정을 막을 수 있다. 저장된 십진 초를 사용하는 계수 재계산은 거리/속도를 다시 나누는 신규 AI 검산과 올림 경계에서1초 차이가 날 수 있어 각각의 계약으로 검증한다. 부분 실행은 모델 호출한 후보만 비용/지연으로 집계하고 부모 이력과 원본 기한을 유지해야 한다. source enum 확장은 신규 소비자가 두 값을 처리해야 하는 호환성 영향이며 현재 프론트는 해당GET을 쓰지 않는다.
 
 완료 범위는 검증된 서버 내부 근거의 재계산과 만료/변경 분기다. 실제 walking.evidence는 물리 범위/방향 미확인으로 needs_data·reusable=false를 유지한다. 호출 서비스의 실제 지도 재조회/물리 검증·사용자 산정 생성 연결·F09 계수 학습·F07 출발 안내는 아직 후속이다. 다음 TODO는 F05-07 AI 실패/근거 부족/역 내부 누락 상태 안내다.
+
+## 2026-10-13 — F05-07 도보 상태 화면 안내
+
+### 목표·명세·작업 기반
+
+선택 루틴과 후보 상세에서 개인 도보 시간이 확인되지 않은 이유를 설명하고 실패/만료의 기존 복구 동작을 유지한다. todo.md F05-07·최신 Notion v0.56·walking_api.md·기획/디자인 가이드/화면 계획·기존 JSX/CSS·프롬프트/로깅 정책을 확인했다. 선행 F05-04~06은main27a824c에 병합됐고, 해당 최신main에서 codex/walking-status-guidance를 생성했다. MR 생성/병합은 사용자 작업으로 유지한다.
+
+### 구현과 파일
+
+- frontend/src/components/WalkingGuidance.jsx: 공통 info-box/Footprints·고정 문구로 범위/방향 미확인·접근/환승/마지막 누락·입구/승강장 실내 이동·공급자0초 미확정을 설명한다. 저장 루틴의 요약에서 없는 상세 근거를 추측하지 않는다. 현재 루틴/후보의 AI 산정 미실행을 분명히 표시한다.
+- frontend/src/app/App.jsx: 선택 루틴 요약 아래에 공통 안내 연결. 복구가 필요한 루틴은 이전 시간 비사용/새 장소·경로 선택 상태로 표시한다.
+- JourneyCandidates.jsx: 유효 후보 상세에 공통 근거 안내 연결. JourneyComparison.jsx: 기존 실패 코드를 유지해 알려진 AI 검증/준비 실패와 공급자 시간 조회 오류를 고정 문구로 표시하고 검색 만료 시 이전 값 비사용을 설명한다. 공급자 오류를 AI 실행 증거로 표시하지 않는다. 기존 재시도/로그인/취소/늦은 응답 무시/기한/쿼터 동작은 유지한다.
+- frontend/src/styles/styles.css: .walking-guidance 안에서만 제목/목록/줄바꿈/아이콘 축소 방지를 추가했다. 기존 CSS 변수·미색/초록·카드/버튼/폰트/내비게이션 유지. 실패의 기존 alert는 한 번만 알리고 보조 설명은 중복 알림을 하지 않는다.
+- frontend/tests/components/WalkingGuidance.test.jsx·JourneyComparison.test.jsx: 신규19개 상태/상세/실패/만료 연결 검증. 원문·오류 코드·미확인 시각을 출력하지 않고 추가 모델 요청이 없음을 확인한다.
+- api_contract.md, walking_api.md, planning.md, ai_prompts.md, logging.md, design_guide.md, screen_plan.md, README.md, todo.md, feature_breakdown.md: 사용자 흐름·상태/복구·비노출·현재/다음 작업 동기화. HTTP/API 입력/응답·인증·계산·DDL·보관 변경 없음.
+
+### 실행 결과와 시각 확인
+
+- 첫 전체 프론트161개에서 기존 실패 alert와 새 보조 안내 alert가 중복돼1개 실패했다. 보조 안내의 announce=false로 실제 오류 알림은 한 번만 유지하도록 고쳤다.
+- npm --prefix frontend test -- --reporter=dot: 최종167개/19파일 전부 통과,11.41초. 기존148개와 신규19개를 포함한다. 알 수 없는 오류가 toString/constructor/__proto__와 같아도 객체의 기본 속성을 화면에 렌더링하지 않도록 Object.hasOwn으로 제한하고3개 회귀를 추가했다. 후보 상세/AI_OUTPUT_INVALID 고정 문구·오류 알림1개·자연 만료 후 후보 제거와 이전 시간 비사용·기존 재시도/이탈 회귀를 확인했다.
+- npm --prefix frontend run build:1904모듈·480ms 빌드 성공. git diff --check 통과.
+- bundled Playwright/실제 Edge를 사용해 합성 routine/journey API와 OriginSelector 위치 선택 fixture로 앱 전체를 렌더링했다. 실제 사용자 세션/장소/DB는 사용하지 않았다. 데스크톱1440×1000·모바일390×844 각각 홈 루틴 카드/후보 상세/AI 검증 실패/브라우저 시계 진행 만료의8화면을 캡처·이미지로 확인했다. 각 화면 가로 넘침0·페이지 런타임 오류0. 실제 휴대전화 GPS/실서비스 AI 실패 생성은 미검증이다.
+- 시각 결과는 C:/Users/태휘/.codex/visualizations/2026/10/12/01a12d8b-b1b3-7dd1-83d9-e33fdf61b7ee/f57-{home,candidate,failure,expired}-{1440,390}.png에 보관했다. 임시 재현 스크립트는 TEMP/timeisnow-walking-visual.cjs이며 API/위치 선택을 모두 합성 fixture로 대체한다.
+- 실제 backend8000 health200·frontend5173 응답200 확인. 백엔드 코드/DB 변경이 없어 이번 작업에서는 백엔드221개를 다시 실행하지 않았다. 추가 외부 AI/지도 호출·실제 사용자 산정/이력 생성 없음.
+
+### 명세 동기화·배운 개념·남은 일
+
+구현 전에 Notion v0.57에 화면 흐름·현재 미실행/누락/실내 이동·고정 오류/만료 복구·호환성 계약을 기록했다. 최종 상태/검증/변경 이력을 갱신하고 재조회해 저장을 확인했다. api_contract.md 전체1515줄과 Notion 본문이 줄별 대조에서 일치했다. 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+미실행·근거 부족·실패·만료를 분리해야 사용자가 불확실한 시간에 의존하지 않는다. 요약 응답에서 세부 누락을 추측하지 않고, 보조 안내를 추가할 때 기존 접근성 오류 알림을 중복하지 않아야 한다. 예측값 제공은 물리 범위/방향이나 출발 가능성을 검증했다는 뜻이 아니다.
+
+완료 범위는 현재 루틴/후보 상태를 설명하는 UI와 알려진 실패/만료 표현이다. 현재 실제 walking.evidence는 needs_data/ready_for_estimation=false/reusable=false이며 실제 AI 공개 생성 API 연결과 물리 근거 확보는 후속이다. 실제 출발 시각은 아직 만들지 않는다. 다음은 F07-01 첫 탑승의 최신 도착 후보 연결과 이후 출발 안내 계산이다.
