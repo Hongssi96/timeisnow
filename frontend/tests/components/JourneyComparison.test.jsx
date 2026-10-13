@@ -98,3 +98,22 @@ it('accepted worker region failure offers reselect rather than repeating the sam
   expect(screen.queryByText('도착 검증역')).toBeNull();expect(screen.queryByRole('button',{name:'경로 후보 다시 조회'})).toBeNull();
   await user.click(screen.getByRole('button',{name:'도착지 다시 선택'}));expect(screen.getByRole('button',{name:'검증 위치 적용'})).toBeTruthy();
 });
+
+it('shows indoor walking evidence without starting an AI request',async()=>{
+  mockApi(()=>result([fixtures.mixed]));const user=await open();await search(user);
+  await user.click(screen.getByRole('button',{name:'구간 자세히'}));
+  expect(screen.getByRole('heading',{name:'개인 도보 시간은 아직 확인 전이에요'})).toBeTruthy();
+  expect(screen.getByText(/입구부터 승강장까지/)).toBeTruthy();
+  expect(apiRequest.mock.calls.filter(([path])=>path==='/api/v1/journey-searches')).toHaveLength(1);
+  expect(apiRequest.mock.calls.some(([path])=>path.includes('walking-estimates'))).toBe(false);
+});
+it('shows safe AI validation failure while announcing the existing error once',async()=>{
+  mockApi(()=>{throw new ApiError('AI_OUTPUT_INVALID');});const user=await open();await search(user);
+  expect(screen.getByText(/AI 산정 결과를 검증하지 못했어요/)).toBeTruthy();expect(screen.getAllByRole('alert')).toHaveLength(1);
+  expect(screen.getByRole('button',{name:'결과 다시 확인'})).toBeTruthy();
+});
+it('hides candidate times and shows walking recovery when results expire',async()=>{
+  mockApi();const user=await open();await search(user);
+  await act(()=>vi.advanceTimersByTimeAsync(290000));
+  expect(screen.queryByRole('article')).toBeNull();expect(screen.getByText(/이전 경로의 시간을 사용하지/)).toBeTruthy();
+});

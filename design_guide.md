@@ -178,3 +178,7 @@ OriginSelector의 장소 저장 탭은 기존 PlacesCard의 creationOnly 모드�
 ### F03-02a 지도 핀 저장 폼 (2026-10-08)
 
 PinPlaceSave는 기존 place-form/info-box/small muted/button-row/primary/secondary와 이름 라벨·초기 포커스를 재사용한다. 지도 핀 위치를 유지하고 주소 검색 입력을 생략한다. 저장 중 이름/지도/방식/취소 비활성, 실패 안내와 동일 요청 재시도·만료 재확인 제공. 새 CSS/공통 값/테마 없음. 실제 지도+합성 저장 API PC1440×1000/모바일390×844 폼·자동 선택·가로 넘침0·콘솔error0 확인.
+
+## F05-07 공통 도보 안내 — 2026-10-13
+
+WalkingGuidance는 기존 info-box 위에 lucide Footprints와16px 제목·14px 설명/누락 목록을 사용한다. .walking-guidance는 var(--ink), 기존 카드/경계/배경·버튼을 유지하며 새 색상/글꼴/내비게이션 체계를 만들지 않는다. SVG 축소 방지·긴 문장 줄바꿈·목록 간격을 해당 클래스 안에만 적용한다. 실패는 기존 alert 한 번을 유지하고 보조 설명 중복 알림을 제거한다. 합성 실제 Edge1440×1000/390×844의 홈·후보 상세·실패·만료8화면을 렌더링/이미지 확인했으며 가로 넘침/페이지 오류0. 실제 휴대전화 검증은 아니다.

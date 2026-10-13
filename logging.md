@@ -158,3 +158,7 @@ ai_executions.reused_estimates에 최소 원본 연결(candidate/estimate/revisi
 ## F05-06 재계산 품질 이력 — 2026-10-13
 
 모델 호출 없는 계수 재계산 실행은 model_version/latency_ms/usage=null이다. 새 revision은 부모 revision·같은 estimate·최초 AI 물리 근거와 연결해 이전 수치를 보존한다. 품질 보관은90일과 원본 기한 중 이른 시각이며 원본 근거를 연장하지 않는다. 부분 실행의 메타데이터는 실제 새 후보 AI 호출만 기록한다. 원문/이름/정밀 위치/키/내부 사고 비저장·HTTP 로그 필드 유지. walking_api.md·Notion v0.56.
+
+## F05-07 상태 안내의 비노출 — 2026-10-13
+
+공통 도보 안내는 고정 문구와 기존 후보 누락 코드만 사용하며 모델/공급자 원문·키·정밀 위치·코드·요청ID를 화면에 출력하지 않는다. 새 로그/모델 실행/품질 이력 없음. 시각 검증은 합성 API와 위치 선택 fixture로 수행했으며 실제 사용자 DB를 조작하지 않았다. walking_api.md·Notion v0.57.
