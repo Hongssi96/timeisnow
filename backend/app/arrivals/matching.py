@@ -214,3 +214,56 @@ def scoped_matches(result, scopes):
             matches.append(dict(match, route_dest_id=found[0]['route_dest_id']))
     return {'status': 'candidate_unique' if len(matches) == 1 else 'ambiguous' if matches else 'no_match',
             'matches': matches}
+
+
+def diagnose_match(stops, points, routes, scopes, tolerance=30):
+    """Counts only. Does not relax policy or return any source identity/name/coordinate."""
+    if len(stops)>200 or any(len(rows)>500 for _,rows in routes):
+        return {'detail_reason':'DIAGNOSTIC_SIZE_LIMIT'}
+    names=[normalize_name(s.get('name')) for s in stops]
+    counts={key:0 for key in ('valid_sequence_routes','endpoint_name_pairs','ordered_name_pairs',
+        'contiguous_name_pairs','scoped_ordered_name_pairs','scoped_contiguous_name_pairs',
+        'missing_coordinates','outside_coordinate_limit','missing_station_identity','passing_pairs')}
+    if len(names)<2 or not all(names) or len(points)!=2:
+        return dict(counts,detail_reason='INPUT_UNCONFIRMED')
+    for rid,supplied in routes:
+        try:
+            rows=sorted(supplied,key=lambda row:int(row['stationSeq']))
+            seqs=[int(row['stationSeq']) for row in rows]
+        except (ValueError,TypeError,KeyError):continue
+        if not seqs or len(set(seqs))!=len(seqs):continue
+        counts['valid_sequence_routes']+=1
+        observed=[normalize_name(row.get('stationName')) for row in rows]
+        for i,name in enumerate(observed):
+            if name!=names[0]:continue
+            for j in range(i+1,len(rows)):
+                if observed[j]!=names[-1]:continue
+                counts['endpoint_name_pairs']+=1
+                cursor=0
+                for value in observed[i:j+1]:
+                    if cursor<len(names) and value==names[cursor]:cursor+=1
+                ordered=cursor==len(names);contiguous=observed[i:j+1]==names
+                counts['ordered_name_pairs']+=int(ordered)
+                counts['contiguous_name_pairs']+=int(contiguous)
+                scoped=any(scope['route_id']==str(rid) and scope['board_station_id']==str(rows[i].get('stationId'))
+                           and scope['board_order']==seqs[i] for scope in scopes)
+                counts['scoped_ordered_name_pairs']+=int(scoped and ordered)
+                counts['scoped_contiguous_name_pairs']+=int(scoped and contiguous)
+                if not scoped or not contiguous:continue
+                first=distance_meters(points[0],(rows[i].get('x'),rows[i].get('y')))
+                last=distance_meters(points[-1],(rows[j].get('x'),rows[j].get('y')))
+                if first is None or last is None:counts['missing_coordinates']+=1
+                elif max(first,last)>tolerance:counts['outside_coordinate_limit']+=1
+                elif not rows[i].get('stationId') or not rows[j].get('stationId'):counts['missing_station_identity']+=1
+                else:counts['passing_pairs']+=1
+    reason=('SEQUENCE_DATA_UNCONFIRMED' if not counts['valid_sequence_routes'] else
+            'ENDPOINT_NAMES_UNMATCHED' if not counts['endpoint_name_pairs'] else
+            'INTERMEDIATE_ORDER_UNMATCHED' if not counts['ordered_name_pairs'] else
+            'VISIT_SCOPE_UNMATCHED' if not counts['scoped_ordered_name_pairs'] else
+            'STOPS_NOT_CONTIGUOUS' if not counts['scoped_contiguous_name_pairs'] else
+            'COORDINATES_UNCONFIRMED' if counts['missing_coordinates'] and not counts['passing_pairs'] else
+            'COORDINATE_LIMIT_EXCEEDED' if counts['outside_coordinate_limit'] and not counts['passing_pairs'] else
+            'STATION_IDENTITY_UNCONFIRMED' if counts['missing_station_identity'] and not counts['passing_pairs'] else
+            'MATCH_AMBIGUOUS' if counts['passing_pairs']>1 else
+            'MATCH_CHECKS_PASSED' if counts['passing_pairs'] else 'MATCH_UNCONFIRMED')
+    return dict(counts,detail_reason=reason)

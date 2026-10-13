@@ -8,7 +8,7 @@ from app.common.http import NoRedirect
 from app.common.errors import AuthError
 from app.arrivals import provider
 from app.arrivals.dto import Mapping
-from app.arrivals.matching import boarding_candidates,station_route_scopes,match_route,scoped_matches,direction_candidate
+from app.arrivals.matching import boarding_candidates,station_route_scopes,match_route,scoped_matches,direction_candidate,diagnose_match
 
 OPERATIONS={
  'stations':('busstationservice','getBusStationListv2','busStationList'),
@@ -73,6 +73,7 @@ def resolve(context,expires_at,*,diagnostics=None):
     result=scoped_matches(match_route(stops,points,routes,30,require_contiguous=True),scopes)
     record(matched_count=len(result['matches']))
     if result['status']!='candidate_unique':
+        if diagnostics is not None:record(match_checks=diagnose_match(stops,points,routes,scopes,30))
         record(reason='ROUTE_SEQUENCE_UNCONFIRMED');return None
     record(stage='route_info')
     match=result['matches'][0]
