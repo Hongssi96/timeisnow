@@ -26,8 +26,10 @@ class WalkingHistoryTests(unittest.IsolatedAsyncioTestCase):
         registered=await self.signup_login()
         self.owner=registered[2]['data']['user_id']
         self.value=fixture();self.output=result()
-        self.context={'place_refs':[],'verified_at':datetime.now(timezone.utc)-timedelta(seconds=1),
-                      'valid_until':datetime.now(timezone.utc)+timedelta(days=60)}
+        # Context verification and persistence use the same authoritative DB clock.
+        with database() as c:verified=c.execute('SELECT clock_timestamp() AS now').fetchone()['now']
+        self.context={'place_refs':[],'verified_at':verified-timedelta(seconds=1),
+                      'valid_until':verified+timedelta(days=60)}
         self.metadata={'model_version':'gpt-5.6-luna','latency_ms':2500,'usage':None}
 
     def store(self,**kw):

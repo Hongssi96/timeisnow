@@ -195,6 +195,6 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
     {saveMessage&&<div className="info-box" role="alert">{saveMessage}</div>}
     {state.phase==='anonymous'&&<button className="primary" onClick={onLogin}>로그인하기</button>}
     {['empty','unsupported'].includes(state.phase)&&<JourneyUnavailable unsupported={state.phase==='unsupported'} codes={state.reasons} onOrigin={()=>edit('origin')} onDestination={()=>edit('destination')}/>}
-    {state.phase==='ready'&&<JourneyCandidates key={snapshot.current?.accepted?.search_id} candidates={state.candidates} preference={preference} onRecheck={()=>run(true,true)} onSavedLocations={candidateId=>saves[candidateId]} onSaved={canSave?saveRoutine:undefined} defaultRoutineName={routineToReplace?.name||(origin&&destination?`${origin.label} → ${destination.label} 통근`:'')} defaultWeekdays={routineToReplace?.weekdays} defaultTarget={routineToReplace?.target_arrival_local_time} replacing={!!routineToReplace}/>}
+    {state.phase==='ready'&&<JourneyCandidates searchId={snapshot.current?.accepted?.search_id} key={snapshot.current?.accepted?.search_id} candidates={state.candidates} preference={preference} onRecheck={()=>run(true,true)} onSavedLocations={candidateId=>saves[candidateId]} onSaved={canSave?saveRoutine:undefined} defaultRoutineName={routineToReplace?.name||(origin&&destination?`${origin.label} → ${destination.label} 통근`:'')} defaultWeekdays={routineToReplace?.weekdays} defaultTarget={routineToReplace?.target_arrival_local_time} replacing={!!routineToReplace}/>}
   </div>;
 }

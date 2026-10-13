@@ -19,15 +19,17 @@ class Mapping(BaseModel):
 class Arrival(BaseModel):
     candidate_id: UUID
     provider_prediction_seconds: int
+    remaining_seconds: int|None=None
     predicted_arrival_at: datetime|None
 
 class Evidence(BaseModel):
-    model_version: Literal['arrival.evidence.v1']='arrival.evidence.v1'
+    model_version: Literal['arrival.evidence.v2']='arrival.evidence.v2'
     search_id: UUID
     candidate_id: UUID
     first_leg_id: UUID
-    status: Literal['mapping_required','unsupported','no_arrivals','insufficient_data','fresh','expired']
+    status: Literal['mapping_required','unsupported','no_arrivals','insufficient_data','fresh','estimated','expired']
     source_status: Literal['unknown','fresh','stale','clock_mismatch']='unknown'
+    timing_basis: Literal['none','source_generation','receipt_estimate']='none'
     received_at: datetime|None=None
     generated_at: datetime|None=None
     expires_at: datetime

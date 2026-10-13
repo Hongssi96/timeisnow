@@ -1,13 +1,13 @@
 # 첫 탑승 도착 근거 — F07-01a/01b
 
-- 날짜:2026-10-13·Notion v0.71. F07-01 전체는 미완료다.
-- 목표: 검증된 공공 ID가 있는 첫 탑승만 조회하고, 원천 최신성을 확인할 수 없으면 출발 계산에 사용하지 않는다.
+- 날짜:2026-10-13·Notion v0.72. F07-01 전체는 미완료다.
+- 목표: 검증된 공공 ID가 있는 첫 탑승만 조회하고, 검증된 생성시각과 수신 기준 추정을 구분하고, 사용자 승인 추정 근거는 유효기간 안에서만 안내에 사용한다.
 
 ## 현재 공개 조회
 
 GET /api/v1/journey-searches/{search_id}/candidates/{candidate_id}/first-arrivals: 로그인·본인·no-store, CSRF 불필요. 잘못된UUID/없음/타인/검색 만료404, 장소 위치 버전 변경409. 신규 검색의 서버 메모리 근거로 유일 경기 매핑을 확인한 버스 후보는 실제 공급자를 조회한다. 근거 없음/재시작/다른 프로세스/퇴출·매핑 미확인은200 mapping_required·후보[]·valid_for_guidance=false이며 공급자를 호출하지 않는다. 지하철 첫 탑승은 unsupported다. 클라이언트의 정류소ID/검증 완료 쿼리/플래그는 매핑으로 사용하지 않는다.
 
-arrival.evidence.v1: search_id,candidate_id,first_leg_id,status,source_status,received_at/generated_at,expires_at,valid_for_guidance,reasons,candidates. status는 mapping_required/unsupported/no_arrivals/insufficient_data/fresh/expired, source_status는unknown/fresh/stale/clock_mismatch다. 후보는 비식별candidate_id,provider_prediction_seconds,predicted_arrival_at(nullable). 원문·차량번호·좌표·키/URL 비노출, DB/루틴 영구 저장·DDL/기한 연장 없음. 서버 메모리 근거/60초 도착 재사용은 아래 F07-01b 정책을 따른다.
+arrival.evidence.v2: search_id,candidate_id,first_leg_id,status,source_status,timing_basis(none/source_generation/receipt_estimate),received_at/generated_at,expires_at,valid_for_guidance,reasons,candidates. status는 mapping_required/unsupported/no_arrivals/insufficient_data/fresh/estimated/expired, source_status는unknown/fresh/stale/clock_mismatch다. 후보는 비식별candidate_id,provider_prediction_seconds(원래 예측초),predicted_arrival_at(nullable),remaining_seconds(nullable·평가 시점 남은 초 올림). 원문·차량번호·좌표·키/URL 비노출, DB/루틴 영구 저장·DDL/기한 연장 없음. 서버 메모리 근거/60초 도착 재사용은 아래 F07-01b 정책을 따른다.
 
 ## 내부 조회와 경기 어댑터
 
@@ -15,15 +15,19 @@ first_arrivals(user_id,search_id,candidate_id,verified_mapping=...)는 호출 �
 
 고정 https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalItemv2, DATA_GO_KR_SERVICE_KEY(.env보다프로세스환경우선),3초·256KiB·리다이렉트/HTTP 자동 전환 없음. 정상0/무결과4/공급자 실패를 구분하고 stationId/routeId/staOrder/routeDestId가 일치하는 유일 행만 사용한다. RUN의 predictTimeSec1/2는1~86400초 정수, vehId1/2는숫자ID/0제외. 분 필드로 대체하지 않고0/음수/누락/미확인 운행 상태는 시간 근거 부족이다. STOP은무후보,WAIT/PASS는운행/정차 조건이 미확인인 보수적 상태다. 중복 JSON 키/비정상 상수/중복 차량·잘못된 스키마는502, 전송/권한/쿼터503, 시간초과504. 원문·요청URL·키를 로그/DB에 기록하지 않는다.
 
-## 최신성
+## 생성시각 검증과 수신 기준 추정 — 사용자 결정 2026-10-13
 
-수신 후120초와 검증된 생성 후120초 중 이른 기한에 검색/매핑 기한을 더해 적용한다.120초 경계까지 유효하며 초과는expired다. 원천 시각 없음/naive/미래와 수신 시각 역전은 최신으로 바꾸지 않는다. 검증된 생성시각이 있는 내부 입력만 생성시각+예측초를 계산하고, 이미 지난 예측은 사용하지 않는다. 차량 놓침/탑승 관측으로 해석하지 않는다.
+검증 생성시각이 있으면 source_status=fresh/timing_basis=source_generation/status=fresh로 생성시각+예측초를 사용한다. 생성시각이 없는 정상 RUN/유효 예측초는 generated_at=null/source_status=unknown/timing_basis=receipt_estimate/status=estimated로 수신시각+예측초를 추정한다. 두 경우 모두 유효 후보가 있으면 valid_for_guidance=true다. 이 플래그는 추정 사용 허용도 포함하며 원천 최신성 인증이 아니다. 잘못된/naive/미래 생성시각·수신시각 역전은 추정으로 우회하지 않는다. queryTime은 정보요청시간이므로 생성시각으로 저장하지 않는다.
 
-[경기 공식 항목 명세](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusArrival)는 queryTime을 정보요청시간, predictTimeSec1/2를 초 단위로 설명한다. queryTime을 생성시각으로 사용하지 않으므로 현재 경기 조회는 source_status=unknown·predicted_arrival_at=null·valid_for_guidance=false다. 초가 있어도 최신 도착 후보/출발 안내 완료로 표시하지 않는다.
+유효기한은 수신+120초·검증 생성+120초(있을 때)·검색/매핑 기한 중 이른 값이다.120초 경계까지 유효, 초과면expired/후보[]/guidancefalse. 남은 시간은 ceil(추정 또는 검증 도착시각-현재 평가시각), 이미 지난 후보는 제외한다. provider_prediction_seconds는 원래 값을 유지한다. 정상 무결과는no_arrivals, 시간/운행근거 부족 또는 모든 후보 경과는insufficient_data다. 통과/탑승 사실로 해석하지 않는다.
+
+동일 후보 캐시 조회에도 남은 시간/지난 후보를 재평가하지만 최초 received_at/추정도착/기한은 유지한다. 활성 후보 상세는 진입/60초/탭 복귀 조회, 숨김 중지·이탈 취소·중복 방지. 재조회 오류502/503/504는 원래 캐시 기한을 연장하지 않고 화면에 실패를 표시한다.120초 초과면 기존 숫자를 제거한다. 인증/검색/장소 변경 오류는 기존 숫자를 즉시 제거한다. 화면은 서버시각+단조 경과시간으로 평가해 단말 시계 차이를 줄이며 '수신 기준 예상·N초 전 조회'를 표시한다. 실제 출발 시각 숫자는 개인 접근 근거를 연결하는 F07-02 후속이다.
+
+선택 이유: 사용자가 세 방법을 비교한 뒤 수신 기준 추정을 승인했다. 경기 API에 생성시각이 없어 생성시각 필수 조건은 기능 진행을 막지만, 추정 표시/짧은 재조회/만료로 한계를 알리며 실제 데이터를 활용할 수 있다. 재조회/여유5분은 공급자 지연을 증명하거나 제거하지 않는다. 생성시각 또는 공식 지연 상한 확보는 별도 F07-01c로 강화한다. API 모델v2는 estimated/timing_basis/remaining_seconds와 valid_for_guidance 의미 변경을 클라이언트에 요구한다.
 
 ## 남은 범위
 
-경기 자동 매핑과 본인GET 연결은 아래 합성/격리DB 검증까지 구현했다. F07-01 전체 완료에는 원천 생성시각/시간대·실제 키 통합검증·지원 범위 확인이 남았다. 서울 버스/지하철·운영 전체 지역/노선 지원·프론트 실시간 표시·출발/환승/목표 도착 계산은 미구현이다. 현재 journey.v1의 public_id/public_direction_id는null을 유지하며 서버 내부 메모리 매핑과 분리한다. 다음은 신뢰할 원천 시간 근거와 실제 연결 검증이다.
+경기 자동 매핑과 본인GET 연결은 아래 합성/격리DB 검증까지 구현했다. F07-01 전체 완료에는 별도 F07-01c의 원천 시간/갱신지연 근거·지원 범위 강화가 남았다. 경기 매핑/본인조회는 직전 실제 키8회 연결 확인, 수신 기준 추정은 이번 합성/격리DB 검증으로 구분한다. 서울 버스/지하철·운영 전체 지역/노선 지원·프론트 실시간 표시·출발/환승/목표 도착 계산은 미구현이다. 현재 journey.v1의 public_id/public_direction_id는null을 유지하며 서버 내부 메모리 매핑과 분리한다. 다음은 신뢰할 원천 시간 근거와 실제 연결 검증이다.
 
 ## F07-01b 방향 진단 준비/실조회 승인 대기 — 2026-10-13
 

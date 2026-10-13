@@ -40,6 +40,14 @@ def eligible(candidates):
     return None
 
 
+def same_evidence(one,two):
+    # Countdown/elapsed-candidate projection is intentionally reevaluated per GET.
+    def stable(value):
+        return {key:value.get(key) for key in ('model_version','search_id','candidate_id','first_leg_id',
+                'source_status','timing_basis','received_at','generated_at','expires_at')}
+    return stable(one)==stable(two)
+
+
 async def run(maximum):
     budget=Budget(maximum)
     original_open=urllib.request.OpenerDirector.open
@@ -82,7 +90,7 @@ async def run(maximum):
                            candidate_count=len(evidence['candidates']),generated_at_present=evidence['generated_at'] is not None,
                            predicted_arrival_available=any(c['predicted_arrival_at'] is not None for c in evidence['candidates']),
                            valid_for_guidance=evidence['valid_for_guidance'],second_get_no_upstream=budget.count==count_before_replay,
-                           second_get_same_evidence=replay[0]==200 and replay[2]['data']==evidence,
+                           second_get_same_evidence=replay[0]==200 and same_evidence(replay[2]['data'],evidence),
                            stored_search_unchanged=before==after,request_count=budget.count)
             return summary
     except Exception as error:

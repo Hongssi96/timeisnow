@@ -1,6 +1,7 @@
 """Owned first boarding evidence; unverified public mappings never fetch."""
 from datetime import datetime,timedelta,timezone
 from uuid import uuid5,NAMESPACE_URL
+import math
 from pydantic import ValidationError
 from app.auth import security
 from app.common.database import database
@@ -40,28 +41,57 @@ def checked_mapping(value,first,at):
     except (ValidationError,ValueError,TypeError):raise AuthError(422,'VALIDATION_ERROR','검증된 첫 탑승 매핑을 확인해주세요.') from None
 
 
+def project(evidence,at):
+    """Reassess original anchors; reading a cache never makes its receipt newer."""
+    value=evidence.model_copy(deep=True)
+    if value.received_at is not None and at<value.received_at:
+        value.source_status='clock_mismatch';value.status='insufficient_data'
+        value.valid_for_guidance=False;value.candidates=[]
+        value.reasons=['SOURCE_TIME_UNCONFIRMED'];return value
+    if at>value.expires_at:
+        value.status='expired';value.valid_for_guidance=False
+        value.candidates=[];value.reasons=['ARRIVAL_EXPIRED'];return value
+    candidates=[]
+    for item in value.candidates:
+        if item.predicted_arrival_at is not None:
+            remaining=(item.predicted_arrival_at-at).total_seconds()
+            if remaining<=0:continue
+            item.remaining_seconds=math.ceil(remaining)
+        candidates.append(item)
+    value.candidates=candidates
+    value.valid_for_guidance=value.status in ('fresh','estimated') and bool(candidates)
+    if value.status in ('fresh','estimated') and not candidates:
+        value.status='insufficient_data'
+        value.reasons=list(dict.fromkeys(value.reasons+['PREDICTION_UNCONFIRMED']))
+    return value
+
+
 def normalize(mapping,values,received_at,at,search_id,candidate_id,search_expires,generated_at=None):
     expires=min(received_at+timedelta(seconds=120),mapping.valid_until,search_expires)
-    source='unknown';reasons=[];generation=None
+    source='unknown';generation=None;anchor=None;basis='none'
+    reasons=['GENERATION_TIME_UNCONFIRMED']
     if isinstance(generated_at,datetime) and generated_at.tzinfo is not None:
         generation=generated_at;expires=min(expires,generation+timedelta(seconds=120))
         source='clock_mismatch' if generation>at or generation>received_at else 'stale' if at-generation>timedelta(seconds=120) else 'fresh'
-    if at<received_at:source='clock_mismatch'
-    if at>expires:status='expired';reasons=['ARRIVAL_EXPIRED']
-    elif source!='fresh':status='insufficient_data';reasons=['GENERATION_TIME_UNCONFIRMED' if source=='unknown' else 'SOURCE_TIME_UNCONFIRMED']
-    else:status='fresh'
+        if source=='fresh':anchor=generation;basis='source_generation';reasons=[]
+        else:reasons=['SOURCE_TIME_UNCONFIRMED']
+    elif generated_at is None:
+        anchor=received_at;basis='receipt_estimate'
+        reasons.append('RECEIPT_BASED_ESTIMATE')
+    if at<received_at:source='clock_mismatch';anchor=None;basis='none';reasons=['SOURCE_TIME_UNCONFIRMED']
+    status='fresh' if source=='fresh' else 'estimated' if anchor is not None else 'insufficient_data'
     candidates=[]
     for vehicle,seconds in values or []:
-        predicted=generation+timedelta(seconds=seconds) if source=='fresh' else None
-        if predicted is not None and predicted<=at:continue
+        predicted=anchor+timedelta(seconds=seconds) if anchor is not None else None
         identity=f'{search_id}:{candidate_id}:{mapping.provider}:{mapping.station_id}:{mapping.route_id}:{mapping.sta_order}:{mapping.route_dest_id}:{mapping.mapping_version}:{vehicle}'
         candidates.append(Arrival(candidate_id=uuid5(NAMESPACE_URL,identity),provider_prediction_seconds=seconds,predicted_arrival_at=predicted))
     candidates.sort(key=lambda item:(item.provider_prediction_seconds,str(item.candidate_id)))
-    if values==[] and status!='expired':status='no_arrivals'
-    elif not candidates and status=='fresh':status='insufficient_data';reasons=['PREDICTION_UNCONFIRMED']
-    elif values is None and status!='expired':status='insufficient_data';reasons=list(dict.fromkeys(reasons+['PREDICTION_UNCONFIRMED']))
-    return Evidence(search_id=search_id,candidate_id=candidate_id,first_leg_id=mapping.first_leg_id,status=status,source_status=source,
-        received_at=received_at,generated_at=generation,expires_at=expires,valid_for_guidance=status=='fresh' and bool(candidates),reasons=reasons,candidates=candidates)
+    if values==[]:status='no_arrivals'
+    elif values is None:status='insufficient_data';reasons=list(dict.fromkeys(reasons+['PREDICTION_UNCONFIRMED']))
+    evidence=Evidence(search_id=search_id,candidate_id=candidate_id,first_leg_id=mapping.first_leg_id,status=status,source_status=source,
+        timing_basis=basis,received_at=received_at,generated_at=generation,expires_at=expires,
+        reasons=reasons,candidates=candidates)
+    return project(evidence,at)
 
 
 def reserve_refresh(user_id):
@@ -90,7 +120,7 @@ def first_arrivals(user_id,search_id,candidate_id,*,verified_mapping=None):
             if entry.evidence is not None and entry.attempted_at is not None and now()-entry.attempted_at<timedelta(seconds=60) and now()<=entry.evidence.expires_at:
                 cached=entry.evidence.model_copy(deep=True)
                 cached.expires_at=min(cached.expires_at,current['expires_at'],entry.expires_at)
-                return cached
+                return project(cached,now())
             reserve_refresh(user_id)
             value=entry.mapping or public_mapping.resolve(entry.context,min(entry.expires_at,current['expires_at']))
             if value is None:
