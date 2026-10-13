@@ -1,17 +1,17 @@
-# 첫 탑승 도착 근거 — F07-01a
+# 첫 탑승 도착 근거 — F07-01a/01b
 
-- 날짜:2026-10-13·Notion v0.58. F07-01 전체는 미완료다.
+- 날짜:2026-10-13·Notion v0.65. F07-01 전체는 미완료다.
 - 목표: 검증된 공공 ID가 있는 첫 탑승만 조회하고, 원천 최신성을 확인할 수 없으면 출발 계산에 사용하지 않는다.
 
 ## 현재 공개 조회
 
-GET /api/v1/journey-searches/{search_id}/candidates/{candidate_id}/first-arrivals: 로그인·본인·no-store, CSRF 불필요. 잘못된UUID/없음/타인/검색 만료404, 장소 위치 버전 변경409. 현재 공공 ID/방향이 없는 버스 후보는200 mapping_required·후보[]·valid_for_guidance=false이며 공급자를 호출하지 않는다. 지하철 첫 탑승은 unsupported다. 클라이언트의 정류소ID/검증 완료 쿼리/플래그는 매핑으로 사용하지 않는다.
+GET /api/v1/journey-searches/{search_id}/candidates/{candidate_id}/first-arrivals: 로그인·본인·no-store, CSRF 불필요. 잘못된UUID/없음/타인/검색 만료404, 장소 위치 버전 변경409. 신규 검색의 서버 메모리 근거로 유일 경기 매핑을 확인한 버스 후보는 실제 공급자를 조회한다. 근거 없음/재시작/다른 프로세스/퇴출·매핑 미확인은200 mapping_required·후보[]·valid_for_guidance=false이며 공급자를 호출하지 않는다. 지하철 첫 탑승은 unsupported다. 클라이언트의 정류소ID/검증 완료 쿼리/플래그는 매핑으로 사용하지 않는다.
 
-arrival.evidence.v1: search_id,candidate_id,first_leg_id,status,source_status,received_at/generated_at,expires_at,valid_for_guidance,reasons,candidates. status는 mapping_required/unsupported/no_arrivals/insufficient_data/fresh/expired, source_status는unknown/fresh/stale/clock_mismatch다. 후보는 비식별candidate_id,provider_prediction_seconds,predicted_arrival_at(nullable). 원문·차량번호·좌표·키/URL 비노출, 새 저장/캐시/DDL/기간 연장 없음.
+arrival.evidence.v1: search_id,candidate_id,first_leg_id,status,source_status,received_at/generated_at,expires_at,valid_for_guidance,reasons,candidates. status는 mapping_required/unsupported/no_arrivals/insufficient_data/fresh/expired, source_status는unknown/fresh/stale/clock_mismatch다. 후보는 비식별candidate_id,provider_prediction_seconds,predicted_arrival_at(nullable). 원문·차량번호·좌표·키/URL 비노출, DB/루틴 영구 저장·DDL/기한 연장 없음. 서버 메모리 근거/60초 도착 재사용은 아래 F07-01b 정책을 따른다.
 
 ## 내부 조회와 경기 어댑터
 
-first_arrivals(user_id,search_id,candidate_id,verified_mapping=...)는 호출 전후 본인/활성 회원·검색/후보 스냅샷·장소 위치 버전·매핑 기한을 확인한다. 호출 서비스가 첫 교통leg와 연결을 검증한 Mapping만 전달한다. provider=gyeonggi-bus,first_leg_id(UUID),station_id/route_id/route_dest_id(양수 숫자 문자열1~20자),sta_order(정수1~1000),mapping_version(ASCII토큰1~200자),verified_at/valid_until(aware datetime)을 사용한다. 공개 입력으로 이 구조를 받지 않으며 아직 자동 매핑 저장소/호출자는 없다.
+first_arrivals(user_id,search_id,candidate_id,verified_mapping=...)는 호출 전후 본인/활성 회원·검색/후보 스냅샷·장소 위치 버전·매핑 기한을 확인한다. 호출 서비스가 첫 교통leg와 연결을 검증한 Mapping만 전달한다. provider=gyeonggi-bus,first_leg_id(UUID),station_id/route_id/route_dest_id(양수 숫자 문자열1~20자),sta_order(정수1~1000),mapping_version(ASCII토큰1~200자),verified_at/valid_until(aware datetime)을 사용한다. 공개 입력으로 이 구조를 받지 않는다. F07-01b 자동 매핑은 서버 메모리의 본인 검색/후보 근거로 이 구조를 생성한다.
 
 고정 https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalItemv2, DATA_GO_KR_SERVICE_KEY(.env보다프로세스환경우선),3초·256KiB·리다이렉트/HTTP 자동 전환 없음. 정상0/무결과4/공급자 실패를 구분하고 stationId/routeId/staOrder/routeDestId가 일치하는 유일 행만 사용한다. RUN의 predictTimeSec1/2는1~86400초 정수, vehId1/2는숫자ID/0제외. 분 필드로 대체하지 않고0/음수/누락/미확인 운행 상태는 시간 근거 부족이다. STOP은무후보,WAIT/PASS는운행/정차 조건이 미확인인 보수적 상태다. 중복 JSON 키/비정상 상수/중복 차량·잘못된 스키마는502, 전송/권한/쿼터503, 시간초과504. 원문·요청URL·키를 로그/DB에 기록하지 않는다.
 
@@ -23,8 +23,7 @@ first_arrivals(user_id,search_id,candidate_id,verified_mapping=...)는 호출 �
 
 ## 남은 범위
 
-F07-01 전체 완료에는 실제 경로의 공공 정류소/노선/순번/방향 운영 매핑, 공급자 생성시각/시간대와 실조회 확인, 서울 버스/지하철 등 지원 확대가 필요하다. 현재 검색 모델의 public_id/public_direction_id는null이다. 자동 매핑·실제 공급자 호출·프론트·출발 시각/환승/목표 도착 계산은 이번 단계에서 수행하지 않았다. 다음은 F07-01b 운영 매핑과 신뢰 가능한 시간 근거 연결이다.
-
+경기 자동 매핑과 본인GET 연결은 아래 합성/격리DB 검증까지 구현했다. F07-01 전체 완료에는 원천 생성시각/시간대·실제 키 통합검증·지원 범위 확인이 남았다. 서울 버스/지하철·운영 전체 지역/노선 지원·프론트 실시간 표시·출발/환승/목표 도착 계산은 미구현이다. 현재 journey.v1의 public_id/public_direction_id는null을 유지하며 서버 내부 메모리 매핑과 분리한다. 다음은 신뢰할 원천 시간 근거와 실제 연결 검증이다.
 
 ## F07-01b 방향 진단 준비/실조회 승인 대기 — 2026-10-13
 
@@ -88,3 +87,18 @@ Notion v0.63. direction_candidate에 서버 진단 내부 scoped_direction을 �
 이번7회+이전16회=누적23회, 승인10+8+8=26회 중3회 잔여다. queryTime 존재는 확인했지만 verified_generation_time_available=false·valid_for_guidance=false·production_mapping_validated=false를 유지한다. 원문·키·차량번호 저장/출력·사용자 저장 장소/좌표 읽기 없음. 코드/테스트/API/계산/저장 변경 없고 이번 테스트 재실행도 없다.
 
 이는 공개 한 사례의 방향 진단 성공이다.100m는 진단 정책이며 운영 허용오차/자동 매핑 저장·공개GET 연결은 미확인이다. 경기 원천 생성시각도 없어 최신 도착/출발 계산 완료가 아니다. Notion v0.64 저장 확인·F07-01b/F07-01 미체크 유지. 다음은 운영 매핑 정책/조회 연결 설계와 신뢰할 원천 시각 확보다.
+
+
+## F07-01b 경기 자동 매핑/본인 조회 연결 — 2026-10-13
+
+Notion v0.65. 신규 경로 검색 작업은 첫 교통leg가 BUS이고 차량 이름1개일 때 공개 버스 정류소 이름·양끝 점만 본인/검색/후보/fingerprint에 묶어 서버 메모리에 보관한다. 입력 GPS·도보 전체 geometry·원문·키는 저장하지 않는다. 검색300초 이내·프로세스당 최근32검색/검색당 최대20후보, 만료 후 사용 금지/다음 접근 정리. 재시작/다른 프로세스/퇴출·옛 검색은 mapping_required이며 새 검색으로 복구한다. 루틴 영구 저장·새DB/DDL 없음.
+
+첫-arrivals GET은 이 근거로 경기 정류소 검색→최대2정류소 경유노선→최대2노선의 정차목록→유일 노선 상세를 대조한다. 초기 운영 정책은 양끝30m 이내·모든 정류소 이름의 연속 순서·공식 station/route/방문순번/방향ID·일관된 회차/같은 방향·실제 끝 정류소 일치다. 근처 한 정류소/일부 노선만 골라 유일하다고 표시하지 않는다. 기존100m는 진단용으로 남고 운영 정책이 아니다. 복수 차량/노선·회차 넘기/회차점 승차·순환/근거 없음은 mapping_required, 첫 지하철은 unsupported다.
+
+매핑 최대6회/총5초 예산·각최대3초/응답1MiB·고정HTTPS/리다이렉트 및 HTTP 전환 금지. 도착은 기존3초/256KiB/정확한ID·RUN·양수 예측초 검사다. 전체최대7회. 같은 후보는 프로세스 내 lock으로 병렬 중복 차단429/Retry-After2, 사용자 공급자 갱신10회/분 버킷429. 수신 후60초 동안 재사용하되 최초 수신/생성/검색/매핑 기한을 연장하지 않는다. 미매핑 결과도60초 중복 호출 방지. 캐시/매핑 호출 전후 활성 회원/본인·장소 버전·검색/후보 fingerprint/매핑 기한을 확인하고 매핑 도중 후보가 바뀌면 도착 호출 전409로 차단한다. 검색 기한이 짧아져도 캐시 응답 기한을 함께 줄인다.
+
+경기 원천 생성시각은 계속 unknown이다. 예측 초가 있어도 generated_at=null·predicted_arrival_at=null·valid_for_guidance=false다. GET 입력/응답 필드·쿠키/소유권/no-store·CSRF 불필요를 유지하며 공개 입력의 정류소ID/검증플래그는 무시한다. 공급자502/503/504, 현재 소유권/기한404·장소/후보 변경409. 새 AI/프론트/출발 계산 연결 없음.
+
+검증: 신규 연결16개9.167초, 최종 전체백엔드283개119.790초 전부 통과. 실제 격리PostgreSQL/ASGI·합성 공급자로 경로 작업→메모리 근거→공공 매핑→본인GET→도착 초/unknown·60초 재사용을 검증했다. 30m 초과/100m 이내·연속 정차 누락·복수/충돌·키/크기/JSON/시간초과·재시작/용량/소유권/fingerprint/TTL·동시/버킷·호출 중 후보/검색 변경·DB 경로 무변경/원문 비노출도 확인했다. 이번 키 실조회0회이며 이전 공개 진단을 신규 운영 정책/GET 실검증으로 표시하지 않는다.
+
+서버 최종 적용health200·프론트200·비인증GET401. DB head0011·회원20/장소35/루틴12/ai_executions0/walking_paths0 유지. F07-01b/F07-01 전체는 원천 생성시각/최신성·실제 키 통합검증·지원 범위가 남아 미완료다. 다음은 신뢰할 원천 시각/공급자 확인과 신규 운영 연결의 실제 키 통합 검증이다. 기존 공개 진단 예산은 누적23회/승인26회·3회 잔여이고 이번에 추가 사용하지 않았다.

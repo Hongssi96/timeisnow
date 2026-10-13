@@ -9,6 +9,7 @@ from uuid import uuid4
 from psycopg.types.json import Jsonb
 
 from app.auth import security
+from app.arrivals import cache as arrival_cache
 from app.common.database import database
 from app.common.errors import AuthError
 from app.common.response import answer
@@ -62,6 +63,7 @@ def replay(connection, request, previous, user_id, fingerprint):
 
 
 def execute(search_id, user_id, start, end, preference):
+    contexts={}
     try:
         with database() as connection:
             row = repository.claim_queued(connection, search_id)
@@ -70,7 +72,7 @@ def execute(search_id, user_id, start, end, preference):
             if not owner or owner['status'] != 'active': missing()
             check_refs(connection,user_id,row['place_refs'])
         places_provider.region_for_location(start); places_provider.region_for_location(end)
-        candidates, reasons = provider.normalize(provider.fetch_routes(start,end),preference)
+        candidates, reasons = provider.normalize(provider.fetch_routes(start,end),preference,mapping_contexts=contexts)
         error = None
     except AuthError as exception:
         candidates, reasons = [], []
@@ -94,6 +96,8 @@ def execute(search_id, user_id, start, end, preference):
                     error = {'code':exception.code,'message':exception.message,'details':[]}
             if error or row['expires_at'] <= now: candidates = []
             repository.finish_search(connection,('failed' if error else 'succeeded',Jsonb(candidates),Jsonb(reasons),Jsonb(error) if error else None,search_id))
+        if not error and candidates:
+            arrival_cache.publish(user_id,search_id,candidates,contexts,row['expires_at'])
     except Exception:
         # Failed DB writes leave a lease that becomes JOB_INTERRUPTED; never log input.
         return

@@ -63,7 +63,8 @@ def names(values):
     return result
 
 
-def normalize(data, preference):
+def normalize(data, preference, *, mapping_contexts=None):
+    if mapping_contexts is not None: mapping_contexts.clear()
     if not isinstance(data, dict):
         invalid()
     status = data.get('status')
@@ -85,7 +86,7 @@ def normalize(data, preference):
         steps = route.get('steps')
         if not isinstance(steps, list) or not 1 <= len(steps) <= 500:
             invalid()
-        legs, walking, vehicle_options = [], 0, {}
+        legs, walking, vehicle_options, bus_contexts = [], 0, {}, {}
         for index, step in enumerate(steps):
             if not isinstance(step, dict) or not isinstance(step.get('properties'), dict):
                 invalid()
@@ -109,6 +110,9 @@ def normalize(data, preference):
                 invalid()
             if kind == 'WALKING': walking += leg_seconds
             leg_id = str(uuid4())
+            if kind == 'BUS' and len(vehicles)==1:
+                bus_contexts[leg_id]={'first_leg_id':leg_id,'stops':[{'name':n} for n in stops],
+                                      'points':[points[0][:],points[-1][:]],'vehicle':vehicles[0]}
             if kind != 'WALKING':
                 vehicle_options[leg_id] = [{'name':item['name'],'provider_type':item.get('type')} for item in sp['vehicles']]
             legs.append({'leg_id':leg_id,'sequence':index,'type':kind,'seconds':leg_seconds,
@@ -121,8 +125,15 @@ def normalize(data, preference):
             'ordered_legs':legs,'transfer_count':transfers,'total_seconds':seconds,'total_distance_meters':meters,
             'walking_seconds':walking,'estimated_arrival_at':None,'time_sources':['provider_estimate'],
             'missing_segments':missing[:]},vehicle_options))
+        first=next(leg for leg in legs if leg['type']!='WALKING')
+        if mapping_contexts is not None and first['leg_id'] in bus_contexts:
+            mapping_contexts[candidates[-1]['candidate_id']]=bus_contexts[first['leg_id']]
     candidates.sort(key=lambda c: ((c['transfer_count'] if preference == 'fewer_transfers' else c['walking_seconds'] if preference == 'less_walking' else c['total_seconds']), c['total_seconds'],c['transfer_count'],c['walking_seconds']))
     candidates = candidates[:20]
+    if mapping_contexts is not None:
+        kept={c['candidate_id'] for c in candidates}
+        for identifier in list(mapping_contexts):
+            if identifier not in kept: del mapping_contexts[identifier]
     if not candidates and not reasons:
         reasons.append('NO_ROUTE')
     return candidates, list(dict.fromkeys(reasons + [reason for candidate in candidates for reason in candidate['missing_segments']]))

@@ -1122,3 +1122,24 @@ query_time_present=true이지만 verified_generation_time_available=false·valid
 배운 개념: 실제 정류소 방문 순번·공식 진행 방향 ID·해당 방향의 마지막 정류소를 함께 대조하면 canonical 노선 기점 ID의 왕복 동일성 가정을 제거할 수 있다. 한 사례의 방향 일치와 운영 전체 매핑/교통 정보 최신성은 별도 완료 조건이다.
 
 F07-01b/F07-01 전체 미완료.100m 운영 허용오차·자동 매핑 저장/공개GET 호출 연결·원천 생성시각 확보가 남았다. 다음은 운영 매핑 정책/조회 연결 설계와 신뢰할 원천 시각 확보다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+
+## 2026-10-13 — F07-01b 경기 운영 매핑/본인 조회 연결
+
+목표: 검증된 경로 근거를 실제 조회 API와 연결하며 경기 원천 생성시각 unknown은 출발 계산에 쓰지 않는다. 시작 시 TODO·최신 Notion v0.64·journeys/provider/service/repository 및 arrivals/provider/service/dto·연결 테스트를 확인했다. git fetch 후 main c4794a6 유지, 동일 F07-01b codex/first-boarding-mapping에서 계속했다. 사전 Notion v0.65에30m/연속 정차/공식 방향·메모리 수명/용량·GET 호출/오류/60초 재사용/갱신 제한과 이전 호환성 영향을 기록한 후 구현했다.
+
+변경 파일: backend/app/arrivals/matching.py는 기존 진단 매칭을 공유 모듈로 옮기고 require_contiguous를 추가했다. backend/route_mapping_probe.py는 기존 진단 호환 import를 유지한다. cache.py는 본인/검색/후보/fingerprint·공개 버스 이름/양끝 점을 최근32검색/20후보·검색 기한으로 묶는다. 입력GPS/도보geometry·원문/키는 저장하지 않는다. 만료는 사용을 차단하고 다음 접근에 메모리를 정리한다. 재시작/다중프로세스/퇴출은 미매핑 복구다.
+
+mapping.py는 고정 경기 HTTPS·3초/1MiB·매핑5초 예산·중복JSON/비정상상수/전송 오류/무결과4 구분과 정류소≤2/노선≤2·30m·전체 연속 이름/순번·공식 방향/회차/실제 끝 정류소를 검증한다. 총최대6회 매핑+1회 도착이다. journeys/provider.py는 선택적으로 첫BUS/단일차량의 최소 공개 근거를 추출하고 최종20후보만 남긴다. journeys/service.py는 DB 경로 저장 성공 후 메모리 근거를 게시한다. 실패/만료/검색 탈락이면 게시하지 않는다.
+
+arrivals/service.py는 본인GET을 cache/자동매핑/기존 엄격 도착 어댑터와 연결했다. 동시 동일 후보는lock429/Retry-After2, 실제 갱신10회/분 HMAC 버킷·60초 수신 재사용·TTL/수신 시각 무연장·기한 단축을 적용한다. 매핑/도착/캐시 전후 회원/본인/장소·검색/후보 fingerprint/매핑 기한을 재검사하고 매핑 중 후보 변화는 도착 호출 전에409로 차단한다. 공개정류소ID/검증플래그를 받지 않고 생성시각unknown이면 ETA null/guidancefalse다. API 필드/CSRF/no-store·DB 경로/루틴 저장은 유지, 새DDL/프론트/AI/출발 계산 없음.
+
+테스트: backend/tests/test_arrival_mapping_connection.py 신규16개9.167초 전부 통과. 첫 실행은 mock 원함수 참조/URL 문자열 타입/계정 중복 테스트 도우미 오류였고 수정했다. 스냅샷 테스트의 total_seconds만 변경하면 공통 모델 검증에서502가 나오는 것을 확인해 유효한 missing_segments 변화로 교체했다. 이후 호출 중 스냅샷 변화/검색 기한 단축 검사와30m 초과100m 이내·정류소 중간 누락을 엄밀하게 보강했다. 기존 도착17개/정류소15개도 통과. 중간 전체281개/282개 통과 후 최종 전체283개119.790초 전부 통과했다. 최종은 실제 격리 PostgreSQL/ASGI·합성 공급자이며 새로운 실제 키 조회0회다. 캐시 재시작/용량/소유권/fingerprint·스냅샷/장소/검색 만료·연속 정차/좌표/방향 충돌·전송/JSON/크기/누락 키/시간초과·쿼터/병렬·TTL/수신 무연장·응답/DB 경로 비변경·원문 비노출을 확인했다.
+
+실행: 최종 코드로 기존 프로젝트 백엔드만 확인 후 재시작, launcher29912·health200·프론트200·비인증 first-arrivals401 확인. DB head0011_walking_recalculation·회원20/장소35/루틴12/ai_executions0/walking_paths0을 적용 전후 확인했다. 마이그레이션 없음. AST service/router/provider 영역 SQL 직접 실행0건·git diff --check 확인. 프론트 변경이 없어 시각 검증/프론트 테스트는 수행하지 않았다.
+
+문서: API 목록/5.9 공통 조회와 구현 상태·오류/캐시/메모리/계산 차단·이전 API 호환성을 Notion v0.65에 맞췄다. api_contract.md·arrivals_api.md·planning.md·provider_plan.md·public_arrivals_plan.md·logging.md·README.md·todo.md·feature_breakdown.md를 동기화하고 Notion 저장을 다시 읽었다. 응답 필드/입력은 유지하지만 근거가 있는 새 검색의 GET은 공급자를 조회할 수 있어 이전 항상미매핑 동작은 변경됐다. 생성시각unknown으로 최신 도착/출발 안내 완료라고 표시하지 않는다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 좌표를 DB에 영구 저장하지 않아도 검증한 최소 공개 교통 근거를 검색 수명에 묶어 매핑할 수 있다. 재시작/다중프로세스에서 메모리 근거가 없어지면 새 검색을 요구하는 제약이 있다. 수신 결과 재사용은 최초 수신/검색 기한을 연장하면 안 되고, 긴 매핑 조회 전후의 후보/장소 변화도 확인해야 한다.
+
+남은 문제: F07-01b/F07-01 전체 미완료. 원천 생성시각/최신성·새30m/연속 정책과GET의 실제 키 통합검증·지원 범위 확대가 남았다. 이번 실제 키 사용0회, 기존 공개 진단 예산 누적23회/승인26회·3회 잔여다. 이전 공개 진단을 신규 정책/GET 실검증으로 대체하지 않는다. 다음은 신뢰할 원천 시각/공급자 확인과 새 운영 연결 실검증이다.

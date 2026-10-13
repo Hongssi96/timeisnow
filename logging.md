@@ -166,3 +166,6 @@ ai_executions.reused_estimates에 최소 원본 연결(candidate/estimate/revisi
 ## F07-01a 도착 근거 비저장 — 2026-10-13
 
 새조회는최소비식별후보/상태만응답하고 차량번호·좌표/주소·공급자원문·키/URL을로그/DB에남기지않는다. 공급자예외원문을오류문구에복사하지않는다. 조회 전후본인/버전을검사하며새품질이력/캐시/TTL연장없음. 합성검증과실제도착실조회를구분한다. arrivals_api.md·Notion v0.58.
+
+
+F07-01b(2026-10-13, Notion v0.65): 경기 첫BUS의 서버 메모리 근거/30m·연속 정차·공식 방향 자동 매핑과 본인 first-arrivals GET을 연결했다. 검색300초/32검색/20후보·프로세스 내60초 재사용·10회/분·호출 전후 본인/버전/fingerprint/TTL 검사. 사용자GPS/도보geometry·키/원문/차량번호 비저장, DB/DDL/AI/프론트 변경 없음. 새 연결16개/전체283개 통과·실제 키 통합검증0회. 생성시각unknown이라 출발 계산은 차단하고 F07-01b 전체 미완료다. 상세 arrivals_api.md·development_log.md.

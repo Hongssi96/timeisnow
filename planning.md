@@ -517,3 +517,6 @@ ai_prompts.md의 common.v1 SYSTEM과 walking_estimate.v1/journey_explanation.v2 
 ### F07-01a 도착 근거 준비 (2026-10-13)
 
 본인 검색 후보의 첫 탑승 조회를 추가하고 공공 ID가 없으면 매핑 미확인으로 반환한다. 검증된 경기 버스 ID를 받는 내부 HTTPS 어댑터와120초 수신/원천 신선도 검사를 준비했다. 경기 요청시각을 생성시각으로 바꾸지 않아 실제 도착 연결은 아직 미완료다. F07-01은운영 매핑/원천 시간/실조회 확인 전까지체크하지 않는다. arrivals_api.md·Notion v0.58.
+
+
+F07-01b(2026-10-13, Notion v0.65): 경기 첫BUS의 서버 메모리 근거/30m·연속 정차·공식 방향 자동 매핑과 본인 first-arrivals GET을 연결했다. 검색300초/32검색/20후보·프로세스 내60초 재사용·10회/분·호출 전후 본인/버전/fingerprint/TTL 검사. 사용자GPS/도보geometry·키/원문/차량번호 비저장, DB/DDL/AI/프론트 변경 없음. 새 연결16개/전체283개 통과·실제 키 통합검증0회. 생성시각unknown이라 출발 계산은 차단하고 F07-01b 전체 미완료다. 상세 arrivals_api.md·development_log.md.
