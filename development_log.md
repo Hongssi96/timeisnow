@@ -1092,3 +1092,18 @@ F07-01a만완료다. F07-01전체는실제경로의공공ID/방향운영매핑·
 최신 Notion v0.61·TODO를 읽고 명세 v0.62와 api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md에 실결과/남은 범위를 기록했다. Notion을 다시 읽어 저장 확인했다. API/계산/저장 계약·코드·DDL·프론트/AI 영향 없음, 테스트도 재실행하지 않았다. 새 테스트 통과로 보고하지 않는다.
 
 배운 개념: 진단 코드의 단순 왕복 가정 실패는 원천 데이터나 실제 운행 방향 오류의 증명이 아니다. 그룹화한 오류 사유를 구체적 필드/전제 검사와 분리해야 다음 조사를 정확히 좁힐 수 있다. 다음은 단순 왕복 전제와 실제 양방향 종점 구조를 분리하고 공식 경유노선 방향을 대조하는 작업이다. F07-01b/F07-01 전체 미완료·원천 최신성/운영 연결도 미완료다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+
+## 2026-10-13 — F07-01b 왕복 전제 분리
+
+목표: 실제 SIMPLE_RETURN_ENDPOINT_UNCONFIRMED 사유와 단순 왕복 가정을 분리하고 공식 경유노선 방향을 실제 끝 정류소와 대조한다. 최신 Notion v0.62/TODO/route_mapping_probe.py·기존 테스트를 읽고 경기 공식 정류소 경유노선/노선 정차 목록 매뉴얼을 웹으로 다시 확인했다. git fetch 후 동일 미완료 기능 codex/first-boarding-mapping에서 계속했다.
+
+변경: backend/route_mapping_probe.py direction_candidate의 선택적 scoped_direction은 공식 경유노선으로 좁힌 station/route/방문순번을 재확인하고 routeDestId와 해당 방향의 실제 마지막 정류소 ID를 대조한다. 기존 scope 없는 단순 왕복 가설은 유지한다. 실제 회차점 ID/노선 상세 routeId·연속 순번/회차 일관성·승하차/방향 경계 검증은 유지하고, 왕복 마지막 물리 정류소 ID를 canonical 기점과 강제로 같게 두지 않는다. canonical 종점의 물리 별칭도 방향 근거로 대체하지 않는다. 순환/회차 통과/회차점 승차·scope 충돌은 계속 차단한다. backend/check_gyeonggi_mapping.py는 해당 scope를 연결하고 고정 direction_basis/boolean return_endpoint_matches_start를 출력한다. 공개 API/운영 매핑/저장에는 연결하지 않는다.
+
+실제 검증: backend/tests/test_route_mapping_probe.py21개0.003초, test_station_first_mapping.py15개0.009초 총36개 통과. 신규7개는 다른 왕복 끝 ID·canonical 종점 별칭·종착/방문 scope 충돌·회차 통과/승차·결측/boolean/순환·CLI 방향 대조와 guidance/production false 유지다. 이전 합성 회귀 포함 통과, 전체 백엔드/프론트는 재실행하지 않았다. 수정 후 외부 키 실조회0회이며 이전 실제 실패가 해결됐다고 보고하지 않는다.
+
+문서: 최신 명세 v0.63·api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md를 갱신하고 Notion 저장을 다시 읽었다. API/계산/저장 계약·DDL·프론트/AI·클라이언트 호환성 변경 없음. 진단/검증 구현 상태와 남은 실제 대조만 기록했다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 왕복 양방향의 물리 정류소 ID는 같다고 가정할 수 없다. 공식 정류소 방문 방향 ID와 실제 정차 목록의 해당 방향 끝 정류소를 비교해야 하며 이름/노선 전체 종점을 대신 쓰면 안 된다. 합성 검증 통과와 실제 공급자 사례 해결은 별도다.
+
+남은 작업: 누적16회/승인18회로2회 잔여, 전체 진단 재실행에는 부족하다. 동일 공개 경로/키/공식 HTTPS --max-requests 8로 추가 최대8회 검증 초안을 문서에 준비했다. 실제 방향/원천 시각·운영 매핑/출발 연결은 미완료라 F07-01b/F07-01 체크하지 않는다. 다음은 수정 진단의 실제 방향 대조다.

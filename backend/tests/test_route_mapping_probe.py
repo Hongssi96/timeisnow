@@ -107,6 +107,46 @@ class DirectionProbeTests(unittest.TestCase):
         self.assertEqual(result['reason'],'DIRECTION_FIELDS_UNCONFIRMED')
         self.assertNotIn('private',str(result))
 
+    def scoped(self, board=1, alight=2, destination='30'):
+        match, rows, info = self.fixture(board,alight)
+        return match, rows, info, dict(match, route_dest_id=destination)
+
+    def test_scoped_direction_allows_different_return_stop_id(self):
+        match, rows, info, scope = self.scoped(4,5,'50')
+        rows[-1]['stationId']='50'; match['alight_station_id']='50'
+        result=direction_candidate(match,rows,info,scoped_direction=scope)
+        self.assertEqual(result['route_dest_id'],'50')
+        self.assertEqual(result['direction_basis'],'station_route_scope')
+        self.assertFalse(result['return_endpoint_matches_start'])
+        self.assertEqual(direction_candidate(match,rows,info)['reason'],'SIMPLE_RETURN_ENDPOINT_UNCONFIRMED')
+
+    def test_scoped_direction_uses_actual_boundary_not_canonical_end_alias(self):
+        match,rows,info,scope=self.scoped(); info['endStationId']='31'
+        self.assertEqual(direction_candidate(match,rows,info,scope)['route_dest_id'],'30')
+
+    def test_scoped_destination_conflict_is_rejected(self):
+        match,rows,info,scope=self.scoped(destination='999')
+        self.assertEqual(direction_candidate(match,rows,info,scope)['reason'],'STATION_ROUTE_DESTINATION_CONFLICT')
+
+    def test_scoped_station_route_and_visit_identity_must_match(self):
+        for key in ['route_id','board_station_id','board_order']:
+            match,rows,info,scope=self.scoped(); scope[key]='999'
+            self.assertEqual(direction_candidate(match,rows,info,scope)['reason'],'STATION_ROUTE_IDENTITY_CONFLICT')
+
+    def test_scoped_direction_does_not_allow_crossing_or_boarding_turn(self):
+        for board,alight in [(2,4),(3,4)]:
+            args=self.scoped(board,alight)
+            self.assertEqual(direction_candidate(*args)['status'],'turnaround_unresolved')
+
+    def test_scoped_invalid_destination_turn_and_circular_route_remain_unresolved(self):
+        for value in [None, True, '0']:
+            match,rows,info,scope=self.scoped(); scope['route_dest_id']=value
+            self.assertEqual(direction_candidate(match,rows,info,scope)['status'],'direction_unresolved')
+        match,rows,info,scope=self.scoped(); info['turnStID']='999'
+        self.assertEqual(direction_candidate(match,rows,info,scope)['reason'],'TURN_DESTINATION_UNCONFIRMED')
+        match,rows,info,scope=self.scoped(); info['endStationId']=info['startStationId']
+        self.assertEqual(direction_candidate(match,rows,info,scope)['reason'],'CIRCULAR_DIRECTION_UNCONFIRMED')
+
     def test_exact_unique_arrival_direction_is_required(self):
         match, rows, info = self.fixture(); direction = direction_candidate(match, rows, info)
         arrival = {'stationId': '10', 'routeId': '99', 'staOrder': 1, 'routeDestId': '30'}

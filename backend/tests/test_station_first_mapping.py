@@ -51,7 +51,7 @@ class StationScopeTests(unittest.TestCase):
 
 
 class StationFirstCliTests(unittest.TestCase):
-    def execute(self, route_count=1, station_failure=False, empty=False, budget=10, info_missing=False):
+    def execute(self, route_count=1, station_failure=False, empty=False, budget=10, info_missing=False, return_id="10"):
         stages=[]
         def wrapped(field, rows, code=0):
             return {'response':{'msgHeader':{'resultCode':code, 'queryTime':'request-time'}, 'msgBody':{field:rows}}}
@@ -74,7 +74,7 @@ class StationFirstCliTests(unittest.TestCase):
                 names=['출발' if rid=='99' else '다른','도착','회차','복귀','출발']
                 rows=[{'stationId':sid,'stationSeq':i+1,'stationName':name,'turnSeq':3,
                        'turnYn':'Y' if i==2 else 'N','x':127.11 if i==1 else 127.1,'y':37.41 if i==1 else 37.4}
-                      for i,(sid,name) in enumerate(zip(['10','20','30','40','10'],names))]
+                      for i,(sid,name) in enumerate(zip(['10','20','30','40',return_id],names))]
                 return wrapped('busRouteStationList', rows)
             if stage=='getBusRouteInfoItemv2':
                 return wrapped('busRouteInfoItem',{} if info_missing else {'routeId':'99','startStationId':'10','endStationId':'30','turnStID':'30'})
@@ -97,6 +97,15 @@ class StationFirstCliTests(unittest.TestCase):
         self.assertFalse(result['valid_for_guidance'])
         self.assertFalse(result['verified_generation_time_available'])
         self.assertNotIn('getBusRouteListv2',stages)
+
+    def test_different_return_endpoint_uses_scoped_direction_and_stays_unfit_for_guidance(self):
+        code,result,stages=self.execute(return_id='50')
+        self.assertEqual(code,0)
+        self.assertTrue(result['arrival_direction_matches'])
+        self.assertEqual(result['direction_basis'],'station_route_scope')
+        self.assertFalse(result['return_endpoint_matches_start'])
+        self.assertFalse(result['valid_for_guidance'])
+        self.assertFalse(result['production_mapping_validated'])
 
     def test_unresolved_direction_reason_is_preserved_without_claiming_conflict(self):
         code,result,stages=self.execute(info_missing=True)

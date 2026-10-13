@@ -113,12 +113,14 @@ def main(max_requests=10):
             info = gg("busrouteservice", "getBusRouteInfoItemv2",
                       {"routeId": match["route_id"]}, "busRouteInfoItem")
             route_rows = dict(routes)[match["route_id"]]
-            direction = direction_candidate(match, route_rows, info[0] if len(info) == 1 else {})
+            direction = direction_candidate(match, route_rows, info[0] if len(info) == 1 else {}, scoped_direction=match)
             if direction['status'] == 'direction_candidate' and direction['route_dest_id'] != match['route_dest_id']:
                 direction = {'status': 'direction_unresolved', 'route_dest_id': None,
                              'reason': 'STATION_ROUTE_DESTINATION_CONFLICT'}
             summary["direction_status"] = direction["status"]
             summary["direction_reason"] = direction.get("reason")
+            summary["direction_basis"] = direction.get("direction_basis")
+            summary["return_endpoint_matches_start"] = direction.get("return_endpoint_matches_start")
             rows = gg("busarrivalservice", "getBusArrivalItemv2",
                       {"stationId": match["board_station_id"], "routeId": match["route_id"],
                        "staOrder": str(match["board_order"])}, "busArrivalItem")

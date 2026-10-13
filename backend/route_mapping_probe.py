@@ -67,8 +67,8 @@ def match_route(stops, points, routes, max_endpoint_meters):
             "matches": matches}
 
 
-def direction_candidate(match, supplied_rows, route_info):
-    """Diagnostic hypothesis for simple out-and-back routes, never production approval."""
+def direction_candidate(match, supplied_rows, route_info, scoped_direction=None):
+    """Diagnostic direction: legacy hypothesis or authoritative station scope, never production approval."""
     import re
 
     def positive(value):
@@ -94,10 +94,19 @@ def direction_candidate(match, supplied_rows, route_info):
         if marked != [turn] or any(row.get('turnYn') not in ('Y', 'N') for row in rows):
             raise ValueError('TURN_MARKERS_UNCONFIRMED')
         start, end = positive(route_info['startStationId']), positive(route_info['endStationId'])
-        if start == end or positive(rows[0]['stationId']) != start or positive(rows[-1]['stationId']) != start:
-            raise ValueError('SIMPLE_RETURN_ENDPOINT_UNCONFIRMED')
-        if positive(rows[turn - 1]['stationId']) != end or positive(route_info['turnStID']) != end:
-            raise ValueError('TURN_DESTINATION_UNCONFIRMED')
+        if scoped_direction is None:
+            if start == end or positive(rows[0]['stationId']) != start or positive(rows[-1]['stationId']) != start:
+                raise ValueError('SIMPLE_RETURN_ENDPOINT_UNCONFIRMED')
+            if positive(rows[turn - 1]['stationId']) != end or positive(route_info['turnStID']) != end:
+                raise ValueError('TURN_DESTINATION_UNCONFIRMED')
+        else:
+            if start == end:
+                raise ValueError('CIRCULAR_DIRECTION_UNCONFIRMED')
+            if positive(route_info['turnStID']) != positive(rows[turn - 1]['stationId']):
+                raise ValueError('TURN_DESTINATION_UNCONFIRMED')
+            for key in ('route_id', 'board_station_id', 'board_order'):
+                if positive(scoped_direction[key]) != positive(match[key]):
+                    raise ValueError('STATION_ROUTE_IDENTITY_CONFLICT')
         board, alight = int(positive(match['board_order'])), int(positive(match['alight_order']))
         if not 1 <= board < alight <= len(rows):
             raise ValueError()
@@ -107,12 +116,22 @@ def direction_candidate(match, supplied_rows, route_info):
             raise ValueError()
         if board < turn < alight or board == turn:
             return {'status': 'turnaround_unresolved', 'route_dest_id': None}
-        destination = end if alight <= turn else start
-        return {'status': 'direction_candidate', 'route_dest_id': destination}
+        if scoped_direction is None:
+            destination = end if alight <= turn else start
+            basis = 'simple_return_hypothesis'
+        else:
+            destination = positive(rows[turn - 1 if alight <= turn else -1]['stationId'])
+            if positive(scoped_direction['route_dest_id']) != destination:
+                raise ValueError('STATION_ROUTE_DESTINATION_CONFLICT')
+            basis = 'station_route_scope'
+        return {'status': 'direction_candidate', 'route_dest_id': destination, 'direction_basis': basis,
+                'return_endpoint_matches_start': positive(rows[-1]['stationId']) == start}
     except (KeyError, ValueError, TypeError, IndexError, AttributeError) as error:
         safe_reasons = {'ROUTE_ID_MISMATCH', 'STATION_SEQUENCE_INCOMPLETE', 'TURN_SEQUENCE_CONFLICT',
                         'TURN_SEQUENCE_OUT_OF_RANGE', 'TURN_MARKERS_UNCONFIRMED',
-                        'SIMPLE_RETURN_ENDPOINT_UNCONFIRMED', 'TURN_DESTINATION_UNCONFIRMED'}
+                        'SIMPLE_RETURN_ENDPOINT_UNCONFIRMED', 'TURN_DESTINATION_UNCONFIRMED',
+                        'CIRCULAR_DIRECTION_UNCONFIRMED', 'STATION_ROUTE_IDENTITY_CONFLICT',
+                        'STATION_ROUTE_DESTINATION_CONFLICT'}
         reason = str(error) if isinstance(error, ValueError) and str(error) in safe_reasons else 'DIRECTION_FIELDS_UNCONFIRMED'
         return {'status': 'direction_unresolved', 'route_dest_id': None, 'reason': reason}
 

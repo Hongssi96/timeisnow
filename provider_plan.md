@@ -158,3 +158,14 @@ backend/check_gyeonggi_mapping.py --max-requests 8: 요청 예산은1~10회 정�
 해당 사유는 startStationId=endStationId 또는 정차 목록의 첫/마지막 stationId가 startStationId와 불일치할 때 반환하는 묶음 검사다. 출력만으로 어느 개별 조건이 실패했는지 구분되지 않는다. 실제 노선 오류·반대편 정류소·특정 입력 필드 문제로 단정하지 않으며 단순 왕복 전제와 실제 양방향 종점 구조를 분리해 다음 단계에서 대조해야 한다. 원천 최신성/운영 매핑·출발 연결은 미완료다.
 
 이번7회+이전9회=누적16회, 승인10+추가8=18회 중2회 잔여. 승인 검토를 통과했으며 사용자 저장 장소/좌표를 읽거나 키/원문/차량번호를 출력·저장하지 않았다. 코드/테스트/API/저장/계산 변경 없음, 테스트를 새로 실행했다고 기록하지 않는다. Notion v0.62 저장 확인·F07-01b/F07-01 미체크 유지.
+
+
+## F07-01b 왕복 전제 분리 진단 — 2026-10-13
+
+Notion v0.63. direction_candidate에 서버 진단 내부 scoped_direction을 추가했다. scope가 없으면 기존 단순 왕복 가설로 검사한다. scope가 있으면 공식 정류소 경유노선에서 얻은 routeId/승차 stationId/방문순번과 실제 매칭 구간을 재대조하고, routeDestId가 해당 방향의 실제 끝 정류소 ID와 일치해야 방향 후보가 된다. 실제 회차점 ID/노선 상세 routeId·연속 순번·일관된 turnSeq/유일 turnYn·승하차 ID·같은 방향의 구간을 검사하며 순환/회차를 넘는 구간·회차점 승차/종착 충돌은 미확인으로 둔다.
+
+왕복 끝 stationId가 canonical startStationId와 같거나 canonical endStationId가 물리 회차 정류소 ID와 같다는 가정으로 방향을 추론하지 않는다. 진단 출력 direction_basis=station_route_scope/simple_return_hypothesis, return_endpoint_matches_start는 고정 상태/boolean만 제공한다. 이는 운영 매핑/공개 API 연결이 아니며 기존100m 진단 허용오차·원천 최신성 unknown·valid_for_guidance=false를 유지한다.
+
+합성 신규7개 포함 test_route_mapping_probe.py21개0.003초/test_station_first_mapping.py15개0.009초 총36개 통과. 다른 왕복 끝 ID·canonical 종점 별칭·scope 방문/종착 충돌·회차 통과/승차·결측/boolean/순환·CLI 공식 방향 대조와 guidance 차단 유지까지 검증했다. 수정 후 키 실조회0회이므로 이전 실제 사례 해결을 주장하지 않는다. 전체 백엔드/프론트 테스트 재실행 없음.
+
+누적16회/승인18회로2회만 남아 전체 공개 진단 재실행에는 부족하다. 검토할 다음 실행은 동일 공개 판교역→성남시청/동일 키/고정 카카오·경기 HTTPS로 --max-requests 8이며, 추가 최대8회 예산을 받아 수정 후 실제 방향 일치를 확인하는 것이다. 원문·키·차량번호 저장/출력과 사용자 저장 장소 읽기 없음. F07-01b/F07-01 전체 미완료이며 API/저장/계산/클라이언트 호환성 변경 없음.
