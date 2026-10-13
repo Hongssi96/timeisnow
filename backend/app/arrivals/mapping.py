@@ -46,27 +46,46 @@ def query(kind,params,deadline):
     except OSError: raise AuthError(503,'PROVIDER_UNAVAILABLE','교통 정보에 연결할 수 없어요.') from None
     except (ValueError,TypeError,KeyError,AttributeError,UnicodeError,RecursionError): provider.invalid()
 
-def resolve(context,expires_at):
+def resolve(context,expires_at,*,diagnostics=None):
+    def record(**values):
+        if diagnostics is not None:diagnostics.update(values)
+    if diagnostics is not None:diagnostics.clear()
+    record(stage='station_search',reason='MAPPING_PENDING')
     deadline=time.monotonic()+5
     stops=context['stops'];points=context['points']
     stations=query('stations',{'keyword':stops[0]['name']},deadline)
     nearby=boarding_candidates(stops[0]['name'],points[0],stations,30)
-    if nearby['status']!='station_candidates': return None
+    record(station_count=nearby.get('candidate_count',0))
+    if nearby['status']!='station_candidates':
+        record(reason='STATION_CANDIDATES_UNCONFIRMED');return None
+    record(stage='station_routes')
     via=[(sid,query('via',{'stationId':sid},deadline)) for sid in nearby['station_ids']]
     try: scopes=station_route_scopes(context['vehicle'],via)
     except ValueError: provider.invalid()
     ids=sorted({s['route_id'] for s in scopes})
-    if not 1<=len(ids)<=2: return None
+    record(route_count=len(ids))
+    if not ids:
+        record(reason='NO_ROUTE_AT_BOARDING_STOP');return None
+    if len(ids)>2:
+        record(reason='ROUTE_CANDIDATE_LIMIT');return None
+    record(stage='route_stations')
     routes=[(rid,query('stops',{'routeId':rid},deadline)) for rid in ids]
     result=scoped_matches(match_route(stops,points,routes,30,require_contiguous=True),scopes)
-    if result['status']!='candidate_unique': return None
+    record(matched_count=len(result['matches']))
+    if result['status']!='candidate_unique':
+        record(reason='ROUTE_SEQUENCE_UNCONFIRMED');return None
+    record(stage='route_info')
     match=result['matches'][0]
     info=query('info',{'routeId':match['route_id']},deadline)
-    if len(info)!=1: return None
+    if len(info)!=1:
+        record(reason='ROUTE_INFO_UNCONFIRMED');return None
     direction=direction_candidate(match,dict(routes)[match['route_id']],info[0],match)
-    if direction['status']!='direction_candidate': return None
+    if direction['status']!='direction_candidate':
+        record(reason=direction.get('reason') or 'TURNAROUND_UNCONFIRMED');return None
     at=datetime.now(timezone.utc)
-    if at>=expires_at: return None
+    if at>=expires_at:
+        record(reason='SEARCH_EXPIRED');return None
+    record(stage='complete',reason='MAPPING_CONFIRMED')
     return Mapping(provider='gyeonggi-bus',first_leg_id=UUID(context['first_leg_id']),station_id=match['board_station_id'],
                    route_id=match['route_id'],sta_order=match['board_order'],route_dest_id=direction['route_dest_id'],
                    mapping_version='gbis.station-scope.v1.30m.contiguous',verified_at=at,valid_until=expires_at)

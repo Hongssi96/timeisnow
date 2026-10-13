@@ -3,7 +3,7 @@ import argparse,asyncio,json,sys,urllib.request,urllib.parse,urllib.error
 from pathlib import Path
 from unittest.mock import patch
 from app.common import request_logging
-from app.arrivals import cache,service
+from app.arrivals import cache,service,mapping
 
 # This CLI intentionally reuses the repository's isolated-schema ASGI harness.
 sys.path.insert(0,str(Path(__file__).resolve().parent/'tests'))
@@ -43,6 +43,10 @@ def eligible(candidates):
 async def run(maximum):
     budget=Budget(maximum)
     original_open=urllib.request.OpenerDirector.open
+    original_resolve=mapping.resolve
+    diagnostics={}
+    def traced_resolve(context,expires_at):
+        return original_resolve(context,expires_at,diagnostics=diagnostics)
     def guarded_open(opener,url,*args,**kwargs):
         budget.before(url)
         return original_open(opener,url,*args,**kwargs)
@@ -53,7 +57,7 @@ async def run(maximum):
         request_logging.logger.disabled=True
         case.setUp();ready=True;cache.clear()
         await case.signup_login()
-        with patch.object(urllib.request.OpenerDirector,'open',guarded_open):
+        with patch.object(urllib.request.OpenerDirector,'open',guarded_open),patch.object(mapping,'resolve',traced_resolve):
             accepted=await case.call('/journey-searches',PUBLIC_BODY)
             if accepted[0]!=202:return dict(summary,status='search_rejected',http_status=accepted[0],request_count=budget.count,budget_exhausted=budget.exhausted)
             search_id=accepted[2]['data']['search_id']
@@ -65,7 +69,7 @@ async def run(maximum):
             path='/journey-searches/'+search_id+'/candidates/'+candidate['candidate_id']+'/first-arrivals'
             with database() as connection:before=connection.execute('SELECT * FROM journey_searches WHERE id=%s',(search_id,)).fetchone()
             response=await case.call(path)
-            summary.update(http_status=response[0],request_count=budget.count,budget_exhausted=budget.exhausted)
+            summary.update(http_status=response[0],request_count=budget.count,budget_exhausted=budget.exhausted,mapping_diagnostics=diagnostics.copy())
             if response[0]!=200:
                 summary.update(status='arrival_error',error_code=response[2].get('error',{}).get('code'))
                 return summary

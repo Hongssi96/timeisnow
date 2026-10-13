@@ -117,3 +117,16 @@ backend/check_arrival_connection.py --max-requests 10: 공개 판교역(127.1111
 원천 확인: [경기 공식 항목 명세](https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusArrival)를 다시 읽었다. queryTime은 정보요청시간이며 행별 생성시각 계약은 없으므로 해당응답만으로 freshness를 확정할 수 없다. [서울 지하철 공식 출력](https://data.seoul.go.kr/dataList/openApiView.do?infId=OA-12764&srvType=A)은 recptnDt를 생성시각/barvlDt를 초로 설명한다. 다만 실제 역/노선/방향/시간대/지원 범위와 운영 전송은 미검증이고 자동 대체하지 않는다. 웹 도구의 HTTPS sample 접근은 불가였으며 이 결과만으로 로컬 연결을 단정하지 않았다. 별도 로컬 환경에서 공식 swopenapi.seoul.go.kr에 인증키/역명 없는 HTTPS HEAD1회·3초 timeout을 확인했고 HTTP 전환/서울키 전송은0회다. 이는 키 오류나 모든HTTPS 지원 불가의 증명이 아니다.
 
 Notion v0.66 저장 확인. 앱 API/계산/저장·runtime 코드 변경 없음, F07-01b/F07-01 미체크 유지. 다음은 승인된 추가 예산으로 실제 경기 연결을 검증하고, 경기 원천시각 제약을 해소할 공급자/전송 정책을 정하는 작업이다.
+
+
+## F07-01b 실제 키 연결 미매핑/중단 단계 — 2026-10-13
+
+사용자가 추가 최대10회 실제 키 검증을 승인해 check_arrival_connection.py --max-requests 10을 실행했다. 실제6회·종료1: HTTP200 mapping_required/source_status=unknown·후보0·생성/예측시각 없음/guidancefalse, 재조회 무호출/동일근거/경로DB 무변경true였다. 도착 항목까지 연결됐다고 표시하지 않는다.
+
+서버 내부 mapping.resolve에 선택적 diagnostics를 추가해 고정 stage/reason와 정류소/노선/매칭 개수만 반환하도록 했다. 공개 GET 입력/응답/정책에는 연결하지 않고 CLI 임시DB에서만 수집한다. 관련 매핑 연결17개9.095초·도구6개1.629초 전부 통과, 이번 전체 회귀는 재실행하지 않았다.
+
+당시 승인누적36회(기존26+추가10) 중29회 사용/7회 잔여를 확인해 --max-requests 7로 재검증, 실제6회·종료1이었다. stage=route_stations/reason=ROUTE_SEQUENCE_UNCONFIRMED, station_count=1/route_count=1/matched_count=0. 모든 정류소 이름의 연속 순서/양끝30m/공식 방문scope를 함께 검사한 결과이며 어느 개별 조건이 실패했는지는 아직 확인되지 않았다. 정책을 완화하거나 다른 후보를 임의로 선택하지 않았다. HTTP200 mapping_required/후보0·unknown·guidancefalse와 재조회 무호출/동일근거·검색 무변경true를 재확인했다.
+
+이번12회+이전23회=누적35회/승인36회·1회 잔여다. 각 실행 후 임시 스키마/메모리 정리가 성공 반환됐고 실제 DB는head0011·회원20/장소35/루틴12/산정0을 유지했다. 키/좌표/공공ID/차량번호/쿠키/원문 출력·저장 없음. 생성시각 없음은 기존 공식 계약 제약이며 이번에는 도착 항목까지 조회되지 않아 해당실응답 최신성 검증도 수행하지 못했다.
+
+Notion v0.67 저장 확인·F07-01b/F07-01 미완료. 다음은 매칭 복합 검사의 정차/좌표/방문scope 불일치 근거를 분리하고, 신뢰할 생성시각/공급자를 확보하는 작업이다. 공개 API/계산/저장 계약·클라이언트 호환성 변경 없음.

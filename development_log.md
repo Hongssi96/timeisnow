@@ -1160,3 +1160,20 @@ arrivals/service.py는 본인GET을 cache/자동매핑/기존 엄격 도착 어�
 배운 개념: provider 단일 진단 성공과 실제 서버의 인증/검색/캐시/도착 흐름 통합 성공은 다르다. 실제 키 검증도 임시 스키마와 공개 입력으로 기존 개인 데이터와 분리할 수 있다. 생성시각 없는 응답은 정상 연결만으로 최신성을 확보할 수 없고, 다른 공급자의 생성시각 필드가 있어도 전송/시간대/방향을 검증해야 한다.
 
 남은 작업: F07-01b/F07-01 미완료. 추가 조회 예산 승인 후 실제 연결 실행, 경기 원천 생성시각 제약을 해소할 공급자/전송 정책 확인이 필요하다. 도구 준비/합성 검증을 실제키 통합 성공으로 표시하지 않는다.
+
+
+## 2026-10-13 — F07-01b 실제 키 연결 미매핑/중단 단계 확인
+
+사용자 응은 직전 공개 판교역→성남시청·동일 저장 키/공식 HTTPS 추가 최대10회·임시DB 통합검증의 명시 승인이다. check_arrival_connection.py --max-requests 10을 실행해 실제6회·종료1이었다. HTTP200 mapping_required/unknown·후보0·generated_at_present=false/predicted_arrival_available=false/valid_for_guidance=false, second_get_no_upstream/second_get_same_evidence/stored_search_unchanged=true였다. 연결 성공이라고 기록하지 않았다.
+
+현재 TODO·최신 Notion v0.66·mapping.py/CLI의 중단 조건을 대조하고 backend/app/arrivals/mapping.py에 선택적diagnostics를 추가했다. 고정 stage/reason와station/route/matched count만 수집하고 공개API/로그에 키/공공ID/좌표/원문을 노출하지 않는다. backend/check_arrival_connection.py는 임시DB에서만 trace를 연결한다. backend/tests/test_arrival_mapping_connection.py에 무노선/성공 trace의 안전한 키/사유·개수 검증을 추가했다. 관련17개9.095초·CLI6개1.629초 전부 통과, 전체회귀는 이번 재실행하지 않았다. 공개GET 정책/응답·계산/저장·프론트/AI 변경 없음.
+
+당시 총승인36회=기존26+추가10, 실제누적29회=기존23+첫6회로7회 잔여였다. 이를 코드상 --max-requests 7로 강제해 승인 검토 통과 후 재검증했다. 실제6회/종료1: mapping_diagnostics stage=route_stations/reason=ROUTE_SEQUENCE_UNCONFIRMED/station_count=1/route_count=1/matched_count=0, HTTP200 mapping_required/unknown·후보0/생성·예측시각 없음/guidancefalse였다. 재조회 무호출/동일근거·검색무변경true 재확인. 누적35/승인36회로1회 잔여다. 생성시각에 도달하지 못한 도착 응답을 검증했다고 주장하지 않는다.
+
+복합 매칭은 모든 정차 이름의 연속 순서·양끝30m·공식 방문scope를 함께 대조한다. 개별 실패 원인/실제 정류소 오류/경로 변경 여부는 이번 출력으로 단정할 수 없다. 매핑 정책을 낮추거나 미대조 후보를 선택하지 않았다. 임시스키마/프로세스 메모리는 두 실행이 정리 성공 후 반환했다. 실제DB head0011·회원20/장소35/루틴12·산정0을 확인했다. auth_test 패턴 스키마 총75개가 존재하는 것도 확인했다; 직전 격리 도구 테스트는 기존/종료후 스키마 개수 동일을 검증했으나 이75개의 생성 이력/원인은 이번 조사하지 않았고 무관한 기존 스키마를 삭제하지 않았다. 현재 도구의 임시 스키마 정리 성공과 전체 인스턴스에 임시 스키마가 없음을 혼동하지 않는다.
+
+Notion v0.67 및 api_contract.md·arrivals_api.md·public_arrivals_plan.md·provider_plan.md·todo.md·feature_breakdown.md에 실제 실패/단계/개수·검증/예산을 갱신하고 저장을 다시 읽었다. API/계산/저장 계약·호환성 변경 없음. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 실제 카카오 후보 정렬/내용과 공식 정차 목록은 진단의 한 사례와 다를 수 있다. HTTP200 미매핑과 캐시 재사용 성공이 최신 도착 연결 성공을 뜻하지 않는다. 부족한 근거는 차단하고 내부 단계/개수를 통해 원인을 좁혀야 한다.
+
+F07-01b/F07-01 전체 미완료. 다음은 정차/좌표/방문scope 중단의 개별 근거 확인과 신뢰할 원천 생성시각/공급자 확보다. 이번 실제키 통합검증은 실패(도착 미조회)로 보고하며 완료 체크하지 않는다.

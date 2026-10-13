@@ -31,6 +31,18 @@ def query_fixture(kind,params,deadline):
 class MappingUnitTests(unittest.TestCase):
     def setUp(self):cache.clear();self.addCleanup(cache.clear)
 
+    def test_diagnostic_counts_and_reason_never_include_public_identity(self):
+        trace={}
+        def fake(kind,params,deadline):
+            return [] if kind=='via' else query_fixture(kind,params,deadline)
+        with patch.object(mapping,'query',side_effect=fake):
+            self.assertIsNone(mapping.resolve(context(),datetime.now(timezone.utc)+timedelta(seconds=200),diagnostics=trace))
+        self.assertEqual(trace,{'stage':'station_routes','reason':'NO_ROUTE_AT_BOARDING_STOP','station_count':1,'route_count':0})
+        with patch.object(mapping,'query',side_effect=query_fixture):
+            self.assertIsNotNone(mapping.resolve(context(),datetime.now(timezone.utc)+timedelta(seconds=200),diagnostics=trace))
+        self.assertEqual(trace['reason'],'MAPPING_CONFIRMED')
+        self.assertEqual(set(trace),{'stage','reason','station_count','route_count','matched_count'})
+
     def test_strict_mapping_uses_public_direction_not_return_endpoint_alias(self):
         at=datetime.now(timezone.utc)+timedelta(seconds=200)
         with patch.object(mapping,'query',side_effect=query_fixture) as q:
