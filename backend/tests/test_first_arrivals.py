@@ -77,8 +77,8 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(evidence.candidates[0].predicted_arrival_at-evidence.generated_at,timedelta(seconds=100))
 
     def test_unknown_source_and_clock_mismatch_are_not_fresh(self):
-        evidence=self.normalize(generated=False);self.assertEqual(evidence.status,'insufficient_data')
-        self.assertFalse(evidence.valid_for_guidance);self.assertIsNone(evidence.candidates[0].predicted_arrival_at)
+        evidence=self.normalize(generated=False);self.assertEqual(evidence.status,'estimated')
+        self.assertTrue(evidence.valid_for_guidance);self.assertEqual(evidence.timing_basis,'receipt_estimate')
         evidence=self.normalize(age=-1);self.assertEqual(evidence.source_status,'clock_mismatch');self.assertFalse(evidence.valid_for_guidance)
 
     def test_120_second_boundary_and_receipt_expiry(self):
@@ -144,8 +144,8 @@ class ArrivalApiTests(unittest.IsolatedAsyncioTestCase):
         await self.setup_route()
         with patch.object(provider,'fetch',return_value=[('123',300)]) as upstream:
             result=service.first_arrivals(self.owner,self.search_id,self.candidate_id,verified_mapping=self.mapping)
-        self.assertEqual(upstream.call_count,1);self.assertEqual(result.source_status,'unknown');self.assertFalse(result.valid_for_guidance)
-        self.assertIsNone(result.candidates[0].predicted_arrival_at)
+        self.assertEqual(upstream.call_count,1);self.assertEqual(result.source_status,'unknown');self.assertTrue(result.valid_for_guidance)
+        self.assertIsNotNone(result.candidates[0].predicted_arrival_at)
         encoded=result.model_dump_json()
         for secret in ('200000177','200000037','plateNo','latitude','serviceKey'):self.assertNotIn(secret,encoded)
 

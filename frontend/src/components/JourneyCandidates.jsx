@@ -1,4 +1,5 @@
 import WalkingGuidance from './WalkingGuidance';
+import FirstArrivals from './FirstArrivals';
 import React, { useState } from 'react';
 import { Footprints, BusFront, TrainFront, ChevronDown, ChevronUp, Repeat2 } from 'lucide-react';
 import { formatJourneyTime, missingWalk, sortCandidates } from '../lib/journeys';
@@ -16,7 +17,7 @@ const icon=kind=>kind==='BUS'?BusFront:kind==='SUBWAY'?TrainFront:Footprints;
 const WEEKDAYS=[['월',1],['화',2],['수',3],['목',4],['금',5],['토',6],['일',7]];
 const METHODS=[['all','전체'],['BUS','버스'],['BUS_AND_SUBWAY','버스 + 지하철'],['SUBWAY','지하철']];
 
-export default function JourneyCandidates({ candidates, preference, onRecheck, onSavedLocations, onSaved, defaultRoutineName, defaultWeekdays, defaultTarget, replacing = false }) {
+export default function JourneyCandidates({ searchId, candidates, preference, onRecheck, onSavedLocations, onSaved, defaultRoutineName, defaultWeekdays, defaultTarget, replacing = false }) {
   const [expanded,setExpanded]=useState(null);
   const [naming,setNaming]=useState(null);
   const [method,setMethod]=useState('all');
@@ -56,7 +57,7 @@ export default function JourneyCandidates({ candidates, preference, onRecheck, o
         {c.missing_segments.includes('DURATION_TOTAL_MISMATCH')&&<p className="candidate-note">총 예상 시간은 다시 확인해야 해요.</p>}
         {c.transfer_count!==c.transfer_count_computed&&<p className="candidate-note">구간 기준 환승 {c.transfer_count_computed}회 · 횟수 확인 필요</p>}
         <button className="secondary wide" aria-expanded={open} aria-controls={'candidate-'+c.candidate_id} onClick={()=>setExpanded(open?null:c.candidate_id)}>{open?'구간 닫기':'구간 자세히'}{open?<ChevronUp size={17}/>:<ChevronDown size={17}/>}</button>
-        {open&&<div id={'candidate-'+c.candidate_id} className="candidate-detail"><WalkingGuidance route={c}/><ol className="route-detail">{c.ordered_legs.map(leg=>{const Icon=icon(leg.type);return <li key={leg.leg_id}><span className="soft-icon"><Icon size={18}/></span><div><strong>{leg.type==='WALKING'?roles[leg.walking_role]:kinds[leg.type]+' · '+vehicleNames(leg)}</strong><p>약 {formatJourneyTime(leg.seconds)} · {leg.distance_meters.toLocaleString('ko-KR')}m</p>{leg.type!=='WALKING'&&<><p>{leg.boarding.name} → {leg.alighting.name}</p><p className="candidate-note">정류장 순서 기준 · 실제 운행 방향 확인 필요</p>{leg.vehicle_options.some(v=>v.provider_type)&&<p className="candidate-note">{vehicleDetails(leg)}</p>}</>}</div></li>;})}</ol>
+        {open&&<div id={'candidate-'+c.candidate_id} className="candidate-detail"><WalkingGuidance route={c}/>{searchId&&<FirstArrivals key={c.candidate_id} searchId={searchId} candidateId={c.candidate_id}/>}<ol className="route-detail">{c.ordered_legs.map(leg=>{const Icon=icon(leg.type);return <li key={leg.leg_id}><span className="soft-icon"><Icon size={18}/></span><div><strong>{leg.type==='WALKING'?roles[leg.walking_role]:kinds[leg.type]+' · '+vehicleNames(leg)}</strong><p>약 {formatJourneyTime(leg.seconds)} · {leg.distance_meters.toLocaleString('ko-KR')}m</p>{leg.type!=='WALKING'&&<><p>{leg.boarding.name} → {leg.alighting.name}</p><p className="candidate-note">정류장 순서 기준 · 실제 운행 방향 확인 필요</p>{leg.vehicle_options.some(v=>v.provider_type)&&<p className="candidate-note">{vehicleDetails(leg)}</p>}</>}</div></li>;})}</ol>
           {c.connections.map(x=><div className="candidate-connection" key={x.connection_id}><strong>환승 연결</strong><p>{x.from_stop.name} → {x.to_stop.name}</p><p>{x.walking_seconds===null?'환승 도보 확인 필요':`제공된 환승 도보 약 ${formatJourneyTime(x.walking_seconds)}`} · 연결 가능 여부 확인 필요</p></div>)}
           {!!c.timing_breakdown.unallocated_seconds&&<p className="candidate-note">총 시간 중 약 {formatJourneyTime(c.timing_breakdown.unallocated_seconds)}은 구간별로 구분되지 않았어요. 대기나 여유 시간으로 확정하지 않아요.</p>}
           <ul className="candidate-reasons">{[...new Set(c.missing_segments)].filter(reason=>messages[reason]).map(reason=><li key={reason}>{messages[reason]}</li>)}{c.missing_segments.some(reason=>!messages[reason])&&<li>추가 구간 정보 확인 필요</li>}</ul>

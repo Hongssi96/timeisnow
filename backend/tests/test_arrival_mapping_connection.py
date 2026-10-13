@@ -151,8 +151,8 @@ class ConnectedArrivalTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(service.public_mapping,'resolve',return_value=self.mapping) as resolve,patch.object(provider,'fetch',return_value=[('123',300)]) as fetch:
             one=await self.call(self.path);two=await self.call(self.path)
         self.assertEqual((one[0],two[0],resolve.call_count,fetch.call_count),(200,200,1,1))
-        self.assertEqual(one[2]['data'],two[2]['data']);self.assertEqual(one[2]['data']['status'],'insufficient_data')
-        self.assertFalse(one[2]['data']['valid_for_guidance']);self.assertIsNone(one[2]['data']['candidates'][0]['predicted_arrival_at'])
+        self.assertEqual(one[2]['data']['received_at'],two[2]['data']['received_at']);self.assertEqual(one[2]['data']['expires_at'],two[2]['data']['expires_at']);self.assertEqual(one[2]['data']['status'],'estimated')
+        self.assertTrue(one[2]['data']['valid_for_guidance']);self.assertEqual(one[2]['data']['timing_basis'],'receipt_estimate');self.assertIsNotNone(one[2]['data']['candidates'][0]['predicted_arrival_at'])
         with database() as c:after=c.execute('SELECT * FROM journey_searches WHERE id=%s',(self.search_id,)).fetchone()
         self.assertEqual(before,after)
         for private in ['200000177','latitude','points','serviceKey']:self.assertNotIn(private,json.dumps(one[2]))
@@ -188,7 +188,8 @@ class ConnectedArrivalTests(unittest.IsolatedAsyncioTestCase):
         try:
             with patch.object(provider,'fetch') as fetch:self.assertEqual((await self.call(self.path))[0],429);fetch.assert_not_called()
         finally:entry.lock.release()
-        with patch.object(service.public_mapping,'resolve',return_value=None) as resolve:
+        with database() as c:frozen=service.security.repository.clock_now(c)
+        with patch.object(service.security.repository,'clock_now',return_value=frozen),patch.object(service.public_mapping,'resolve',return_value=None) as resolve:
             for i in range(10):
                 entry.evidence=None
                 self.assertEqual((await self.call(self.path))[0],200)

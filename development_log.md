@@ -1241,3 +1241,26 @@ Notion v0.71. 사용자 01b 완료 요청에 따라 앞서 제시한 같은 공�
 실행: backend/.venv/Scripts/python.exe backend/check_arrival_connection.py --max-requests 8. 이번 수정은 검증 결과/구현 상태 기록으로 기존 codex/boarding-stop-sequence 기능 브랜치에 이어 기록했다. 최신 Notion v0.70·TODO/공공계획·provider/service/검증CLI를 확인하고 결과를 v0.71과 로컬 미러/arrivals_api.md/provider_plan.md/public_arrivals_plan.md/todo.md/feature_breakdown.md에 동기화했다. 계약 변경 없음/전체 완료조건 해제 없음. 결과 저장 재조회와 로컬 미러 전체 일치 확인 후 커밋·푸시한다. MR/병합은 사용자만 수행한다.
 
 배운 개념: 최신성은 서버의 수신 성공과 별개의 성질이다. 공식 요청시각 필드를 데이터 생성시각으로 대체하면 원천 지연을 숨긴다. live connection_verified는 매핑/조회·캐시·보관 검증의 성공이며 최신 예측 확보/출발 안내 완료의 증명이 아니다. 생성시각 또는 믿을 수 있는 공급자 갱신 지연 근거가 필요하다.
+
+
+## 2026-10-13 — F07-01b 수신 기준 추정 정책·선택 이유
+
+사용자 결정/진행 이유: 생성시각 확보·공급자 지연 상한·수신 기준 추정 세 방법을 비교한 후 사용자가 추천한 수신 기준 추정 진행과 이유 기록을 승인했다. 경기 API는 queryTime=정보요청시간이며 생성시각을 제공하지 않는다. 생성시각 필수 조건을 그대로 두면 실제 매핑/조회가 성공해도 안내 개발이 막히므로, 원천 지연을 숨기지 않는 명시적 추정으로 기능을 진행하기로 했다.60초 재조회·120초 만료는 우리 앱의 오래된 캐시 사용을 제한하며 원천 지연이나 정확도를 보장하지 않는다. 개인 여유5분도 원천 지연의 증명이 아니다. source_status=unknown/generated_at=null 유지, 추정 상태와 생성시각 검증 상태를 구분하며 향후 공식 시간/지연 근거를 확보하면 강화한다.
+
+착수/명세: 최신 TODO·Notion v0.71·provider/service/dto/cache/관련 테스트, arrivals_api/provider/public_arrivals/planning/personalization/policy_decisions/design_guide/screen_plan과 기존 JSX/CSS를 대조했다. 새 codex/arrival-receipt-estimate를 최신 origin/main205c7e3에서 생성하고 이전 미병합 매핑수정/실검증 기록을97b1663·2a00c78·3f254fb로 cherry-pick했다. 구현 전 Notion v0.72 계약 변경 후 로컬 API 미러에 동기화했다.
+
+구현: backend/app/arrivals/dto.py·service.py에서 arrival.evidence.v2/estimated/timing_basis/remaining_seconds를 추가했다. 정상 RUN/양수 예측초는 수신시각+예측초로 추정ETA·원천unknown 유지, 검증 생성시각은 source_generation/fresh로 유지한다. 잘못된/naive/미래 생성시각과 수신 역전은 추정 우회 금지. 캐시 GET도 원래 수신/ETA/기한을 유지하면서 남은초 올림·지난후보 제외·120초 만료를 재평가한다. 유효 estimated의 valid_for_guidance=true는 추정 사용 허용이며 최신성 인증이 아니다. 정상 무결과·운행/시간 부족·매핑/지원 부족 상태는 기존대로 안내 제외. 재조회 실패는 원래 캐시의 received_at/attempted_at/expires_at을 바꾸지 않는다.
+
+화면: frontend/src/lib/arrivals.js·components/FirstArrivals.jsx·JourneyCandidates/JourneyComparison.jsx에 본인 v2 GET 검증과 후보 상세 카드를 연결했다. 기존 info-box/walking-guidance/candidate-note·Clock3 아이콘 재사용, 신규CSS/테마/외부 라이브러리 없음. 진입/60초/탭 복귀 조회·숨김 중지·이탈 취소/중복 방지·서버시간+단조 경과로 계산, 수신 기준 예상/조회경과/원천지연 미확인/실패/만료·빈후보/미지원/매핑미확인 표시. 인증/검색/장소 변경 시 기존 숫자 즉시제거. 실제 예상 출발 숫자는 개인 접근근거 연결 F07-02 후속이다. 생성시각/공식 지연 상한·지원 확장은 F07-01c로 분리하며 사용자 변경 완료조건에 따라 F07-01b 완료/F07-01 전체 미완료로 맞췄다.
+
+검증/수정: backend/tests/test_receipt_arrivals.py 신규8개는 수신ETA/unknown/출처 구분·120초 경계/검색기한·초올림/원래ID·캐시 GET의지난후보 제거/시계/naive·미래 우회 금지/갱신실패의원래캐시기한 유지 확인. 기존 first-arrivals17개4.920초/연결17개8.717초·검증CLI6개1.497초 통과. frontend FirstArrivals10개2.54초와 arrivals.js 계약5개 포함 최종 전체182개9.38초·빌드407ms 통과. 최종 전체 백엔드314개106.538초 통과. 유료AI/외부키 조회0회(직전 실제8회 매핑/도착연결 성공·후보0과 구분), 이번 생성시각/실제 양수 추정 후보/공급자 지연을 확인했다고 기록하지 않는다. 기존 승인49/49회·잔여0은 요금/공급자 쿼터가 아니다.
+
+초기 실패와 배운점: 프론트 npm을루트에서 실행해 package.json 없음1회 오류 후 frontend 디렉터리로 수정했다. UI합성 실행에서 /api/v1 누락으로 요청 검증 실패를 발견해 수정하고 실제 API클라이언트 경로/응답 테스트5개를 추가했다. 격리DB정리 개수검사와 다른DB테스트를병렬실행해 임시스키마개수간섭으로 CLI1개 실패, 단독 재검증6개 통과. 첫 전체314개118.009초는 quota테스트 분경계429기대 실패1개·도보fixture의verified_at 미래판정 오류1개였다. 호스트-DB차이1.007초를 실제측정해 verified_at=호스트시각-1초 fixture가 경계에 걸림을 확인했다. 테스트에서 rate bucket의DB시간을 고정하고 공통 도보fixture 생성도 DB clock_timestamp를 사용하도록 수정했다(test_arrival_mapping_connection.py/test_walking_history.py). 운영 시간/검증/버킷 정책은 완화하지 않았다. 그 후 최종 전체314개 통과. 검증CLI는 카운트다운변화와 원래근거를 구분해 재조회 동일근거를 비교하도록 수정했다.
+
+시각 검증: 실제 브라우저에서 합성 v2 응답·기존CSS·새실제컴포넌트로1280×800/390×844 확인. 수신 기준 예상/조회경과·줄바꿈·가로넘침 없음,120초 지난숫자 제거 확인. 리사이즈직후 첫캡처는이전프레임이라 실제viewport/body폭을 확인한뒤 다시캡처했다. 임시receipt-preview.html/jsx와검사탭 정리·viewport원복. 전체 실로그인/실경로 검색 시각검증은 이번 수행하지 않았으며 공통CSS도 변경하지 않았다.
+
+문서: api_contract.md/arrivals_api.md/provider_plan.md/public_arrivals_plan.md/planning.md/personalization.md/policy_decisions.md/logging.md/design_guide.md/screen_plan.md/todo.md/feature_breakdown.md에 정책·선택 이유/한계·v2호환성·구현상태를 동기화했다. Notion v0.72 계약/예시/공통상태/변경이력/검증결과 저장을 재조회해 확인한다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa. v1클라이언트는v2/estimated/새필드와valid_for_guidance의추정허용 의미 대응필요. 새DB/DDL/AI 호출 없음. 사용자만 MR 생성/병합하며 에이전트는하지 않는다.
+
+남은 문제/다음: 원천시간/갱신지연·정확도/지원범위는 F07-01c 후속이다. F07-02에서 유효한개인접근W와초기여유300초로t_vehicle-W-300을 계산하며근거없는숫자를만들지 않는다. 이번정책으로 출발계산에쓸수있는 추정근거는 준비됐으나 출발시각계산 자체는완료하지 않았다. F07-01 전체 미체크 유지.
+
+최종 저장/서버 확인: Notion v0.72를 재조회해 계약/추정·미매핑 예시/선택 이유·검증 결과 저장과 로컬 API 미러1568줄 전체 일치 확인. 기존 프로젝트 uvicorn 프로세스 확인 후 재시작해 새 정책 적용, /api/v1/health200·프론트5173/200·비인증first-arrivals401 확인. 실제 키 추가 전송 없음. Notion의 일지 파일명이 자동외부링크로 변환된 부분은 코드형식으로 고쳐 재확인했다.

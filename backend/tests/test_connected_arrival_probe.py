@@ -59,7 +59,7 @@ class OfflineProbeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['status'],'connection_verified')
         self.assertEqual(result['request_count'],0)
         self.assertEqual(result['source_status'],'unknown')
-        self.assertFalse(result['valid_for_guidance'])
+        self.assertTrue(result['valid_for_guidance'])
         self.assertTrue(result['second_get_no_upstream'])
         self.assertTrue(result['second_get_same_evidence'])
         self.assertTrue(result['stored_search_unchanged'])
