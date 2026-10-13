@@ -1192,3 +1192,22 @@ F07-01b/F07-01 전체 미완료. 다음은 정차/좌표/방문scope 중단의 �
 배운 개념: 복합 매칭 실패는 한 가지 원인의 증명이 아니다. 정차 순서/연속성·공식 방문·좌표를 독립적인 개수로 분리해야 기준 완화 없이 원인을 좁힐 수 있다. 진단 코드 자체의 통과와 실제 실패 원인의 확인은 다르다.
 
 남은 작업: 누적35/승인36회로1회 잔여, 전체실진단에 부족하다. 같은 공개 경로/저장키/공식HTTPS·임시DB check_arrival_connection.py --max-requests 8로 추가최대8회 승인할 구체적 실행을 준비했다. 실제 개별 불일치/도착 연결·원천 최신성은 미완료로 F07-01b/F07-01 체크하지 않는다.
+
+
+## 2026-10-13 — F07-01b 정류소 목록 연속성 차단 실확인
+
+사용자 “위의 추가조회해서 원인 확인해”는 직전 공개 경로/키/카카오·경기HTTPS 추가 최대8회 원인 진단의 명시 승인이다. check_arrival_connection.py --max-requests 8을 실행해 실제6회·종료1이었다. 같은 미완료 F07-01b 브랜치를 유지했다.
+
+실제 결과: HTTP200 mapping_required/unknown·도착후보0·생성/예측시각 없음/guidancefalse, second_get_no_upstream/second_get_same_evidence/stored_search_unchanged=true. station_count=1/route_count=1/matched_count=0·detail_reason=STOPS_NOT_CONTIGUOUS. valid_sequence_routes=1/endpoint_name_pairs=2/ordered_name_pairs=2/scoped_ordered_name_pairs=2지만 contiguous_name_pairs=0/scoped_contiguous_name_pairs=0이다. 이름의 순서와 공식 노선/승차정류소/방문순번은 일치하는 쌍이 있으나 경기 목록 사이에 카카오 제공 목록 외 정류소가 포함되는 형태라 전체 목록 연속성 필수 정책이 차단했다.
+
+최신 Notion v0.68·TODO와 diagnose_match 코드를 읽어 좌표/식별 검사 조건을 대조했다. missing_coordinates/outside_coordinate_limit/missing_station_identity/passing_pairs=0은 연속 일치쌍이 없어 해당검사 미실행임을 확인했다. 좌표가 맞거나 도착/방향/하차 반복방문이 유일하다는 뜻으로 해석하지 않는다. 해당 개별 단계는 아직 미확인이다.
+
+제안/미구현: 전체 목록 연속성 필수 정책을 재검토하고 제공된 이름의 전체순서·공식 승차방문·양끝30m·회차/같은방향/반복방문·공식 방향ID/유일성을 유지하면서 공공 중간 정류소 추가를 처리한다. 이번 요청은 실제 원인 확인이며 코드/매핑 수용정책/공개API/계산/저장을 바꾸지 않았다. 테스트도 재실행하지 않았다.
+
+사용자에게 설명한 것처럼 조회 상한은 검증 승인용 API 호출횟수이며 공급자 잔여쿼터/요금 예산이 아니다. 이번6회+기존35회=누적41회, 승인36+추가8=44회로3회 잔여다. 실제잔여쿼터/비용은 확인하지 않았다. 기존 사용자 데이터/장소를 변경하지 않고 키/좌표/공공ID/차량번호/쿠키/원문을 출력/저장하지 않았다. 도구는 임시스키마/메모리 정리 성공 후 반환했다.
+
+Notion v0.69 및 api_contract.md·arrivals_api.md·provider_plan.md·public_arrivals_plan.md·todo.md·feature_breakdown.md에 실제 원인·미검사 범위·제안 상태·호출상한 의미를 기록하고 저장을 다시 읽었다. API/계산/저장 계약·클라이언트 호환성 변경 없음. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 같은 노선의 정류소 순서는 맞아도 공급자마다 제공 목록의 상세도가 다를 수 있다. 연속성 실패와 잘못된 순서/방문순번은 구분해야 한다. 뒤 단계 검사가 생략돼0개가 나오는 것과 실제 검사 통과는 다르다.
+
+F07-01b/F07-01 전체 미완료. 다음은 연속 목록 조건 재검토·기존 방문/좌표/방향/유일성 검증 유지 구현과 실제 도착 연결 확인이다. 원천 생성시각/최신성 제약도 남았다.
