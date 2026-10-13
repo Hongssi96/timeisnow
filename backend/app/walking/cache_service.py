@@ -2,9 +2,10 @@
 import hashlib
 import json
 import math
+from decimal import Decimal, ROUND_CEILING
 from pydantic import ValidationError
 from app.common.errors import AuthError
-from app.ai.walking_dto import Result
+from app.ai.walking_dto import Result,Profile
 from app.ai.walking_service import missing, expected
 from app.ai.prompt_loader import load_prompt
 from app.ai.provider import MODEL, invalid
@@ -46,17 +47,36 @@ def identity(candidate,request,refs,source):
     return key,value
 
 
-def lookup(connection,user_id,candidate,request,refs,source,now,context,revision_id=None):
+def lookup(connection,user_id,candidate,request,refs,source,now,context,revision_id=None,allow_recalculation=False):
     key,physical=identity(candidate,request,refs,source)
     if key is None:return None
     row=repository.cache_candidate(connection,user_id,key,revision_id)
     if row is None:return None
     if row['cache_identity']!=physical or row['place_refs']!=refs:invalid()
-    if row['input_evidence']['profile']!=request.profile.model_dump():
-        raise AuthError(409,'PROFILE_RECALCULATION_REQUIRED','개인 설정이 변경되어 기준 시간 재계산이 필요해요.')
-    if row['model_version']!=physical['model_version'] or row['prompt_version']!=physical['prompt_version'] or row['system_prompt_version']!=physical['system_prompt_version'] or row['policy_version']!=request.policy_version:invalid()
-    base,factor,seconds,method=expected(candidate,request.profile)
-    if not math.isclose(float(row['base_seconds']),base,rel_tol=1e-12,abs_tol=1e-9) or float(row['applied_duration_factor'])!=factor or int(row['estimated_seconds'])!=seconds or row['method']!=method:invalid()
+    previous=Profile.model_validate(row['input_evidence']['profile'])
+    current=request.profile
+    changed=previous.model_dump()!=current.model_dump()
+    if changed:
+        same_fields=previous.model_dump(exclude={'version','validated_duration_factor'})==current.model_dump(exclude={'version','validated_duration_factor'})
+        if not allow_recalculation or not same_fields:
+            raise AuthError(409,'PROFILE_RECALCULATION_REQUIRED','개인 설정의 기준을 다시 확인해주세요.')
+    if row['baseline_model_version']!=physical['model_version'] or row['prompt_version']!=physical['prompt_version'] or row['system_prompt_version']!=physical['system_prompt_version'] or row['policy_version']!=request.policy_version:invalid()
+    if row['source']=='ai_estimate':
+        old_base,old_factor,old_seconds,old_method=expected(candidate,previous)
+    else:
+        old_base=float(row['base_seconds'])
+        old_factor=1.0 if candidate.provider_duration_includes_personalization else previous.validated_duration_factor or 1.0
+        old_seconds=int((row['base_seconds']*Decimal(str(old_factor))).to_integral_value(rounding=ROUND_CEILING))
+        old_method=expected(candidate,previous)[3]
+    physical_base=expected(candidate,previous)[0]
+    if (not math.isclose(float(row['base_seconds']),physical_base,rel_tol=1e-12,abs_tol=1e-9)
+        or not math.isclose(float(row['base_seconds']),old_base,rel_tol=1e-12,abs_tol=1e-9)
+        or float(row['applied_duration_factor'])!=old_factor or int(row['estimated_seconds'])!=old_seconds or row['method']!=old_method):invalid()
+    base,factor,seconds,method=old_base,old_factor,old_seconds,old_method
+    if changed:
+        base=float(row['base_seconds'])
+        factor=1.0 if candidate.provider_duration_includes_personalization else current.validated_duration_factor or 1.0
+        seconds=int((row['base_seconds']*Decimal(str(factor))).to_integral_value(rounding=ROUND_CEILING))
     expires=min(row['expires_at'],row['path_expires_at'],context.valid_until)
     if expires<=now:return None
     result=Result(candidate_id=candidate.candidate_id,status='ok',origin_ref=candidate.origin_ref,
@@ -65,4 +85,7 @@ def lookup(connection,user_id,candidate,request,refs,source,now,context,revision
         evidence_ids=candidate.evidence_ids,missing_segments=[],reason='같은 조건의 검증된 도보 시간을 재사용했어요.')
     link={'candidate_id':candidate.candidate_id,'estimate_id':str(row['estimate_id']),
         'revision_id':str(row['id']),'expires_at':expires.isoformat()}
+    if changed:
+        link['recalculated']=True
+        result.reason='검증된 기준 시간에 새 개인 계수를 적용했어요.'
     return result,link

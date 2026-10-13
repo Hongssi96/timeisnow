@@ -154,3 +154,7 @@ ai_executions에 검증된 최소 입력/Context·reason 제외 구조화 결과
 ## F05-05 캐시 적용 이력 — 2026-10-12
 
 ai_executions.reused_estimates에 최소 원본 연결(candidate/estimate/revision/effective expiry)만90일 보관한다. 전체 적중은 model_version/latency_ms/usage=null로 모델 실행 집계에서 제외한다. 부분 적중은 누락 후보 호출의 실측값만 기록한다. 재사용으로 숫자 revision과 원본 만료/보관 기한을 연장하지 않는다. 삭제된 원본은 연결 JSON에서 역추정해 복구하지 않고404로 차단한다. 일반 HTTP 로그 필드와 개인 정보 비저장 규칙을 유지한다. walking_api.md·Notion v0.55.
+
+## F05-06 재계산 품질 이력 — 2026-10-13
+
+모델 호출 없는 계수 재계산 실행은 model_version/latency_ms/usage=null이다. 새 revision은 부모 revision·같은 estimate·최초 AI 물리 근거와 연결해 이전 수치를 보존한다. 품질 보관은90일과 원본 기한 중 이른 시각이며 원본 근거를 연장하지 않는다. 부분 실행의 메타데이터는 실제 새 후보 AI 호출만 기록한다. 원문/이름/정밀 위치/키/내부 사고 비저장·HTTP 로그 필드 유지. walking_api.md·Notion v0.56.

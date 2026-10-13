@@ -14,6 +14,7 @@ from app.common.response import answer
 from app.ai.walking_dto import EstimateOutput
 from app.ai.walking_service import parse_input,validate_output,missing as missing_evidence,expected
 from app.ai.prompt_loader import load_prompt
+from app.ai.provider import invalid as invalid_output
 from app.journeys.service import check_refs
 from app.places.service import parsed_id
 from app.walking import history_repository as repository
@@ -63,18 +64,31 @@ def saved_result(connection,user_id,execution_id):
     rows=repository.execution_estimates(connection,user_id,execution_id)
     return {'execution_id':str(execution_id),'estimates':[{'candidate_id':row['candidate_id'],
         'estimate_id':str(row['estimate_id']),'revision_id':str(row['revision_id']),
-        'reused':row['reused'],'expires_at':row['expires_at'].isoformat()} for row in rows]}
+        'reused':row['reused'],'source':row['source'],'expires_at':row['expires_at'].isoformat()} for row in rows]}
 
 
-def persist(user_id,value,output,*,context,metadata,failure_code=None,cache_sources=None,_reused=None):
+def validate_execution_output(output,request,cached_ids):
+    ids=[item.candidate_id for item in output.results]
+    if output.request_id!=request.request_id or len(ids)!=len(set(ids)) or set(ids)!={item.candidate_id for item in request.candidates}:invalid_output()
+    remaining=[item for item in request.candidates if item.candidate_id not in cached_ids]
+    if remaining:
+        subset=parse_input({**request.model_dump(),'candidates':[item.model_dump() for item in remaining]})
+        validate_output(EstimateOutput(request_id=output.request_id,prompt_version=output.prompt_version,
+            results=[item for item in output.results if item.candidate_id not in cached_ids]),subset)
+
+
+def persist(user_id,value,output,*,context,metadata,failure_code=None,cache_sources=None,_reused=None,_recalculated=None):
     """For trusted server callers after ownership and physical evidence verification."""
     user_id=parsed_id(str(user_id))
     request=parse_input(value)
     context,metadata,refs=parse_context(context,metadata)
     sources=cache.parse_sources(cache_sources,request)
+    recalculated=_recalculated or []
+    recalculated_ids={item['candidate_id'] for item in recalculated}
+    if len(recalculated_ids)!=len(recalculated):invalid()
     reused=_reused or []
     reused_ids={item['candidate_id'] for item in reused}
-    if len(reused_ids)!=len(reused):invalid()
+    if len(reused_ids)!=len(reused) or reused_ids & recalculated_ids:invalid()
     context_snapshot=cache.snapshot(context,refs,sources)
     bundle=load_prompt('walking_estimate',expected_version='walking_estimate.v1')
     validated=None
@@ -82,8 +96,8 @@ def persist(user_id,value,output,*,context,metadata,failure_code=None,cache_sour
         try:validated=EstimateOutput.model_validate(output.model_dump() if isinstance(output,EstimateOutput) else output)
         except (ValidationError,TypeError,ValueError):
             raise AuthError(502,'AI_OUTPUT_INVALID','AI 산정 결과를 확인할 수 없어요.') from None
-        validate_output(validated,request)
-        if any(item.status=='ok' and item.candidate_id not in reused_ids for item in validated.results) and metadata.model_version is None:invalid()
+        validate_execution_output(validated,request,reused_ids|recalculated_ids)
+        if any(item.status=='ok' and item.candidate_id not in reused_ids|recalculated_ids for item in validated.results) and metadata.model_version is None:invalid()
     elif failure_code not in {'AI_OUTPUT_INVALID','PROVIDER_UNAVAILABLE','PROVIDER_TIMEOUT','PROMPT_RESOURCE_INVALID'}:invalid()
     status='failed' if failure_code else ('validated' if any(item.status=='ok' for item in validated.results) else 'needs_data')
     # Free-form model reasons are not persisted; they are unnecessary for numeric provenance.
@@ -93,6 +107,7 @@ def persist(user_id,value,output,*,context,metadata,failure_code=None,cache_sour
     hash_input={'input':request.model_dump(),'output':validated.model_dump() if validated else None,
         'context':context_snapshot,'metadata':metadata.model_dump(),'failure_code':failure_code}
     if sources is not None:hash_input['reused_estimates']=reused
+    if recalculated:hash_input['recalculated_estimates']=recalculated
     body_hash=fingerprint(hash_input)
     with database() as connection:
         now=check_context(connection,user_id,request,context,refs)
@@ -103,13 +118,13 @@ def persist(user_id,value,output,*,context,metadata,failure_code=None,cache_sour
             if old['retained_until']<=now:missing()
             return saved_result(connection,user_id,old['id'])
         # Re-check source ownership, identity, math and expiry in the saving transaction.
-        if reused:
+        if reused or recalculated:
             if failure_code or sources is None:invalid()
             candidates={item.candidate_id:item for item in request.candidates}
-            for link in reused:
+            for link in reused+recalculated:
                 candidate=candidates.get(link['candidate_id'])
                 if candidate is None:invalid()
-                hit=cache.lookup(connection,user_id,candidate,request,refs,sources.get(candidate.candidate_id),now,context,link['revision_id'])
+                hit=cache.lookup(connection,user_id,candidate,request,refs,sources.get(candidate.candidate_id),now,context,link['revision_id'],allow_recalculation=link in recalculated)
                 if hit is None or hit[1]!=link:missing()
                 actual=next(item for item in validated.results if item.candidate_id==candidate.candidate_id)
                 if actual.model_dump(exclude={'reason'})!=hit[0].model_dump(exclude={'reason'}):invalid()
@@ -118,10 +133,18 @@ def persist(user_id,value,output,*,context,metadata,failure_code=None,cache_sour
             bundle.system.version,bundle.prompt_version,request.policy_version,request.profile.version,
             Jsonb(request.model_dump()),Jsonb(context_snapshot),Jsonb(structured) if structured else None,status,failure_code,metadata.latency_ms,
             Jsonb(metadata.usage.model_dump()) if metadata.usage else None,now,retained,Jsonb(reused)))
+        for link in recalculated:
+            parent=repository.cache_candidate(connection,user_id,
+                cache.identity(candidates[link['candidate_id']],request,refs,sources[link['candidate_id']])[0],link['revision_id'])
+            result=next(item for item in validated.results if item.candidate_id==link['candidate_id'])
+            repository.insert_recalculation(connection,(uuid4(),user_id,parent['estimate_id'],execution_id,request.profile.version,
+                parent['base_seconds'],Decimal(str(result.applied_duration_factor)),result.estimated_seconds,result.method,
+                now,min(parent['expires_at'],parent['path_expires_at'],context.valid_until),
+                min(parent['retained_until'],parent['path_retained_until'],retained),parent['id'],link['candidate_id'],user_id,parent['estimate_id']))
         by_id={item.candidate_id:item for item in validated.results} if validated else {}
         for candidate in request.candidates:
             result=by_id.get(candidate.candidate_id)
-            if result is None or result.status!='ok' or candidate.candidate_id in reused_ids:continue
+            if result is None or result.status!='ok' or candidate.candidate_id in reused_ids|recalculated_ids:continue
             if missing_evidence(candidate,request.profile):invalid()
             base,factor,seconds,method=expected(candidate,request.profile)
             expires=min(now+timedelta(days=30),context.valid_until)
@@ -153,7 +176,7 @@ def detail(request,estimate_id):
             raise AuthError(409,'VERSION_CONFLICT','프로필이 변경됐어요. 다시 산정해주세요.')
         check_refs(connection,user_id,row['place_refs'])
         data=EstimateSummary(estimate_id=row['estimate_id'],revision_id=row['id'],base_seconds=float(row['base_seconds']),
-            applied_duration_factor=float(row['applied_duration_factor']),estimated_seconds=int(row['estimated_seconds']),scope=row['scope'],
+            applied_duration_factor=float(row['applied_duration_factor']),estimated_seconds=int(row['estimated_seconds']),scope=row['scope'],source=row['source'],
             calculated_at=row['calculated_at'],expires_at=row['expires_at'],prompt_version=row['prompt_version'],policy_version=row['policy_version'])
     return answer(request,data.model_dump(mode='json'))
 
@@ -189,13 +212,17 @@ def _estimate_and_store(user_id,value,*,context,cache_sources=None):
             for link in old['reused_estimates']:
                 candidate=next(item for item in request.candidates if item.candidate_id==link['candidate_id'])
                 if cache.lookup(connection,user_id,candidate,request,refs,sources.get(candidate.candidate_id) if sources else None,now,checked_context,link['revision_id']) is None:missing()
+            for row in rows:
+                if row['source']=='profile_recalculation' and not row['reused']:
+                    candidate=next(item for item in request.candidates if item.candidate_id==row['candidate_id'])
+                    if cache.lookup(connection,user_id,candidate,request,refs,sources.get(candidate.candidate_id) if sources else None,now,checked_context,row['revision_id']) is None:missing()
             replay=old['structured_result']
             for result in replay['results']:result['reason']='저장된 검증 실행 결과예요.'
             return {'result':replay,**saved_result(connection,user_id,old['id'])}
         hits={}
         if sources is not None:
             for candidate in request.candidates:
-                hit=cache.lookup(connection,user_id,candidate,request,refs,sources.get(candidate.candidate_id),now,checked_context)
+                hit=cache.lookup(connection,user_id,candidate,request,refs,sources.get(candidate.candidate_id),now,checked_context,allow_recalculation=True)
                 if hit:hits[candidate.candidate_id]=hit
     misses=[item for item in request.candidates if item.candidate_id not in hits]
     called=any(not missing_evidence(candidate,request.profile) for candidate in misses)
@@ -207,7 +234,7 @@ def _estimate_and_store(user_id,value,*,context,cache_sources=None):
             results.update({item.candidate_id:item for item in estimate(subset).results})
         output=EstimateOutput(request_id=request.request_id,prompt_version='walking_estimate.v1',
             results=[results[item.candidate_id] for item in request.candidates])
-        validate_output(output,request)
+        validate_execution_output(output,request,set(hits))
     except AuthError as error:
         if error.code in {'AI_OUTPUT_INVALID','PROVIDER_UNAVAILABLE','PROVIDER_TIMEOUT'}:
             record_failure(user_id,request,context=checked_context,metadata={'model_version':None,
@@ -215,7 +242,8 @@ def _estimate_and_store(user_id,value,*,context,cache_sources=None):
         raise
     stored=persist(user_id,request,output,context=checked_context,metadata={'model_version':'gpt-5.6-luna' if called else None,
         'latency_ms':round((time.monotonic()-started)*1000) if called else None},cache_sources=cache_sources,
-        _reused=[hit[1] for hit in hits.values()])
+        _reused=[hit[1] for hit in hits.values() if not hit[1].get('recalculated')],
+        _recalculated=[hit[1] for hit in hits.values() if hit[1].get('recalculated')])
     return {'result':output.model_dump(mode='json'),**stored}
 
 

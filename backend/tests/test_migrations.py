@@ -59,7 +59,7 @@ class MigrationTest(unittest.TestCase):
                     command.upgrade(config, 'head')
                     self.assertEqual(connection.execute(text(
                         "SELECT version_num FROM alembic_version")).scalars().all(),
-                        ["0010_walking_cache"])
+                        ["0011_walking_recalculation"])
                     self.assertEqual(sorted(inspect(connection).get_table_names(schema=schema)),
                                      ['ai_executions', 'alembic_version', 'auth_credentials', 'auth_rate_limit_buckets',
                                       'auth_sessions', 'journey_plans', 'journey_search_keys', 'journey_searches',

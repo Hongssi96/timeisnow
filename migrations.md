@@ -60,3 +60,5 @@ current는 DB 적용 위치, history는 파일의 변경 순서다. upgrade head
 2026-10-12 F05-04:0009_walking_history는ai_executions/walking_paths/walking_estimates/walking_estimate_revisions4개테이블을 추가한다. 기존데이터변경없음, downgrade는산정이력을삭제하므로 실제DB에서는기존규칙에따라주의하며 왕복검증은격리스키마에서수행한다. 상세walking_api.md·database_schema.md.
 
 2026-10-12 F05-05:0010_walking_cache는 확인된 물리 캐시 키/식별자 및 최소 재사용 연결 컬럼을 추가한다. 기존 행은 NULL 키·빈 재사용 목록이며 백필하지 않는다. 격리 왕복 검증은0009의 legacy 행을 보존한 채0010 적용/0009 복구/재적용과 전체 왕복을 확인한다. 실제 DB downgrade는 하지 않는다.
+
+2026-10-13 F05-06: head0011_walking_recalculation. 새 source와 부모 복합FK·candidate_id를 추가한다. 이전 AI 스냅샷은 부모null을 유지한다.0010 downgrade는 파생 revision만 제거하므로 품질 이력 손실이 있으며 실제DB에서 실행하지 않는다. 격리 테스트는 파생을 만든 후0010 복구 시 원본360초 보존, 재적용 시 원본 부모null 및 전체 왕복을 확인한다.

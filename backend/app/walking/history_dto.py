@@ -40,7 +40,7 @@ class EstimateSummary(BaseModel):
     applied_duration_factor: float
     estimated_seconds: int
     scope: str
-    source: Literal['ai_estimate']='ai_estimate'
+    source: Literal['ai_estimate','profile_recalculation']='ai_estimate'
     reused: Literal[False]=False
     calculated_at: datetime
     expires_at: datetime

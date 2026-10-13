@@ -76,3 +76,15 @@ Notion v0.55. 내부 estimate_and_store(..., cache_sources=[...])를 확장한�
 전체 입력/Context/cache_sources 및 원본 연결로 멱등 재실행을 검사한다. ai_executions.reused_estimates에 candidate/estimate/revision/effective expiry만 보존한다. 전부적중이면 모델/지연/사용량null, 부분적중은실제누락호출의메타데이터만기록한다. 원본연결삭제/만료 후 재실행은404, 실행ID내용변경409. 사용자/request_id와정렬된사용자/물리키 세션잠금으로 다른실행ID의동시호출도409 EXECUTION_IN_PROGRESS. 호출중장소변경/원본만료는저장전재확인해 전체롤백한다. 일반로그에이름/정밀좌표/키/원문추가없음.
 
 0010_walking_cache: walking_paths.cache_key/cache_identity(nullable 쌍) 및회원/키/기한인덱스, ai_executions.reused_estimates(기본빈배열). 이전이력백필없음. 신규공개API/UI없음. 실제walking.evidence는needs_data·reusable=false를유지하므로실사용재사용/출발안내연결은후속이다.
+
+## F05-06 개인 계수 변경 재계산 — 2026-10-13
+
+Notion v0.56. 내부 estimate_and_store는 같은 물리 키의 유효 원본에서 profile.version/validated_duration_factor만 바뀌면 AI와 지도 호출 없이 재계산한다. 저장된 양수 base_seconds에 새 계수(기본1.0·허용0.5~2.0)를 곱하고 Decimal로 올림한다. 이전 최종값에 계수를 다시 적용하지 않는다. 이미 개인화된 공급자 시간은 계수1로 유지한다. 거리/속도 소수 기준도 저장된 십진 초를 그대로 사용하므로 올림 경계에서는 원래 거리/속도를 다시 나눈 계산과1초 차이가 날 수 있다. 재계산은 원본 기준의 표현을 일관되게 사용하는 계약이다.
+
+예: 기준300초·기존 계수1.2/360초 → 새 계수1.1/330초. 같은 estimate에 새 revision_no·profile_version·parent_revision_id·candidate_id·source=profile_recalculation·calculated_at을 저장한다. 부모/원본 경로/현재 Context 중 이른 expires_at을 유지하고 품질 retained_until도 원본을 넘기지 않는다. 최초 AI 근거 버전과 숫자 이력은 보존한다. 재사용/재계산/새 산정이 섞이면 새 후보만AI에 전달하고, 모델 실행 없는 이력의 model/지연/사용량은null이다. 같은 실행 재요청 또는 다음 동일 프로필 조회는 같은 revision을 반환하며 중복 보정/새 이력 생성을 막는다.
+
+호출 전후 회원/프로필/본인 장소 버전·물리 키·원본 수치/연결/기한을 재검사한다. 만료/변경은 현재 검증 근거를 제공받아 새 산정으로 처리한다. 오래된 Context/위치 버전은404/409이며 미확인 실제 근거는needs_data이다. 물리 키가 같으나 프로필 다른 필드도 변경됐으면409 PROFILE_RECALCULATION_REQUIRED로 차단한다. 실제 공급자 경로 재조회와 물리 근거 확인은 호출 서비스의 선행 조건이며 이번 내부 모듈이 미확인 값을 인증하지 않는다.
+
+GET 상세는 인증/no-store/기존 필드/reused=false를 유지하고 source enum에 profile_recalculation을 추가한다. 최신 revision의 계수/초/계산 시각을 반환한다. 내부 estimates도 source를 추가한다. 프론트는 해당GET을 아직 쓰지 않아 UI 변경은 없지만 신규 소비자는 source 두 값을 처리해야 한다.0011_walking_recalculation은 부모 revision의 회원/estimate 복합FK·candidate_id·source 제약을 추가하며 기존AI revision의 부모는null이다. downgrade는 파생 revision만 제거하고 원본을 보존하므로 실제 개발DB에서 수행하지 않는다.
+
+F09 계수 학습·실제 물리 근거 확보/사용자 생성 연결·F07 출발 안내는 후속이다. 현재 walking.evidence의 needs_data/ready_for_estimation=false/reusable=false를 유지한다.

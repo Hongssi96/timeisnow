@@ -292,3 +292,7 @@ ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조�
 ## F05-05 캐시 확장 — 2026-10-12
 
 0010_walking_cache: walking_paths.cache_key char(64)/cache_identity jsonb는 nullable 쌍이며 미확인 기존 행을 백필하지 않는다. 회원·물리 키·기한 조회 인덱스를 추가한다. ai_executions.reused_estimates jsonb는 NOT NULL·기본[]·배열 제약이다. 최소 재사용 연결은 본인 원본 FK 조회와 검산으로 확인하고 삭제/만료 연결은 재실행을 차단한다. 기존 numeric revision은 수정/복제하지 않는다. 회원 CASCADE·90일 정리 유지. walking_api.md·Notion v0.55.
+
+## F05-06 재계산 revision — 2026-10-13
+
+0011_walking_recalculation: source 제약에 profile_recalculation 추가, parent_revision_id uuid/candidate_id varchar(200) 추가. 부모는(id,user_id,estimate_id) 복합FK로 같은 회원의 같은 산정만 연결하고 삭제CASCADE. AI 원본은부모/candidate_id null, 재계산은둘다필수이며자기자신참조금지. 기존 원본 revision은 보존하고 estimate별 revision_no 증가를 기존 회원/물리 키 잠금 안에서 처리한다. 새 실행과 현재 후보를 연결하지만 최초 AI 근거 버전과 원본 기한은 유지한다. walking_api.md·Notion v0.56.

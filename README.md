@@ -246,3 +246,5 @@ F03-04(2026-10-07): 홈의 ‘다른 곳에서 출발’에서 로그인 후 현
 프론트엔드는 실행 코드(`frontend/src`: app/components/lib/styles)와 테스트(`frontend/tests`: app/components/lib)로 분리합니다. 진입점은 src/main.jsx이며 실행 명령은 그대로 유지합니다. 상세 [프론트엔드 디렉터리 안내](./frontend/README.md).
 
 F05-05 내부 도보 캐시: 검증된 같은 물리 조건/프로필/버전의 저장값을 전체/부분 재사용하고 누락 후보만 AI에 전달합니다. 기존 GET 계약과 프론트는 그대로이며 DB head0010입니다. 실제 물리 근거 확보와 출발 안내는 후속입니다. [도보 계약](./walking_api.md)·Notion v0.55.
+
+F05-06 내부 재계산: 개인 계수만 바뀌면 저장된 기준 시간으로 새 revision을 계산하며 AI/지도 호출과 원본 기한 연장이 없습니다. GET source에 profile_recalculation이 추가됐고 DB head0011입니다. 서버8000·프론트5173, 실제 출발 안내는 후속입니다. [도보 계약](./walking_api.md)·Notion v0.56.

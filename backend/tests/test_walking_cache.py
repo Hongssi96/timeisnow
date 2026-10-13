@@ -123,16 +123,17 @@ class WalkingCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(upstream.call_count,1);self.assertFalse(saved['estimates'][0]['reused'])
         with database() as c:self.assertEqual(c.execute('SELECT count(*) AS n FROM walking_paths WHERE cache_key IS NULL').fetchone()['n'],1)
 
-    async def test_profile_only_change_blocks_without_ai(self):
+    async def test_profile_only_change_recalculates_without_ai(self):
         await self.setup_owner();self.seed();value=self.next_value()
         value['profile']['validated_duration_factor']=1.3
-        with patch('app.ai.provider.fetch_estimate') as upstream,self.assertRaises(AuthError) as error:self.run_cached(value)
-        self.assertEqual(error.exception.code,'PROFILE_RECALCULATION_REQUIRED');upstream.assert_not_called()
-        value['profile']['version']=2
+        with patch('app.ai.provider.fetch_estimate') as upstream:saved=self.run_cached(value)
+        upstream.assert_not_called();self.assertEqual(saved['result']['results'][0]['estimated_seconds'],390)
+        self.assertEqual(saved['estimates'][0]['source'],'profile_recalculation')
+        value['profile']['version']=2;value['request_id']='req_profile_v2'
         with database() as c:c.execute('UPDATE user_profiles SET version=2 WHERE user_id=%s',(self.owner,))
-        with patch('app.ai.provider.fetch_estimate') as upstream,self.assertRaises(AuthError) as error:self.run_cached(value)
-        self.assertEqual(error.exception.code,'PROFILE_RECALCULATION_REQUIRED');upstream.assert_not_called()
-        self.assertEqual(self.counts(),(1,1,1,1))
+        with patch('app.ai.provider.fetch_estimate') as upstream:saved=self.run_cached(value)
+        upstream.assert_not_called();self.assertEqual(saved['result']['results'][0]['estimated_seconds'],390)
+        self.assertEqual(self.counts(),(3,1,1,3))
 
     async def test_effective_expiry_capped_without_extending_source(self):
         await self.setup_owner();original=self.seed()

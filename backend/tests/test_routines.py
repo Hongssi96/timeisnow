@@ -297,13 +297,19 @@ class RoutineTests(unittest.IsolatedAsyncioTestCase):
         home, work, search_id, candidate = await self.ready()
         body = self.routine_body(home, work, search_id, candidate)
         ids = [(await self.save({**body, 'name': '루틴' + str(index)}))[2]['data']['routine_id'] for index in range(3)]
+        # Deterministic primary ordering plus a deliberate timestamp tie for the UUID boundary.
+        with database() as connection:
+            for index,identifier in enumerate(ids):
+                connection.execute("UPDATE routines SET created_at=TIMESTAMPTZ '2026-10-01 00:00:00+00'+%s*interval '1 second' WHERE id=%s",
+                    (1 if index==2 else 0,identifier))
+        expected_ids=[ids[2]]+sorted(ids[:2],reverse=True)
         page = await self.call('/routines?limit=2')
         self.assertEqual(page[0], 200)
         self.assertEqual(page[1][b'cache-control'], b'no-store')
-        self.assertEqual([item['routine_id'] for item in page[2]['data']['items']], list(reversed(ids))[:2])
+        self.assertEqual([item['routine_id'] for item in page[2]['data']['items']], expected_ids[:2])
         cursor = page[2]['data']['next_cursor']
         second = (await self.call('/routines?limit=2&cursor=' + cursor))[2]['data']
-        self.assertEqual([item['routine_id'] for item in second['items']], list(reversed(ids))[2:])
+        self.assertEqual([item['routine_id'] for item in second['items']], expected_ids[2:])
         self.assertIsNone(second['next_cursor'])
         for query in ('limit=0', 'limit=101', 'limit=x', 'cursor=bad'):
             self.assertEqual((await self.call('/routines?' + query))[0], 422)

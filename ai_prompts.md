@@ -283,3 +283,7 @@ history_service.estimate_and_store/persist는 F05-03 결과를 재검산하고 �
 ## 15. F05-05 재사용 후보는 호출 입력에서 제외 — 2026-10-12
 
 현재 검증 근거와 같은 물리 키·프로필·버전의 유효 저장값만 재검산해 재사용한다. 전체 적중은 모델 호출0회, 부분 적중은 누락 후보만 USER JSON에 담는다. 현재 candidate/evidence ID로 결과를 연결하고 원본 estimate/revision을 유지한다. cache_sources는 서버 검증 식별자이며 AI 입력에 추가하지 않는다. 프롬프트 문구/버전 변경과 원문/정밀 위치/이름/키 전송 없음. 실제 미확인 walking.evidence는 needs_data를 유지한다. walking_api.md·Notion v0.55.
+
+## 16. F05-06 계수 재계산은 서버 처리 — 2026-10-13
+
+유효한 같은 물리 근거의 개인 계수만 변경되면 서버가 저장된 기준 초에 계수를 적용한다. 재계산/재사용 후보는 AI USER 입력에서 제외하고 새 산정 후보만 기존F05-03으로 전달한다. 프롬프트/모델 버전과 문구 변경 없음. 원본 AI 근거와 source=profile_recalculation 이력을 연결하고 모델 미실행 메타데이터는null이다. 반복 계수 적용·만료 연장 없음. walking_api.md·Notion v0.56.

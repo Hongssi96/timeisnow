@@ -936,3 +936,35 @@
 캐시의 핵심은 일시 요청ID 대신 검증된 물리 식별자와 버전을 쓰는 것이다. 재사용은 원본 숫자/기한을 바꾸는 새 계산과 구분하고, 부분 적중의 멱등 재실행에는 기존/신규 원본 연결이 모두 필요하다. 부동소수 DTO 값과 PostgreSQL NUMERIC의 전달을 구분해 검산 계약과 저장 정밀도를 유지한다.
 
 현재 실제 walking.evidence는 물리 범위/방향 미확인으로 needs_data·reusable=false이며 운영 캐시·사용자 산정 생성·출발 안내 연결은 아직 미구현이다. 완료 범위는 검증된 서버 내부 근거에 대한 F05-05 모듈과 이력이다. 다음은 F05-06 개인 계수만 변경된 기준 시간 재계산이며 F07 화면 내 출발 안내/실제 물리 근거 확보·F09 학습은 후속이다.
+
+## 2026-10-13 — F05-06 개인 계수 변경 재계산
+
+### 목표와 선행 명세
+
+개인 계수/프로필 버전만 변경되면 저장된 기준 초로 재계산하고 원본 숫자와 기한을 보존한다. todo.md F05-06·최신 Notion v0.55의5.5.4/5.6·personalization.md4절·walking_api.md·planning.md·ai_prompts.md·logging.md·저장/캐시/검산 코드를 확인했다. Notion spec-to-implementation 스킬을 읽고 요구와 검증 근거를 연결했다. 최신main2690526에서 codex/walking-profile-recalculation을 생성하고 미병합 F05-04 d34b3e2/ F05-05 a59dab3를 f1c7bf2/ebbb944로 포함했다. 사용자 규칙대로 MR 생성/병합은 하지 않는다.
+
+### 구현 및 파일
+
+- backend/app/walking/cache_service.py: 같은 물리 키의 유효 원본에서 계수/프로필 버전만 변경되면 저장된 Decimal 기준 초 × 새 계수를 올림한다. 기본1.0·허용0.5~2.0, 이미 개인화된 공급자 기준은1로 유지한다. 현재 최종값에 계수를 또 곱하지 않는다. 원본 수치/버전/프로필/키/기한을 검증하며 프로필 다른 필드 변경은 내부409 차단한다. 만료/물리 조건/필요 속도 변경은 현재 검증 근거의 새 산정으로 연결하고 미확인 근거는needs_data를 유지한다.
+- history_service.py, history_repository.py, history_dto.py: 같은 estimate에 revision_no 증가·parent_revision_id·현재 candidate_id·새 프로필·source=profile_recalculation을 저장한다. 원본 숫자/경로/최초 AI 버전과 만료/보관 기한을 보존한다. 재사용/재계산/새 후보가 섞이면 새 후보만 AI 호출. 호출 없는 실행 메타데이터는null. 재계산 전후 확인·멱등·동시 물리 키 잠금·삭제/만료 재실행 차단·롤백 유지. 저장된 십진 기준의 재계산과 신규 AI 검산을 구분하며 결과ID 불일치의502 AI_OUTPUT_INVALID 계약을 유지한다. GET 기존 필드/인증/no-store/reused=false를 유지하고 source enum에 새 값을 추가했다. 내부 estimates에도 source를 제공한다.
+- backend/migrations/versions/0011_walking_recalculation.py: source 제약 확대, 부모의 동일 회원/estimate 복합FK·candidate_id·출처별 부모 제약. 기존 AI 원본은 부모null, 회원/부모삭제CASCADE. downgrade는 파생 revision만 제거하므로 실제DB에서는 실행하지 않았다.
+- backend/tests/test_walking_recalculation.py: 신규19개 실제 격리 PostgreSQL/ASGI·합성 AI. test_walking_cache.py의 기존 계수 변경 차단을 새 재계산 기대값으로 맞췄고 test_migrations.py head0011로 갱신했다. test_routines.py는 기존 생성시각 순서 가정을 고정 시각과 의도적인 동률/UUID 경계로 안정화했다. 루틴 API 구현/정렬 계약은 바꾸지 않았다.
+- api_contract.md, walking_api.md, personalization.md, ai_prompts.md, logging.md, database_schema.md, migrations.md, planning.md, README.md, todo.md, feature_breakdown.md: 새 내부 흐름/계산/이력/호환성·현재/다음 작업 동기화. 프론트/프롬프트 문구·모델 버전 변경 없음.
+
+### 실제 실행 및 검증
+
+- 시작 시 Docker Desktop이 꺼져 PostgreSQL 연결이 실패했고 초기 캐시18개가 connection timeout으로 실패했다(90.308초). 이를 성공으로 기록하지 않는다. Docker를 숨김 기동하고 프로젝트 compose db를 켜 healthy를 확인했다.
+- 초기 신규 재계산15개:8.883초 통과. 캐시18개 회귀:11.084초 통과. 부모FK/마이그레이션 복구/source enum/출력ID 오류502까지 포함한 최신 재계산19개:9.468초 통과.
+- 최초 전체220개에서 기존 루틴 목록 테스트1개가 생성 순서=시간 순서를 가정해 실패했다(89.860초). 고정 시각/UUID 동률 경계를 제공한 뒤220개 통과(89.099초). 최신 출력ID 오류 검증까지 포함한 최종 backend/.venv/Scripts/python.exe -m unittest discover -s backend/tests:221개 전부 통과,88.249초.
+- 기준300×1.1=330·연속 계수 변경 시 기준300 유지·기본/경계 계수/잘못된 입력·이미 개인화된 공급자·거리/속도 십진 올림·현재ID 연결·재사용/재계산/새 산정 혼합(새 후보만AI)·부모FK·기한/소유권/위치/프로필·호출 중 원본 만료 롤백·삭제/멱등·동시 실행/실패 잠금 해제·GET source·출력ID502를 확인했다. 파생을 만든0011→0010→0011 격리 복구에서도 원본360초 보존, 재적용 부모null을 확인했다.
+- AST history_service.py/cache_service.py/router.py 직접SQL 실행0건·git diff --check 통과.
+- 실제 개발DB upgrade head0011_walking_recalculation 성공. 전후 users20/saved_places35/routines12·ai_executions0/walking_paths0 유지. 실제 사용자 산정/이력 생성 없음. Docker 재기동으로 자동 실행된 다른 컨테이너의 데이터/설정은 조작하지 않았다.
+- 꺼져 있던 backend8000/frontend5173을 숨김 기동하고 최종 백엔드를 재시작했다. 실제 health200·프론트200·비인증 GET401 AUTH_REQUIRED·OpenAPI source=[ai_estimate,profile_recalculation] 확인. 추가 외부 AI/카카오 호출 없음. UI 변경이 없어 PC/모바일 시각 검증은 새로 수행하지 않았다.
+
+### 계약·학습·남은 범위
+
+구현 전에 Notion v0.56에 재계산/부모이력/십진 기준/무효화/호환성 초안을 기록했다. 최종 상태·예시·공통 source/변경 이력을 갱신하고 다시 읽어 저장을 확인했다. Notion Markdown의 이스케이프된 물결/구분자 때문에 한 차례 문서 갱신/대조가 실패했으며 실제 저장 표기를 재조회해 반영했다. 최종 api_contract.md 전체1507줄과 Notion 본문이 줄별 대조에서 일치했다. 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+개인화 이전 기준과 개인화 최종값을 분리해야 반복 보정을 막을 수 있다. 저장된 십진 초를 사용하는 계수 재계산은 거리/속도를 다시 나누는 신규 AI 검산과 올림 경계에서1초 차이가 날 수 있어 각각의 계약으로 검증한다. 부분 실행은 모델 호출한 후보만 비용/지연으로 집계하고 부모 이력과 원본 기한을 유지해야 한다. source enum 확장은 신규 소비자가 두 값을 처리해야 하는 호환성 영향이며 현재 프론트는 해당GET을 쓰지 않는다.
+
+완료 범위는 검증된 서버 내부 근거의 재계산과 만료/변경 분기다. 실제 walking.evidence는 물리 범위/방향 미확인으로 needs_data·reusable=false를 유지한다. 호출 서비스의 실제 지도 재조회/물리 검증·사용자 산정 생성 연결·F09 계수 학습·F07 출발 안내는 아직 후속이다. 다음 TODO는 F05-07 AI 실패/근거 부족/역 내부 누락 상태 안내다.
