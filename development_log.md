@@ -1465,3 +1465,21 @@ frontend/tests/departure.test.js·components/FirstDeparture.test.jsx 신규7개 
 시각/서버: 합성순수계산응답을 실제readFirstDeparture 엄격클라이언트/FirstArrivals·기존CSS에 연결해PC1280×1000/모바일390×1100의 다음차량사유·새출발·여유·환승·목표·추정표기를 확인했다. 모바일body.scrollWidth=innerWidth390·줄바꿈/가로넘침없음. 임시next-preview.html/jsx/json 삭제·검증탭닫기/viewport원복. 실제사용자로그인·실경로양수추천/도착정확도/실기기보행은 미검증. 프로젝트uvicorn만확인후숨김재시작, health/프론트200·비인증루틴GET401 확인. 직접외부실키/AI0회, 이전승인 잔여9회사용없음, 새DDL없음.
 
 문서/완료: Notion v0.79의5.7.7 구현상태·기존첫차량선택정책·버전/변경이력과이유/호환영향/선행미구현을맞추고재조회저장확인. api_contract.md전체1657행 해시대조일치, unrelated F12보존. next_vehicle_api.md·departure_api.md·routine_departure_api.md·planning.md·personalization.md·logging.md·design_guide.md·screen_plan.md·todo.md·feature_breakdown.md 동기화. F07-06a만체크하고F07-06b/전체06은미완료, 다음은실제이동/수동departed 선행연결 준비. 배운개념: 현재 접근불가능한 차량 제외와 출발확인누락의 절반경과 정책은 서로다르다. 차량ETA를바꿨으면환승/목표타임라인도반드시재계산해야한다. 기한이유효한기존후보재선택은수신시각갱신이아니다. 기능브랜치 커밋·푸시, MR/병합은사용자수행. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+## 2026-10-14 — F08-01/F08-02a 안내 연결 이동·수동 출발 확인 완료
+
+목표/근거: 사용자 다음 진행 요청으로 최신 Notion v0.79·TODO/F08·planning/personalization/logging·기존DTO/라우터/DB·UI/디자인을 비교했다. 운영 /trips와 수동 이벤트가 없어 F07-06b를 실제 출발 상태에 연결할 선행 기능을 구현한다. 최신 origin/main2460bd7에서 codex/manual-departure-session 생성하고 미병합 루틴/도보/목표/다음차량 및 사용자 보류 기록을95072d9·20b533c·4538dd4·384e83b·304bb0a·98a98a7·7ff5f57·4af96f1로 보존했다. Notion v0.80의5.8.1 계약을 구현 전 저장 확인하고 변경 중 24시간 생성키/현재 접근 가능성 검사를 다시 동기화했다. 다른 담당 F12 명세/이력 보존, 해당 기능을 구현/검증했다고 주장하지 않는다.
+
+구현/이유: guidance/issued.py·dto.py·routine.py는 유효 루틴 안내에 본인/경로/루틴·장소/프로필 버전과 묶인 nullable guidance_id 토큰을 최근128개 메모리에 발급한다. 기한은 기존안내/검색최소·GET DB쓰기/실제출발 없음. trips/router·dto·service·repository는 POST /trips의기존guidance_id/mode 입력으로 불변 안내·좌표없는경로 스냅샷과 assisted/baseline 세션을원자저장한다. 본인당active1개·공유잠금현재버전/원래후보·현재접근가능성검사, 동일안내/mode 재전송200·다른mode409, 선택Idempotency-Key24시간·본문변경409. 안내가만료돼도이미저장된본인결과복구. 세션 생성은 출발신고가 아니다.
+
+수동출발: POST /trips/{id}/events의최초departed/source manual·client_event UUID·첫ordered_leg만지원한다. 시간대있는ISO문자열·안내산정이상/수신이하 검증, received_at과발생시각·입력지연별도저장. 행/본인잠금으로동일본문200/다른본문409·다른ID중복출발/취소세션새출발409. 같은시각의다른UTC오프셋은정규화해동일재전송. 실제이동/속도/탑승인증·놓침/GPS판정·학습관측은생성하지않는다. 본인목록/상세복구·expected_version 취소제공, 과거출발기록은취소로삭제하지않는다. 90일만료읽기차단·다음쓰기본인만료행/스냅샷cascade정리. 접근완료/탑승/하차·정정/파생학습·내보내기/삭제작업/매일청소·약속안내토큰은후속이다.
+
+프론트: trips.js 엄격응답/본인연결·CSRF/생성→저장첫구간GET→manual신고·같은이벤트ID/발생시각재시도, ManualDeparture.jsx 실제서버저장후성공·중복누름차단/이탈취소·진행중본인복구/취소. FirstArrivals/RoutineDeparture에연결, 이전실제이동미지원문구수정·departure.jsnullable토큰검증. 기존info-box/h3/button-row/primary/secondary/CSS재사용·새테마없음. 검증중취소된동일안내토큰재생성은서버가과거취소결과를반환하므로클라이언트에서새안내전까지재시작버튼차단/갱신안내를추가했다. 아직F07-06b자동전환은연결하지않는다.
+
+실제검증: 신규backend/tests/test_manual_trips.py12개·격리PostgreSQL/정상인증ASGI로불변스냅샷/생성만으로미출발·토큰메모리소실뒤재전송·모드/헤더키충돌·동시동일생성201/200·active유일·버전/장소/프로필변경차단/쓰기없음·토큰기한/타인/CSRF/no-store·시각/구간/source/미지원type차단·첫출발재전송/순서/취소/기록보존·baseline·90일차단/cascade확인. 초기10개19.943초통과, 전체406개194.374초통과, 마지막ISO문자열검증강화와숫자시각거부추가후관련12개23.270초재통과. migrations전체왕복/기존저장/버전/테이블기대갱신포함. 실패나운영검사완화없음. 프론트전체242개37.85초통과후취소안내토큰차단/버튼행·제목최종수정관련6개1.73초통과, 최종빌드1911모듈423ms. 실API클라이언트단위로세션→저장구간→manual본문/시간·실패같은이벤트재시도/기존출발무재전송·취소버전/타인루틴·GPS거부검증. 컴포넌트서버확인전성공없음·중복/취소/이탈·만료무신규세션·새안내전취소토큰차단검증.
+
+시각/DB: 실제ManualDeparture/trips클라이언트와합성API·기존CSS로PC1280×800/모바일390×844의출발버튼→저장성공/취소·실패→동일시도재시도성공을확인했다. 모바일body.scrollWidth=innerWidth390·줄바꿈/가로넘침없음. 취소후새안내전차단문구는최종관련컴포넌트테스트로확인, 해당추가문구의별도시각확인은미실행이다. 임시manual-preview.html/jsx삭제·탭닫기/viewport원복. 실제사용자로그인/실경로추천성공/실기기이동정확도는미검증. 개발DB기존head0012확인후0013_manual_trips적용·4개신규테이블·회원/장소/루틴/plan기존개수보존확인. 별도F12의미병합0013과향후merge시Alembic head통합필요, 무관한migration변경없음. 직접외부키/AI0회·이전추가검증승인잔여9회사용없음.
+
+문서/완료: Notion v0.80의5.8.1 구현·범위/시간/중복/보관·기존선행미구현표현·버전/변경이력/호환영향을수정하고재조회저장확인. api_contract.md전체1671행해시대조일치/다른담당F12보존. trip_api.md·planning.md·personalization.md·logging.md·design_guide.md·screen_plan.md·routine_departure_api.md·todo.md·feature_breakdown.md동기화. F08-01과F08-02a만체크, 상위F08-02/04/05·F07-06b/전체06은미완료. 배운개념: 세션생성과실제출발신고는별도사실이며과거안내스냅샷을현재예측으로덮어쓰지않는다. 멱등키/이벤트ID와발생·수신시각을분리하면통신재시도로거짓중복관측을막을수있다. 코드·문서기능브랜치커밋/푸시·MR/병합은사용자수행. 다음은저장된수동departed를F07-06b절반경과선택에연결. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+게시 전 최종 서버 확인: 프로젝트uvicorn숨김재시작 후 health/프론트200·비인증tripsGET401·OpenAPI이동3경로/안내토큰필드존재 확인. 최신origin/main2460bd7재확인. git diff --check 통과, 임시프리뷰없음. Notion게시전재조회와로컬미러일치확인 후기능브랜치커밋/푸시한다.

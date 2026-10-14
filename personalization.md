@@ -196,3 +196,7 @@ v2 응답/enum/타이밍 근거/남은초 변경에 클라이언트 대응이 �
 ## 2026-10-14 — F07-06a 다음 접근 가능 차량 선택
 
 제공된 유효 도착 후보 중 지금부터 개인화 접근 W를 확보할 수 있는 가장 이른 차량으로 출발·환승·목표를 재계산한다. 설정 B는 별도 여유이며 below_buffer 경고 유지. NEXT_REACHABLE_VEHICLE 고정사유/기존필드·TTL 유지, 새외부조회/DDL/AI 없음. now-s>W/2·수동 departed 미확인 규칙은 실제 이동 이벤트 선행이 없어 F07-06b 미완료 유지. 상세 next_vehicle_api.md.
+
+## 2026-10-14 — F08-01/F08-02a 안내 연결 세션·수동 출발
+
+유효 루틴 first-departure의 nullable guidance_id로 당시 안내와 경로/버전이 묶인 토큰을 발급하고, POST /trips로 assisted/baseline 불변 안내·이동 세션을 저장한다. 생성만으로 출발하지 않으며 본인 수동 departed 저장 후에만 출발 확인을 표시한다. 본인 조회/복구·취소·중복 전송/24시간 생성 키·90일 이력과 만료 차단, 최초출발 순서/구간·시간대 있는 ISO 시각 검증. 출발 기록은 실제 보행/탑승 인증이나 학습 표본이 아니다. 기준의 원문/좌표/일반로그 추가 없음. 기존 카드·button-row/primary/secondary/상태 표현 재사용·새 CSS/폰트/색상 없음. API 응답 토큰 nullable 추가, 기존 /trips 초안 guidance_id/mode 입력 유지. 상세 trip_api.md·Notion v0.80. F07-06b 절반경과 연결과 나머지 F08 이벤트·정정/학습·내보내기/삭제는 미완료다.
