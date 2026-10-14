@@ -147,18 +147,20 @@ class PinTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_outside_region_failure_cleanup_and_quota(self):
         await self.signup_login()
-        await self.confirmation()
-        with database() as connection:
-            connection.execute('UPDATE place_location_confirmations SET expires_at=now()')
-        with patch.object(places_provider,'region_for_location',side_effect=auth.AuthError(422,'UNSUPPORTED_REGION','지원지역 밖')):
-            self.assertEqual((await self.call('/place-location-confirmations', {'location':{'latitude':35,'longitude':129}}))[0],422)
-        with database() as connection:
-            self.assertEqual(connection.execute('SELECT count(*) AS n FROM place_location_confirmations').fetchone()['n'],0)
-        for _ in range(8): await self.confirmation()
-        with patch.object(places_provider,'region_for_location') as upstream:
-            response = await self.call('/place-location-confirmations', {'location':{'latitude':37,'longitude':127}})
-        self.assertEqual(response[0],429)
-        self.assertIn(b'retry-after',response[1]); upstream.assert_not_called()
+        with database() as connection:frozen=auth.repository.clock_now(connection)
+        with patch.object(auth.repository,'clock_now',return_value=frozen):
+            await self.confirmation()
+            with database() as connection:
+                connection.execute('UPDATE place_location_confirmations SET expires_at=now()')
+            with patch.object(places_provider,'region_for_location',side_effect=auth.AuthError(422,'UNSUPPORTED_REGION','지원지역 밖')):
+                self.assertEqual((await self.call('/place-location-confirmations', {'location':{'latitude':35,'longitude':129}}))[0],422)
+            with database() as connection:
+                self.assertEqual(connection.execute('SELECT count(*) AS n FROM place_location_confirmations').fetchone()['n'],0)
+            for _ in range(8): await self.confirmation()
+            with patch.object(places_provider,'region_for_location') as upstream:
+                response = await self.call('/place-location-confirmations', {'location':{'latitude':37,'longitude':127}})
+            self.assertEqual(response[0],429)
+            self.assertIn(b'retry-after',response[1]); upstream.assert_not_called()
 
     async def test_concurrent_updates_with_same_version_only_one_succeeds(self):
         await self.signup_login()

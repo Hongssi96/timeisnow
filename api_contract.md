@@ -1,7 +1,7 @@
 # 지금이니? API 설계 초안
-- 문서 버전: 0.72 · 작성일: 2026-09-30 · 수정일: 2026-10-13 (F07-01b 수신 기준 추정 정책·선택 이유)
+- 문서 버전: 0.73 · 작성일: 2026-09-30 · 수정일: 2026-10-13 (F07-02 공급자 접근·개인 계수 예상 출발 계산)
 - 프론트엔드: React · 백엔드: Python FastAPI
-- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. F03-05a 수동 확인은 구현/검증 완료이며 GPS 수치/자동 일치 판정은 사용자 결정으로 보류. F04-01 depart_now 대중교통 후보 조회 API 및F04-02 공통 구간 모델은 구현, F04-03 후보 비교 화면은 구현. F06-01 루틴 저장·상세 API와 비교 화면 저장 연동, F06-02 루틴 요일·목표 도착 저장(저장 입력과 일정 PATCH 포함)은 구현. F06-03 본인 목록·선택·이름/일정/경로 수정·삭제와 F06-03a 루틴 등록 중 장소 저장·선택은 구현·검증 완료. F06-04 장소 변경/삭제 루틴 복구 안내도 구현·검증 완료. F03-02a 검색 없는 지도 핀 저장·자동 선택도 구현·검증 완료. F05-01 기존 후보 도보 근거·누락 조회 API도 구현·검증 완료. F05-02 서버 내부 프롬프트 블록·버전 로딩도 구현·검증 완료. F05-03 서버 내부 AI 최소 입력/구조화 결과 검증과 실제 합성 최소 호출도 구현·검증 완료. F05-04 내부 산정/품질 이력 저장과 본인 상세 조회도 구현·검증 완료. F05-05 서버 내부 조건별 전체/부분 재사용도 구현·검증 완료. F05-06 내부 개인 계수 재계산·경로 변경/만료 무효화도 구현·검증 완료. F05-07 루틴/후보 상세의 근거 부족·실내 이동·실패/만료 화면 안내도 구현·검증 완료. F07-01a 기반/F07-01b 경기 매핑·본인GET·사용자 승인 수신 기준 추정은 구현·검증 완료, 원천 시간/갱신지연·지원 범위 강화는 F07-01c 후속으로 F07-01 전체 미완료. AI/실시간·목표 도착 기반 출발 안내·약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
+- 상태: **기획/미구현 계약과 일부 구현을 함께 기록**. GET /health·공통 요청 처리/로그 및17절 기본 회원 인증은 구현, F03-01\~03 장소 검색/저장/본인 조회·지도 핀/출입구·이름 수정/삭제는 구현, F03-04 출발지 입력 확인·단발 현재 위치/지도/본인 저장 장소 선택은 구현. F03-05a 수동 확인은 구현/검증 완료이며 GPS 수치/자동 일치 판정은 사용자 결정으로 보류. F04-01 depart_now 대중교통 후보 조회 API 및F04-02 공통 구간 모델은 구현, F04-03 후보 비교 화면은 구현. F06-01 루틴 저장·상세 API와 비교 화면 저장 연동, F06-02 루틴 요일·목표 도착 저장(저장 입력과 일정 PATCH 포함)은 구현. F06-03 본인 목록·선택·이름/일정/경로 수정·삭제와 F06-03a 루틴 등록 중 장소 저장·선택은 구현·검증 완료. F06-04 장소 변경/삭제 루틴 복구 안내도 구현·검증 완료. F03-02a 검색 없는 지도 핀 저장·자동 선택도 구현·검증 완료. F05-01 기존 후보 도보 근거·누락 조회 API도 구현·검증 완료. F05-02 서버 내부 프롬프트 블록·버전 로딩도 구현·검증 완료. F05-03 서버 내부 AI 최소 입력/구조화 결과 검증과 실제 합성 최소 호출도 구현·검증 완료. F05-04 내부 산정/품질 이력 저장과 본인 상세 조회도 구현·검증 완료. F05-05 서버 내부 조건별 전체/부분 재사용도 구현·검증 완료. F05-06 내부 개인 계수 재계산·경로 변경/만료 무효화도 구현·검증 완료. F05-07 루틴/후보 상세의 근거 부족·실내 이동·실패/만료 화면 안내도 구현·검증 완료. F07-01a 기반/F07-01b 경기 매핑·본인GET·사용자 승인 수신 기준 추정은 구현·검증 완료, 원천 시간/갱신지연·지원 범위 강화는 F07-01c 후속으로 F07-01 전체 미완료. F07-02 후보 첫 버스 예상 출발 계산은 사용자 승인 공급자 접근 개인화 추정으로 구현·검증 완료. 루틴 자동갱신/F07-02a·전체환승/목표도착 기반 출발 안내·약속 서비스는 미구현. 세부 완료 상태는 `todo.md`를 따른다.
 - 기준: 대화에서 확정한 요구사항 및 프로젝트 `C:/projects/timeisnow` 폴더의 `planning.md`, `feature_breakdown.md`, `personalization.md`, `logging.md`, `ai_prompts.md`.
 - 이 페이지는 수동 관리하는 설계 문서다. 코드와 자동 동기화되는 상태가 아니다.
 <table_of_contents/>
@@ -33,7 +33,7 @@ API는 React가 FastAPI에 요청하는 약속이다. GET은 조회, POST는 생
 ## 3. 인증 방식 결정
 첫 버전은 이메일 중복 확인과 비밀번호 기반 가입/로그인이다. 메일 소유 확인·복구는 후순위, 가입 즉시 active다. 서버 세션·HttpOnly 쿠키·CSRF 상세 계약은17절을 따른다.
 ## 4. 기능별 API 목록
-GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1\~2절 출발지 선택/수동 확인·5.2.3절 depart_now 경로 후보 및 본인 작업 조회·5.3절 루틴 저장/상세/일정 및5.3.1절 목록/이름/경로 수정/삭제·5.5.3절 본인 도보 산정 상세·5.9절 첫 탑승 도착 조회는 구현되어 있으며 그 외 항목은 **미구현**이다. 성공 응답 열은 공통 data 내부 필드를 요약한다.
+GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1\~2절 출발지 선택/수동 확인·5.2.3절 depart_now 경로 후보 및 본인 작업 조회·5.3절 루틴 저장/상세/일정 및5.3.1절 목록/이름/경로 수정/삭제·5.5.3절 본인 도보 산정 상세·5.9절 첫 탑승 도착 조회·5.7.1절 후보 첫 버스 예상 출발 계산은 구현되어 있으며 그 외 항목은 **미구현**이다. 성공 응답 열은 공통 data 내부 필드를 요약한다.
 ### 01. 시스템·계정
 <table header-row="true">
 <tr>
@@ -256,8 +256,15 @@ GET /health·17절 기본 회원 인증·5.1.1\~3절 장소·5.2.1\~2절 출발�
 <td>`GET /journey-searches/{search_id}/candidates/{candidate_id}/first-arrivals`</td>
 <td>필요</td>
 <td>본인 search_id/candidate_id</td>
-<td>200: arrival.evidence.v1, status, source_status, candidates, received_at/generated_at, expires_at, valid_for_guidance</td>
+<td>200: arrival.evidence.v2, status, source_status, timing_basis, candidates, received_at/generated_at, expires_at, valid_for_guidance</td>
 <td>5.9: 검증된 경기 첫BUS 조회/60초 메모리 재사용. 원천unknown은 명시한 수신 기준 추정으로만 사용, 미매핑/지하철/만료/후보 없음은 안내 제외</td>
+</tr>
+<tr>
+<td>`GET /journey-searches/{search_id}/candidates/{candidate_id}/first-departure`</td>
+<td>필요</td>
+<td>본인 search_id/candidate_id, departure_basis=recommended/now(기본recommended)</td>
+<td>200: first.departure.v1, status, recommended/selected_departure_at, vehicle_arrival_at, approach_seconds, buffer_seconds, slack_seconds, timing_basis, valid_until, arrival_evidence</td>
+<td>5.7.1: 공급자 접근 도보×개인계수 추정과 첫 차량 근거로 예상 출발 계산, 부족/만료는 숫자 없음. 환승/목표도착/루틴 자동갱신은 후속</td>
 </tr>
 <tr>
 <td>`POST /guidance-queries`</td>
@@ -664,6 +671,17 @@ departure_basis=now라면 selected_departure_at은 현재 시각이고 같은 �
 status는 ready/insufficient_data/no_feasible_journey/stale. 부족하거나 만료된 정보에 slack_seconds를 임의로 채우지 않고 null과 사유를 반환한다. 정상적인 ‘경로 없음’은 200 상태 결과이며 공급자 장애로 처리를 못한 경우는 503이다.
 origin_override에는 현재 위치 또는 지도 핀 객체를 전달한다. 이동 중 trip_id가 있으면 남은 경로를 산정해야 하며 전체 도보 시간을 다시 빼지 않는다.
 transfers의 각 항목은 leg_id, estimated_alighting_at, transfer_walk_seconds, transfer_buffer_seconds, next_boarding_at, feasibility, time_source를 포함한다. 실시간 근거가 없는 연결은 estimated 또는 unknown으로 표시한다.
+### 5.7.1 첫 버스 예상 출발 계산(F07-02)
+- 사용자 결정 <mention-date start="2026-10-13"/>: 실제 검색 후보에 검증된 개인 도보 산정값이 연결되지 않은 상태이므로 사용자는 공급자 접근 도보 시간에 개인 계수를 적용한 추정을 허용했다. 첫BUS 이전의 access 도보 구간 전체가 양수이고 누락이 없을 때 W=ceil(공급자 접근 도보초 합×본인 walking_duration_factor), 기본계수1.0/허용0.5\~2.0, B=본인 first_boarding_buffer_seconds(초·기본300/0\~1800). 공급자 추정을 물리 범위/진행방향/보행 인증으로 승격하거나 AI 산정값이라고 표시하지 않는다. 환승/마지막 도보/차량 대기는 W에 포함하지 않고 여유를 자동 축소하지 않는다.
+- GET /api/v1/journey-searches/\{search_id\}/candidates/\{candidate_id\}/first-departure?departure_basis=recommended\|now(기본recommended): 쿠키 인증·본인·no-store·CSRF 불필요, 클라이언트 시간/계수/접근초/정류소ID를 받지 않는다. search/후보/장소버전 검사는 first-arrivals와 동일(잘못된UUID/타인/없음/만료404·장소변경409). 공개 query 잘못된 basis422, 공급자/버킷502/503/504/429 기존형식. 호출 전후 소유권/검색후보 fingerprint/검색 기한·프로필버전/계수/여유를 재검사, 변경409 VERSION_CONFLICT. 계산은 읽기이며 새 경로/AI 호출·도보산정/루틴 쓰기·TTL연장 없음. first-arrivals의 검증 매핑/60초 캐시를 공유한다.
+- first.departure.v1 응답: search_id/candidate_id/first_leg_id·status(ready/insufficient_data/not_enough_time/stale/unsupported)·departure_basis·calculated_at/valid_until·recommended_departure_at/selected_departure_at/vehicle_arrival_at(nullable)·arrival_candidate_id(nullable)·approach_seconds/provider_approach_seconds/applied_duration_factor/profile_version/approach_basis=provider_personalized(nullable)·buffer_seconds·slack_seconds(nullable, 현재/선택시각 기준 내림 정수 초)·slack_status(meets_buffer/below_buffer/unreachable/unknown)·timing_basis(none/source_generation/receipt_estimate)·valid_for_guidance·reasons·arrival_evidence(arrival.evidence.v2). 개인화 계수는 Alembic0012로 user_profiles.walking_duration_factor(double precision·NOT NULL·기본1·0.5\~2) 추가, 기존회원 보존/GET /auth/me의 profile에 필드추가. 일반 설정변경 API와 학습은 후속이며 내부변경 시profile.version 증가 규칙을 따른다.
+- 유효한 첫 도착 후보 중 가장 이른 차량에 s=t_vehicle-W-B. recommended는 s가 미래면선택s, 이미 지났으면 현재시각을 선택해 S=t_vehicle-(선택시각+W)를 다시 계산한다. now는 현재시각선택, 원래s별도유지. S\<0이면not_enough_time/validfalse·음수slack을0으로 바꾸지 않는다.0\<=S\<B면ready/below_buffer이며5분확보로표시하지 않는다. 원천unknown은 명시적receipt_estimate로만 허용. 기본13분뒤차량/접근5분/여유5분은3분뒤예상출발. 이미 지난차량을탑승/놓침기록으로만들지 않으며 다음차량자동선택/환승/목표도착/이동중잔여계산은F07-03\~07 후속이다.
+- 유효기한은 도착근거/검색기한과 계산+120초 중 이른값. 접근누락/0초/잘못된계수·도착근거없음/매핑미확인/미지원/만료는출발숫자없음. 후보상세는 도착과출발을한GET으로조회하고60초/탭복귀 재계산·숨김/이탈취소, 수신추정/공급자개인화접근/조회경과·기본여유 표시. 화면기한초과/선택차량예측경과/조회인증·경로변경오류는이전출발숫자제거, 권장시각이지난경우경과표시하고5분보장하지 않는다. routine_id 필수인 POST /guidance-queries의기존설계는유지하고 이번후보계산API와구분하며 루틴 자동재검색/출발 안내 및 전체여정은후속이다.
+- F07-02 구현/검증 완료 <mention-date start="2026-10-13"/>: 후보 first-departure GET·본인/프로필/검색 스냅샷 호출 전후 검사·Decimal 접근초 올림·권장/지금 출발/지나간 권장시각 재평가·음수 여유/만료/부족 차단·도착 캐시 공유를 구현했다. 기존 arrival Envelope 이름을 유지하고 별도 DepartureEnvelope 스키마를 사용한다. 신규 백엔드15개4.903초 및 최종 전체329개123.044초, 프론트196개11.25초·빌드427ms 통과. 합성 브라우저1280×800/390×844에서 예상 출발/접근·설정 여유/추정 표기·줄바꿈/가로넘침 없음 확인. 다른 서울 날짜의 출발은 날짜를 붙이고 설정 여유 초는 분으로 임의 반올림하지 않는다. 마이그레이션0011→0012 적용·회원20/장소35/루틴12 보존·계수 범위 정상, 서버health/프론트200·비로그인 새GET401 확인. 이번 실제 교통키/AI 호출0회·실제 경로 출발 숫자/물리 보행/예측 정확도 미검증. F07-02 후보 첫 버스 계산 완료, F07-01c 원천 시간 강화 및 F07-02a 루틴 선택 자동갱신/검증 도보 연결, F07-03 이후 환승·목표도착·다음차량/이동중 계산은 미완료다. 이유/한계/실패 수정/검증은 `development_log.md`에 기록했다.
+후보 첫 출발 data 합성 예시(실제 운행 응답 아님):
+```json
+{"model_version":"first.departure.v1","search_id":"00000000-0000-4000-8000-000000000001","candidate_id":"00000000-0000-4000-8000-000000000002","first_leg_id":"00000000-0000-4000-8000-000000000003","status":"ready","departure_basis":"recommended","calculated_at":"2026-10-13T03:00:00Z","valid_until":"2026-10-13T03:02:00Z","recommended_departure_at":"2026-10-13T03:03:00Z","selected_departure_at":"2026-10-13T03:03:00Z","vehicle_arrival_at":"2026-10-13T03:13:00Z","arrival_candidate_id":"00000000-0000-4000-8000-000000000004","approach_seconds":300,"provider_approach_seconds":300,"applied_duration_factor":1,"profile_version":1,"approach_basis":"provider_personalized","buffer_seconds":300,"slack_seconds":300,"slack_status":"meets_buffer","timing_basis":"receipt_estimate","valid_for_guidance":true,"reasons":["PROVIDER_ACCESS_ESTIMATE","RECEIPT_BASED_ESTIMATE"],"arrival_evidence":{"model_version":"arrival.evidence.v2","search_id":"00000000-0000-4000-8000-000000000001","candidate_id":"00000000-0000-4000-8000-000000000002","first_leg_id":"00000000-0000-4000-8000-000000000003","status":"estimated","source_status":"unknown","timing_basis":"receipt_estimate","received_at":"2026-10-13T03:00:00Z","generated_at":null,"expires_at":"2026-10-13T03:02:00Z","valid_for_guidance":true,"reasons":["GENERATION_TIME_UNCONFIRMED","RECEIPT_BASED_ESTIMATE"],"candidates":[{"candidate_id":"00000000-0000-4000-8000-000000000004","provider_prediction_seconds":780,"predicted_arrival_at":"2026-10-13T03:13:00Z","remaining_seconds":780}]}}
+```
 ### 5.8 실제 이동 이벤트
 `POST /api/v1/trips/trip_demo_01/events`
 ```json
@@ -1343,7 +1361,7 @@ GET /meetings/\{meeting_id\}/sync
 ### 입력·저장
 - email: trim 후 최대254자, ASCII 이메일 형식, 전체 소문자 정규화. 점/플러스 주소는 합치지 않는다. DB UNIQUE로 동시 가입도 중복 방지, 중복409 EMAIL_UNAVAILABLE. 기존 회원 비밀번호를 덮어쓰지 않는다.
 - password:15\~128 Unicode 코드 포인트, 공백/붙여넣기 허용, trim/절단/대소문자 변환 금지. Argon2id(memory19456KiB/time2/parallelism1) 해시 저장. 최소 일반 비밀번호 차단 목록을 적용하며 전체 유출 목록 연동은 후순위다.
-- display_name:trim 후1\~30자. 첫 프로필:walking_preference=normal,first_boarding_buffer_seconds=300,transfer_buffer_seconds=120,route_preference=balanced,timezone=Asia/Seoul,version=1.
+- display_name:trim 후1\~30자. 첫 프로필:walking_preference=normal,walking_duration_factor=1.0,first_boarding_buffer_seconds=300,transfer_buffer_seconds=120,route_preference=balanced,timezone=Asia/Seoul,version=1.
 - users/auth_credentials/user_profiles/auth_sessions/auth_rate_limit_buckets를 사용한다. 메일 확인 상태/토큰/메일 큐 테이블은 만들지 않는다. 회원/자격정보/프로필을 동일 트랜잭션으로 생성한다.
 ### 세션과 CSRF
 - 서버 저장 세션:256비트 이상 난수, DB에는 SHA256 해시만 저장. 로그인7일 절대 만료·미사용24시간, 로그인 전 임시 세션15분. 인증 세션은 회원 active 상태를 검사한다.
@@ -1494,6 +1512,7 @@ F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프�
 - 기존 경로/응답 객체 유지, 설정 상한·만료·공유 ETA120초·자동 종료/삭제·출시 알림 범위가 변경/확정됐다. 아직 서비스가 미구현이므로 배포된 클라이언트 마이그레이션 없음. 422/404/409 등 기존 오류 사용, 소유권·동시 수락·기한 경계·삭제 사본 검증은 구현 시 수행한다.
 - 사용자 요청으로 F01 별도 검증 삭제, 메일 인증/발송 준비 F02-00은 후순위. F02-01 가입·로그인, F02-02 회원 조회·로그아웃, F02-05 초기 프로필 완료. F02-04는 /me와 장소 생성/조회/수정/삭제 소유권 확인, 업무 데이터 소유권 검증은 각 API 구현에서 진행한다. F03-04 main0402d67·R01 mainca8cd93 병합 확인, F03-01\~04 구현/검증 완료. F03-05a 수동 확인은main8b4b40b에 병합 완료다. GPS 수치/자동 일치 판정은 보류한다. F04-01은 main0402d67에서codex/journey-search로 시작해최신main8b4b40b를통합한뒤구현/검증, F04-01은main9670281에병합완료, F04-02는main63674ac에병합완료. F04-03은main4f94af1에병합완료, F04-04는사용자요청으로보류. F04-05는codex/journey-unavailable에서F04-03을통합해구현/검증했다. 사용자MR/병합 후 다음F05-01 도보근거수집이며 미확인물리근거를확정값으로채우지않는다.
 ## 변경 이력
+- <mention-date start="2026-10-13"/> v0.73: 사용자 승인 공급자 접근 도보×개인계수 추정·기본여유300초로 F07-02 후보 예상출발 계산 계약 추가. 본인 first-departure GET/프로필계수컬럼/호출전후버전·기한검사·도착캐시공유/부족·음수여유·후속범위 구분. 기존 /me.profile에계수필드추가·routine guidance초안은유지하며 구현/검증결과는후속기록. 구현/검증 완료: 백엔드329개·프론트196개/빌드·합성PC/모바일·0012 보존 적용/서버 확인, 실제키0회·원천/보행/정확도 미확인. F07-02 후보 계산 완료·루틴 자동갱신은02a/환승 이후후속.
 - <mention-date start="2026-10-13"/> v0.72: 사용자 승인으로 생성시각 검증/수신 기준 추정 정책을 구분했다. arrival.evidence.v2/status estimated/timing_basis/remaining_seconds·수신 ETA·60초 재조회/120초 만료·캐시 경과 재평가·실패 기한 비연장, 화면 추정/조회경과 표시와 선택 이유 기록. 원천 최신성 unknown 유지·강화는 F07-01c, 개인 접근/여유 출발 계산은 F07-02. 기존 클라이언트는 v2 enum/필드/valid_for_guidance 의미 변경 대응 필요. 구현/검증: 백엔드314개·프론트182개/빌드·합성PC/모바일 통과, 이번실제키0회·원천unknown 유지. F07-01b 수정 완료조건 완료/F07-01c 강화와 F07-02 계산 후속.
 - <mention-date start="2026-10-13"/> v0.71: F07-01b 실제8회/HTTP200·유일 매핑/본인 도착 조회 연결·무호출 재사용·검색 무변경을 확인했다. 생성시각/사용 가능한 도착후보 없음·최신성unknown·출발 계산 차단 유지, 기존 완료조건 미충족/TODO 범위 분리 제안은 사용자 결정 대기. API/계산/보관 계약 변경 없음.
 - <mention-date start="2026-10-13"/> v0.70: F07-01b 공공 중간 정류소 추가를 제공이름의 전체순서·30m·공식방문/회차/방향/최종유일성 검증으로 처리하도록 정책을 변경했다. 반복방문은 방향 후 유일성 평가·32후보 상한, GET 필드/캐시/시간/보관 유지·매핑 버전v2/원천unknown 유지. 구현/검증 완료 기록: 최종 백엔드306개 통과·합성 본인GET→도착 연결/안전 차단 확인, 변경 후 실제키0회·원천 최신성/실연결 미확인·전체 미완료.
