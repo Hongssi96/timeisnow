@@ -198,3 +198,8 @@ WalkingGuidance는 기존 info-box 위에 lucide Footprints와16px 제목·14px 
 ## 2026-10-14 — F07-02a-1 루틴 최신 출발 연결
 
 RoutineDeparture는 기존홈루틴카드/FirstArrivals/info-box/candidate-note/secondary/Clock3를 재사용한다. 로딩·경로불일치/복수/없음·실패/만료·복구 상태와다시확인 제공, 새CSS/팔레트/폰트없음. 합성실컴포넌트1280×800/390×844·모바일가로넘침없음 확인. 실로그인전체시각검증 제외.
+
+
+## 2026-10-14 — 출발 부족 사유·F07-05
+
+WalkingGuidance의 이전출발준비중문구를 제공접근도보/개인계수/도착근거가있을때예상안내로수정. FirstArrivals의 기존카드/글자/Clock3에 N분뒤출발·예상정류장여유와 고정부족사유를표시한다. 새CSS/색상/폰트없음. 시각검증결과는개발일지참조.
