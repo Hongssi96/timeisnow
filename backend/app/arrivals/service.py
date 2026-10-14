@@ -111,7 +111,11 @@ def first_arrivals(user_id,search_id,candidate_id,*,verified_mapping=None):
     row,candidate,first,snapshot=owned(user_id,search_id,candidate_id)
     if verified_mapping is None:
         entry=cache.lookup(user_id,search_id,candidate_id,snapshot,now()) if first['type']=='BUS' else None
-        if entry is None: return unmapped(row,first,search_id,candidate_id)
+        if entry is None:
+            evidence=unmapped(row,first,search_id,candidate_id)
+            if first['type']=='BUS':
+                evidence.reasons.append('MULTIPLE_VEHICLE_OPTIONS' if len(first['vehicles'])!=1 else 'MAPPING_CONTEXT_UNAVAILABLE')
+            return evidence
         if not entry.lock.acquire(blocking=False):
             raise AuthError(429,'RATE_LIMITED','도착 정보 조회를 기다려주세요.',{'Retry-After':'2'})
         try:
@@ -122,11 +126,14 @@ def first_arrivals(user_id,search_id,candidate_id,*,verified_mapping=None):
                 cached.expires_at=min(cached.expires_at,current['expires_at'],entry.expires_at)
                 return project(cached,now())
             reserve_refresh(user_id)
-            value=entry.mapping or public_mapping.resolve(entry.context,min(entry.expires_at,current['expires_at']))
+            diagnostics={}
+            value=entry.mapping or public_mapping.resolve(entry.context,min(entry.expires_at,current['expires_at']),diagnostics=diagnostics)
             if value is None:
                 updated,_,updated_first,updated_snapshot=owned(user_id,search_id,candidate_id)
                 if updated_snapshot!=snapshot: raise AuthError(409,'VERSION_CONFLICT','경로가 변경됐어요. 다시 확인해주세요.')
                 evidence=unmapped(updated,updated_first,search_id,candidate_id)
+                reason=public_mapping.safe_failure_reason(diagnostics)
+                if reason:evidence.reasons.append(reason)
             else:
                 _,_,updated_first,updated_snapshot=owned(user_id,search_id,candidate_id)
                 if updated_snapshot!=snapshot: raise AuthError(409,'VERSION_CONFLICT','경로가 변경됐어요. 다시 확인해주세요.')
