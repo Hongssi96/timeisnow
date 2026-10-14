@@ -4,6 +4,9 @@ import { validateArrivalEvidence } from './arrivals';
 export async function getFirstDeparture(searchId,candidateId,signal) {
   if (!safeJourneyId(searchId)||!safeJourneyId(candidateId)) throw new ApiError('INVALID_RESPONSE');
   const result=await apiRequest(`/api/v1/journey-searches/${searchId}/candidates/${candidateId}/first-departure?include_connections=true`,{signal,timeoutMs:25000});
+  return readFirstDeparture(result,searchId,candidateId);
+}
+export function readFirstDeparture(result,searchId,candidateId) {
   const d=result.data;
   if(d?.model_version!=='first.departure.v1'||d.search_id!==searchId||d.candidate_id!==candidateId
     ||!['ready','insufficient_data','not_enough_time','stale','unsupported'].includes(d.status)
