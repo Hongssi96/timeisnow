@@ -22,3 +22,8 @@ GET /api/v1/routines/{routine_id}/departure-searches/{search_id}/first-departure
 ## 2026-10-14 — F07-02a-2 누락 접근 도보 보완
 
 루틴서버바인딩의현재출발장소/버전만 내부first_departure에전달한다. 첫BUS 접근누락에한해 검증공식승차좌표까지 공급자도보1회·최대3초·기존전체20초/최대22회로보완한다. DB루틴/후보스냅샷수정없음. access_walk_api.md.
+
+
+## 2026-10-14 — F07-04 목표 도착 평가
+
+루틴출발GET의선택후보에 nullable target_evaluation을추가했다. 현재본인루틴의오늘목표시간/프로필을전후검사하고서버에서평가한다. 일반후보GET는null·기존쿠키/본인/CSRF/no-store/버전·기한유지, 새외부조회/DDL없음. 미래예약/대체노선은후속. target_arrival_api.md.
