@@ -50,3 +50,11 @@ it('expired evidence removes earlier transfer timestamps',async()=>{
   const r=response();r.data.connection_status='estimated_feasible';r.data.transfers=[{connection_id:'one',feasibility:'estimated_feasible',minimum_boarding_at:'2026-10-13T08:24:00Z',next_boarding_at:'2026-10-13T08:25:00Z'}];getFirstDeparture.mockResolvedValue(r);await mount();getFirstDeparture.mockRejectedValue({code:'PROVIDER_TIMEOUT'});elapsed=121000;await act(async()=>{vi.advanceTimersByTime(121000);});
   expect(screen.queryByText(/다음 차량 예상/)).toBeNull();expect(screen.getByText(/환승 정보가 만료/)).toBeTruthy();
 });
+
+it('routine loader failure removes unexpired numbers and requires an explicit fresh query',async()=>{
+ const initial=response(),loader=vi.fn().mockRejectedValue({code:'PROVIDER_TIMEOUT'});
+ render(<FirstArrivals includeDeparture searchId="search" candidateId="candidate" loader={loader} initialResponse={initial}/>);await act(async()=>{});
+ expect(screen.getByText('예상 출발 17:03')).toBeTruthy();expect(loader).not.toHaveBeenCalled();
+ elapsed=60000;await act(async()=>{vi.advanceTimersByTime(60000);});expect(screen.queryByText('예상 출발 17:03')).toBeNull();
+ elapsed=120000;await act(async()=>{vi.advanceTimersByTime(60000);});expect(loader).toHaveBeenCalledTimes(1);
+});
