@@ -103,7 +103,7 @@ def execute(search_id, user_id, start, end, preference):
         return
 
 
-def search(request, body):
+def search(request, body, *, context=None):
     """Returns ('replay', response) or ('queued', data, execute_task_args)."""
     key = request.headers.get('idempotency-key')
     if key is not None and not re.fullmatch(r'[A-Za-z0-9_-]{1,128}',key):
@@ -115,7 +115,10 @@ def search(request, body):
     with database() as connection:
         user_id = security.authenticated(connection,request,True)
         _, secret, _ = security.settings()
-        fingerprint = hmac.new(secret,json.dumps(body.model_dump(mode='json'),sort_keys=True,separators=(',',':')).encode(),hashlib.sha256).hexdigest()
+        fingerprint_body = body.model_dump(mode='json')
+        if context is not None:
+            fingerprint_body = {'search': fingerprint_body, 'context': context}
+        fingerprint = hmac.new(secret,json.dumps(fingerprint_body,sort_keys=True,separators=(',',':')).encode(),hashlib.sha256).hexdigest()
         # Serialize admissions across processes, including quota and retry races.
         repository.admission_lock(connection)
         cleanup(connection)
