@@ -46,6 +46,7 @@ def calculate(evidence,base,walking,profile,at,basis='recommended'):
     if at>evidence.expires_at:data.status='stale';data.reasons=['ARRIVAL_EXPIRED'];return data
     if base is None or walking is None:data.reasons=['ACCESS_TIME_UNCONFIRMED'];return data
     data.provider_approach_seconds=base;data.approach_seconds=walking
+    data.provider_approach_source='transit_segment'
     data.applied_duration_factor=profile['factor'];data.approach_basis='provider_personalized'
     approved=(evidence.status=='estimated' and evidence.timing_basis=='receipt_estimate' and evidence.source_status=='unknown' and evidence.generated_at is None) or (evidence.status=='fresh' and evidence.timing_basis=='source_generation' and evidence.source_status=='fresh' and evidence.generated_at is not None)
     if not approved or not evidence.valid_for_guidance or not evidence.candidates:
@@ -68,7 +69,7 @@ def calculate(evidence,base,walking,profile,at,basis='recommended'):
     return data
 
 
-def first_departure(user_id,search_id,candidate_id,basis='recommended',include_connections=False):
+def first_departure(user_id,search_id,candidate_id,basis='recommended',include_connections=False,*,access_origin_ref=None):
     deadline=time.monotonic()+20
     if basis not in ('recommended','now'):raise AuthError(422,'VALIDATION_ERROR','출발 기준을 확인해주세요.')
     user_id=arrivals.parsed_id(str(user_id));search_id=arrivals.parsed_id(str(search_id));candidate_id=arrivals.parsed_id(str(candidate_id))
@@ -79,7 +80,24 @@ def first_departure(user_id,search_id,candidate_id,basis='recommended',include_c
     if current_fingerprint!=fingerprint or settings(user_id)!=profile:
         raise AuthError(409,'VERSION_CONFLICT','경로 또는 개인 설정이 변경됐어요. 다시 확인해주세요.')
     evidence=evidence.model_copy(deep=True);evidence.expires_at=min(evidence.expires_at,current['expires_at'])
+    walk_evidence=None;walk_reason=None
+    if base is None and access_origin_ref is not None and first['type']=='BUS' and first['sequence']==0 and 'ACCESS_WALK_MISSING' in route['missing_segments'] and evidence.valid_for_guidance:
+        from app.guidance import access
+        walk_evidence,walk_reason=access.get(user_id,search_id,candidate_id,first,fingerprint,access_origin_ref,deadline)
+        latest,_,_,latest_fingerprint=arrivals.owned(user_id,search_id,candidate_id)
+        if latest_fingerprint!=fingerprint or settings(user_id)!=profile:
+            raise AuthError(409,'VERSION_CONFLICT','경로 또는 개인 설정이 변경됐어요. 다시 확인해주세요.')
+        evidence.expires_at=min(evidence.expires_at,latest['expires_at'])
+        if walk_evidence is not None:
+            base=walk_evidence['seconds']
+            walking=int((Decimal(base)*Decimal(str(profile['factor']))).to_integral_value(rounding=ROUND_CEILING))
     data=calculate(evidence,base,walking,profile,arrivals.now(),basis)
+    if walk_evidence is not None:
+        data.provider_approach_source='boarding_walk'
+        data.approach_fetched_at=walk_evidence['fetched_at'];data.approach_valid_until=walk_evidence['expires_at']
+        data.valid_until=min(data.valid_until,walk_evidence['expires_at'])
+        data.reasons.append('BOARDING_WALK_ESTIMATE')
+    elif walk_reason:data.reasons.append(walk_reason)
     if include_connections:
         from app.guidance.connections import evaluate,following_arrivals
         data=evaluate(route,data,profile,arrivals.now(),lambda leg:following_arrivals(user_id,search_id,candidate_id,leg,fingerprint,deadline))

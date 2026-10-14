@@ -1373,3 +1373,28 @@ frontend/tests/components/FirstDeparture.test.jsx·WalkingGuidance.test.jsx 신�
 
 
 최종 결과: 수정 후 전체백엔드359개132.743초 통과·기존오프라인진단프로브 포함. 프론트전체218개13.85초·배열방어후관련33개2.27초·최종빌드1909모듈438ms 통과. 기존프로젝트uvicorn 확인후숨김재시작, health200·프론트200·비인증first-departure401 확인. Notion v0.76 활성상태·5.7.4/완료기록/변경이력·F07-02a-2 미정후속을갱신하고재조회해저장확인·api_contract.md전체미러대조일치. 관련로컬문서/디자인/로그/개인화와TODO·feature_breakdown 동기화, F07-05 완료·접근누락복구/목표도착/다음차량은미완료유지. 게시전최신main2460bd7재확인·git diff --check 통과. 기능브랜치커밋·푸시, MR/병합은사용자수행. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+
+## 2026-10-14 — F07-02a-2 루틴 누락 접근 도보 보완
+
+목표와 명세: 사용자가 다음 우선 작업인 누락 접근도보 확보·연결을 진행하라고 요청했다. TODO·최신Notion v0.76·관련루틴/도착/출발/개인화/공급자/로깅·디자인 문서와실제코드를확인했다. 카카오 공식 REST 도보계약(https://developers.kakao.com/docs/ko/kakaomap/rest-api)의 /v2/routing/walk·REST키·WGS84·초/미터·status/route/legs/steps/path를다시읽었다. 최신main2460bd7에서codex/missing-access-walk를생성하고 미병합선행루틴/문구커밋34afc4b·fd1d8d1·433f581을7ba99d8/f0b560f/5bd56d4로보존해포함했다. 구현전Notion v0.77의5.7.5에 누락복구범위·개인화/저장/조회/기한/실패/호환정책을확정했다.
+
+선택 이유: 경로 전체 예상시간의 남는값은 접근도보가 아니다. 공급자가 접근구간을 생략한 경우 본인루틴의 현재 저장출발지에서 검증된 실제승차정류소까지 도보경로를 별도로 확보한다. 기존양수접근은유지하고 명시0초/지하철·복수노선/매핑미확인이나일반후보GET에는 자동대체하지않는다. 지점이확인되지않으면 임의근사좌표/직선거리/5분·0초로만들지않는다. 공급자도보에 개인계수를 적용한 추정이며 검증개인AI도보/물리보행안전 인증으로승격하지않는다.
+
+주요 파일: backend/app/arrivals/{cache,mapping,service}.py·guidance/{access,walk_provider,dto,service,routine}.py. 기존경기매핑의30m/이름순서/공식stationId·staOrder/회차·방향유일성을통과한 공식승차행좌표를별도 비공개endpoint sink로 전달한다. 공개Mapping/diagnostics/DB/로그에는추가하지않고 Entry의매핑identity/검색fingerprint·기한에묶는다. 루틴서버바인딩의본인출발장소/버전만내부first_departure에전달하며 공개좌표/장소ID입력추가없음. 후보/루틴/plan의원래DB스냅샷과missing_segments는변경하지않는다.
+
+도보조회/검증: 고정dapi.kakao.com HTTPS/리다이렉트금지·서버REST키/최단경로·최대3초/1MiB, 중복JSON/NaN·미지정상태거부. 양수totalTime<=86400초/양수totalDistance<=100000m·20legs/500steps/20000points·정수비음수시간/거리·단계와구간/총합일치·유한좌표·단계연결/출발·승차양끝30m이내를검사한다. 결과없음/같은점/0초·손상/위치불일치/오류는접근시간없음으로처리한다. 조회중본인/장소/검색/프로필/루틴·매핑identity변경을전후검사해오래된출발을차단한다. 응답원문/사용자좌표/보행geometry는새저장/AI전달하지않는다.
+
+응답/캐시: first.departure.v1에provider_approach_source(transit_segment/boarding_walk/null)·approach_fetched_at/approach_valid_until(nullable)을추가했다. 기존basis=provider_personalized와W=ceil(원래공급자초×개인계수)/설정여유는그대로다. 성공양수초/수신·기한/출발장소버전/매핑identity만기존32검색/20후보/검색300초메모리로보관하고 원문/사용자좌표는추가보관하지않는다. 새계수는원래초에한번만곱하며재조회/캐시기한연장없음. 실패도60초재시도차단·entry잠금/사용자갱신10회·분공유. 전체20초/클라이언트25초유지·외부최대22회(첫+후속2각최대7·도보1), 남은시간3초미만은추가조회없이부족. 최종기한은원래도착/검색/매핑/도보중최소다. 새HTTP경로/DDL/AI없음.
+
+프론트: lib/departure.js는별도도보의허용출처/수신·기한을검증해미래수신·누락·기한연장을거부한다. components/FirstArrivals.jsx는기존카드/Clock3/CSS를재사용해별도조회한공급자도보의개인화추정과조회실패/시간부족/매핑미확인을구분한다. 접근도보실패시첫차량도착정보가있더라도출발카운트/시각을만들지않는다. 새CSS/폰트/색상/테마없음.
+
+실제 검증: backend/tests/test_access_walk.py 신규16개 포함최종전체375개155.207초통과. 최초신규12개12.067초통과후공식행좌표가근사path좌표와다름/diagnostics비노출·장소버전변경·중복잠금429·0초차단4개추가까지최종전체에포함했다. 순수어댑터는초/합계/geometry·끝점방향/불연결·결과없음/0초·고정HTTPS/3초/1MiB·중복JSON/크기검사. 실제격리PostgreSQL/ASGI와합성공급자로 루틴접근누락→공식방향매핑→도보초→출발계산/원래DB후보보존, 계수변경원래초재계산/무재호출·원래수신/기한유지, 미매핑/비공개endpoint없음/시간부족무조회, 실패60초재시도차단·숫자없음, 조회중장소/프로필변경409, 일반후보GET무대체/잠금/0초차단을확인했다. 기존진단프로브는**kwargs로private sink를전달하지만진단응답에좌표가들어가지않음을유지한다. test_arrival_reasons.py 모의mapper에도새비공개인자를수신하도록반영했다.
+
+전체 회귀 실패/수정: 최초375개159.440초는 기존test_places.py의장소쿼터테스트가10회요청도중분경계를넘어11번째가새버킷200이돼기대429와달랐다. 해당테스트의DB시간을고정해항상한분버킷에서검사하도록수정했다. 운영요청제한/버킷정책/계산코드변경없음. 수정후전체375개155.207초통과. 프론트신규4개 포함전체222개23.72초·빌드1909모듈750ms통과: 별도도보메타데이터/미래·만료·누락·알수없는출처거부, 별도조회출처와도보timeout숫자차단을검증했다.
+
+시각/서버: 합성응답과실제FirstArrivals·엄격API클라이언트·기존CSS로브라우저1280×1100/390×1400에서성공출처/예상출발·여유와도보조회실패상태를확인했다. 모바일body.scrollWidth=innerWidth=390·줄바꿈/가로넘침없음. 실제사용자로그인·해당실경로 양수출발·보행정확도/실휴대전화는이번검증제외. 임시access-preview.html/jsx·검증탭삭제/viewport원복. 기존프로젝트uvicorn확인후숨김재시작, health/프론트200·비인증루틴출발GET401·OpenAPI출처필드존재확인. 이번직접실교통키/AI호출0회이며실사용요청에만도보1회를연결한다. 새DDL없어0012유지.
+
+문서/완료: Notion v0.77의활성API목록/상태·5.7.5·기존21회조건의루틴22회예외/이전미정설계해소·구현검증·변경이력을갱신하고재조회해저장확인, api_contract.md전체미러대조일치. access_walk_api.md·departure_api.md·routine_departure_api.md·planning.md·personalization.md·provider_plan.md·arrivals_api.md·logging.md·design_guide.md·screen_plan.md·todo.md·feature_breakdown.md를동기화했다. F07-02a-2는지원경기BUS루틴누락복구범위로완료. 검증개인도보F07-02a전체·미지원매핑/지역지원·원천시간·목표도착/다음차량은미완료유지한다. 다음F07-04 목표도착후보평가, 약속·참여자/채팅은사용자지정다른LLM담당이다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa. 게시전main2460bd7재확인·git diff --check 통과, 기능브랜치커밋/푸시·MR/병합은사용자수행.
+
+배운 개념: 누락된접근도보는경로전체예상시간과분리해확보해야한다. 매핑된공식승차점과길찾기제공근사점을구분하고도보양끝과진행방향을확인해야한다. 캐시에는개인화후초가아닌원래공급자초를보관해야계수변경시두번곱하지않는다. 매핑/도착/도보조회가각각빠르더라도전체시간제한과원래근거기한을공유해야안내가늦거나오래된정보를새정보처럼쓰지않는다.
