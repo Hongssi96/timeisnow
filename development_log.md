@@ -1499,3 +1499,25 @@ frontend/tests/departure.test.js·components/FirstDeparture.test.jsx 신규7개 
 문서: 구현 전 Notion 최신 v0.80 확인 후5.7.8 v0.81 설계를 먼저 저장했다. 구현 후 범위/상태/시간/메모리/출발저장전후/자동조회/호환성/검증/변경이력 수정 및 재조회 저장 확인. api_contract.md는 최신 페이지 내용과 맞추고 F12 다른 담당 내용 보존. planning/personalization/logging/design_guide/screen_plan/routine_departure_api/departure_api/trip_api/next_vehicle_api와TODO/feature 동기화. F07-06/06b는 지원 경기 BUS 루틴 범위로만 완료, 일반 후보 상세는06a 정책 유지. F07-07 및 나머지 F08 이벤트/정정/학습은 후속. 개념: 화면에 제공한 추정과 실제 행동 신고는 서로 다른 사실이다. 서버 메모리 후보 선택과 저장 이벤트 상태를 재검사해야 동시 신고가 이전 안내를 되살리는 것을 막을 수 있다. 명세 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
 
 게시 전 최종 확인: 최신 origin/main2460bd7 유지·Notion v0.81 재조회 변경없음·로컬미러1683행 해시일치. 프로젝트 uvicorn 숨김 재시작 후 backend health200·frontend200·비인증 routines401·OpenAPI departure_state enum/default 확인. git diff --check 통과·임시프리뷰 없음. 기능 브랜치 커밋/푸시, MR/병합은 사용자 수행.
+
+## 2026-10-14 — F07-07a 첫 탑승 전 현재 위치 기반 남은 경로
+
+목표/범위 결정 이유: 출발 신고만으로 현재 남은 도보나 탑승 구간을 알 수 없으므로 이전 W를 다시 빼거나 W-경과초로 진도를 추측하지 않는다. 최신 Notion v0.81·로컬 기획/개인화/여정/디자인/화면·TODO를 확인하고, 기존 origin_override/current/map 초안을 구체화한 v0.82 5.7.9를 구현 전에 저장·재조회했다. 첫 탑승 전이라는 명시 확인과 지금 위치 확인에 한정한 F07-07a로 분리했다. 차량 안/환승 중 F07-07b는 F08 접근 완료/탑승/하차 선행이 없어 상위F07-07 미체크 유지. 특정 공식 노선 상세 결과없음 대응과 실경로 정확도는 사용자 요청 후속 보류.
+
+Git: 최신 origin/main2460bd7에서 codex/moving-remaining-guidance 생성 후 기존 기능 선행 f990370/d27ef97/803b1d0/8cf836f/94720a1/4c6e983/ffcb61c/ea7c9f8/02e5461/33db42f을 cherry-pick했다. 외부 WIP checkpoint도 보존했다. MR 생성/병합은 사용자 수행.
+
+구현 파일/계약: backend/app/guidance/remaining.py·trips/dto.py/router.py에 현재점 검색 POST202 및 본인 버전 GET trip.remaining.v1 추가. 본인 active manual departed·루틴버전/원래경로·장소·프로필/신고 전후 검사, 잘못된stage/saved_place/확인없음/임의시간422, 취소/변경409·타인/만료404. 현재점→서버 루틴 목적지 검색만 만들고 첫 차량부터 나머지 구간이 같은 유일 후보의 새로운 접근 W만 사용한다. 여유S=ETA-(now+W), 현재계수·B·순차환승/오늘목표를 재사용. 누락/0/부족/미지원/만료 시 숫자 차단, 기존 first-departure/스냅샷/관측/프로필/토큰은 덮어쓰지 않는다. 검색/이동 생성 기존쿼터 공유, 직접 외부키/AI0회·새DDL없음. 기존 worker만 임시 좌표 처리, 서버 연결은 본인/검색/trip/event/버전/프로필·32개 메모리로 제한하고 원문좌표 새DB/일반로그/URL/AI 저장 없음. 현재 위치 확인 사용은 접수+120초·검색/도착 최소기한, 재시작/퇴출/만료는 새 위치 확인. 이는 GPS 측정 최신성/물리 위치·탑승 인증이 아니다.
+
+프론트 파일: RemainingGuidance.jsx·lib/remaining.js 신설, ManualDeparture.jsx 신고 저장/복구 뒤 연결. OriginSelector.jsx currentPointOnly 옵션으로 기존 기본화면은 유지하고 남은 경로에서는 현재/지도만 허용·저장탭/저장버튼 숨김. 첫 탑승 전 확인 후 요청, 유효 동안60초/탭복귀 GET·숨김/이탈 취소·만료/실패/위치 재선택/안내중지 즉시 숫자 제거·늦은 응답 무시. 현재점 자동 재측정·원래 출발지 자동 재검색 없음. 클라이언트도 이전 위치기한 최소 유지, 여유/설정초 보존·자동 경과를 새 보행 관측으로 만들지 않는다. 중지 버튼은 화면 종료이며 boarded 이벤트 저장이 아니다. 기존 CSS·팔레트·버튼·카드 재사용, RemainingInfo 공통 표시로 검증/표시 일치.
+
+실제 검증: backend/tests/test_remaining_guidance.py의8개 PostgreSQL 격리·정상인증ASGI/합성 공급자 테스트 최종24.829초 통과. 새로운 접근120초가 원래300초와 다름·현재점 전달·스냅샷 불변·유효숫자·CSRF/미확인/숫자1확인/미지원stage/저장장소/임의시간 차단·생성만/취소 비출발·멱등기한/재시작·0도보·다른trip/버전/프로필/현재점 만료·경로 없음/변경/중복·조회중취소409 확인. 첫 실행8개22.226초 실패4개는 fixture candidate 메서드가 기존 self.candidate 필드와 충돌하고 재가입409를 만든 테스트 구성 오류였다. 메서드 이름을 바꾸고 생성만 상태를 격리DB로 구성해 수정했으며 운영검증을 완화하지 않았다.
+
+프론트 전체264개16.36초 통과(최종 UI 추출/여유초/기한보호 전), 최종 관련4파일33개4.43초 재통과·1913모듈 빌드521ms 성공. 첫33개 중2실패는 SDK fixture request_id 누락과 mock 재조회가 위치기한을 임의 연장하던 오류를 수정했다. 실제 RemainingInfo/엄격readRemaining·RemainingGuidance/OriginSelector·기존CSS 합성 프리뷰 PC1280×1000/모바일390×900의 현재점 선택 UI·유효/설정여유부족/근거부족·중지 복귀를 확인, body.scrollWidth<=innerWidth 가로넘침 없음. 클릭으로 실제 GPS 권한 요청/실사용자 로그인/지도 정밀 선택/실이동 정확도·실경로 추천 성공은 미검증. 기한/오류/늦은 응답/첫탑승전확인 차단은 컴포넌트 테스트로 확인했으며 별도 전체 실기기 흐름으로 주장하지 않는다. 임시 remaining-preview.html/jsx 제거·탭 닫기·viewport 원복.
+
+전체 백엔드 첫430개263.913초 실행은 기존 access walk 변경중 테스트 ASGI3초 타임아웃1개와 origins 개인정보 테스트의 처리시간114.58에 합성 위치 정확도14.5 문자열이 포함된 오탐1개로 실패. access case는 운영/테스트 시간제한 변경 없이 단독 통과. origins 테스트는 JSON 레코드로 파싱해 latitude/longitude/accuracy/captured_at/origin 키 및 비밀값 유출을 검사하고 공개 timestamp/duration_ms 숫자와 구분하도록 수정했다. test_origins.py만 바꾸며 실제 로깅 계약 변경 없음. 초기 수정 후 json import 누락을 바로 보완, 전체 재실행 결과는 아래 최종 기록을 따른다. 개인정보 검사 자체를 삭제하지 않았다.
+
+문서: moving_guidance_api.md 신설, planning/personalization/logging/design_guide/screen_plan/routine_departure_api/trip_api/TODO/feature 동기화. Notion v0.82 5.7.9·호환성/변경이력·상태·범위 재확인 및 로컬 미러 동기화 결과는 아래 기록. 배운 개념: 출발 시각은 진행 위치가 아니며 현재점부터 계산한 남은 경로와 원래 경로를 구분해야 한다. 메모리 연결의 짧은 기한과 상태 전후 검사로 오래된 위치/취소된 이동에서 숫자를 유지하지 않게 한다. 로그 개인정보 검사는 값의 필드를 구분해야 정상 처리시간의 우연한 숫자를 유출로 오인하지 않는다. 다음은 F08-02b 접근 완료/탑승 기록→F07-07b 현재 구간별 남은 경로. 명세 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+최종 검증/서버: 전체 백엔드430개242.547초 재실행 통과(운영 시간제한 변경 없음). 프론트 최종 관련33개4.43초/빌드1913모듈521ms 재통과. 개발 서버 숨김 재시작·backend health200/frontend200·비인증 remaining GET401·OpenAPI 신규2경로/stage 상수 확인. Notion v0.82 구현 상태/전체F07-07 미완료 범위/새 API 목록/호환성·변경이력/검증 저장 및 재조회 확인. 로컬 api_contract.md 동기화·F12 보존, 추가 외부 승인 잔여9회 미사용.
+
+게시 전 확인: 최신 origin/main2460bd7 유지, Notion v0.82 재조회 변경없음/로컬미러 1706행 해시일치, git diff --check 통과·임시 프리뷰 없음. codex/moving-remaining-guidance 기능 브랜치에 커밋·푸시하며 MR/병합은 사용자 수행.

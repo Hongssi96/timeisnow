@@ -1,3 +1,4 @@
+import json
 """Temporary origin validation with real auth/DB, synthetic coordinates only."""
 import io
 import logging
@@ -60,8 +61,14 @@ class OriginTests(unittest.IsolatedAsyncioTestCase):
         line = output.getvalue()
         self.assertIn('/api/v1/origin-validations',line)
         self.assertIn(result[2]['meta']['request_id'],line)
+        # Public timestamps/duration can coincidentally contain location digits.
+        records=[json.loads(record) for record in line.splitlines() if record.strip()]
+        payload=json.dumps([{key:value for key,value in record.items() if key not in ('timestamp','duration_ms')} for record in records],ensure_ascii=False)
+        for record in records:
+            for key in ('latitude','longitude','accuracy_meters','captured_at','origin'):
+                self.assertNotIn(key,record)
         for private in ['37.51','127.01','14.5','captured_at','합성동',self.cookie,self.csrf]:
-            self.assertNotIn(private,line)
+            self.assertNotIn(private,payload)
 
     async def test_manual_confirmation_never_claims_gps_quality_or_place_matching(self):
         await self.signup_login()

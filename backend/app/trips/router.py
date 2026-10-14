@@ -1,5 +1,5 @@
 from typing import Literal
-from fastapi import APIRouter,Request,Query
+from fastapi import APIRouter,Request,Query,BackgroundTasks
 from app.trips import dto,service
 router=APIRouter(prefix='/api/v1/trips')
 
@@ -14,3 +14,13 @@ def detail(request:Request,trip_id:str):return service.detail(request,trip_id)
 def event(request:Request,trip_id:str,body:dto.Event):return service.add_event(request,trip_id,body)
 @router.patch('/{trip_id}')
 def cancel(request:Request,trip_id:str,body:dto.Cancel):return service.cancel(request,trip_id,body)
+
+@router.post('/{trip_id}/remaining-searches',status_code=202)
+def remaining_search(request:Request,trip_id:str,body:dto.RemainingSearch,background:BackgroundTasks):
+    from app.guidance import remaining
+    return remaining.refresh(request,trip_id,body,background)
+
+@router.get('/{trip_id}/remaining-searches/{search_id}/guidance')
+def remaining_guidance(request:Request,trip_id:str,search_id:str,expected_version:int=Query(ge=1)):
+    from app.guidance import remaining
+    return remaining.result(request,trip_id,search_id,expected_version)

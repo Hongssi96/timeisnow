@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {activeTrip,confirmDeparture,cancelTrip} from '../lib/trips';
+import RemainingGuidance from './RemainingGuidance';
 
 const failure=error=>['AUTH_REQUIRED','SESSION_EXPIRED'].includes(error?.code)?'로그인 후 이동 기록을 다시 확인해주세요.':error?.code==='ACTIVE_TRIP_EXISTS'?'다른 이동이 진행 중이에요. 기존 이동을 먼저 확인하거나 취소해주세요.':['VERSION_CONFLICT','RESOURCE_NOT_FOUND'].includes(error?.code)?'안내가 바뀌었거나 만료됐어요. 최신 출발을 다시 확인해주세요.':'출발 확인을 저장하지 못했어요. 다시 시도해주세요.';
 export default function ManualDeparture({routineId,departure,available,onReported=null,onCancelled=null}){
@@ -36,6 +37,7 @@ export default function ManualDeparture({routineId,departure,available,onReporte
     {!state.trip?.departure_event&&(state.trip||available&&departure?.guidance_id&&departure.guidance_id!==cancelledGuidance.current)&&<button className="primary" disabled={state.phase==='saving'} onClick={()=>save()}>{state.phase==='saving'?'출발 확인 저장 중…':'지금 출발했어요'}</button>}
     {state.trip&&<button className="secondary" disabled={state.phase==='saving'} onClick={()=>save(true)}>이 이동 취소</button>}
    </div>
+   {state.trip?.departure_event&&state.phase!=='saving'&&<RemainingGuidance key={state.trip.trip_id} trip={state.trip}/>}
   </>}
  </div>;
 }

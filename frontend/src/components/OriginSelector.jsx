@@ -11,7 +11,7 @@ const validLocation = value => Number.isFinite(value?.latitude) && Math.abs(valu
 const validPlace = value => typeof value?.place_id === 'string' && typeof value.label === 'string'
   && validLocation(value.location) && Number.isInteger(value.location_version) && value.location_version >= 1;
 
-export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyChange, purpose = 'origin', initialMode = 'current', initialLocation = null }) {
+export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyChange, purpose = 'origin', initialMode = 'current', initialLocation = null, currentPointOnly = false }) {
   const noun = purpose === 'destination' ? '도착' : '출발';
   const [mode, setMode] = useState(initialMode);
   const [phase, setPhase] = useState('loading');
@@ -124,9 +124,9 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyC
     }, 'locating');
   }
   return <div className="origin-selector" aria-busy={busy}>
-    <p className="muted">{noun}지를 선택해주세요. 출발 시간 안내는 준비 중이에요.</p>
+    <p className="muted">{currentPointOnly ? '지금 있는 위치를 확인해주세요. 자동 위치 추적은 하지 않아요.' : `${noun}지를 선택해주세요. 출발 시간 안내는 준비 중이에요.`}</p>
     {phase === 'anonymous' ? <><p role="alert">{message}</p><button className="primary wide" onClick={onLogin}>로그인하기</button></> : <>
-      <div className="origin-methods" role="group" aria-label={`${noun}지 선택 방법`}>{[['current','현재 위치'],['map','지도 선택'],['saved','저장 장소'],['new','장소 저장']].map(([key,label]) =>
+      <div className="origin-methods" role="group" aria-label={`${noun}지 선택 방법`}>{[['current','현재 위치'],['map','지도 선택'],['saved','저장 장소'],['new','장소 저장']].filter(([key])=>!currentPointOnly||['current','map'].includes(key)).map(([key,label]) =>
         <button className="secondary" key={key} aria-pressed={mode === key} disabled={phase === 'loading' || creatingBusy} onClick={() => changeMode(key)}>{label}</button>)}</div>
       {message && <p className="info-box" role="alert">{message}</p>}
       {busy && <p role="status">{phase === 'locating' ? '기기 위치 권한을 확인하고 있어요. 최대 15초 기다려요.' : phase === 'validating' ? `${noun}지를 확인하고 있어요.` : '내 장소를 확인하고 있어요.'}</p>}
@@ -148,8 +148,8 @@ export default function OriginSelector({ onSelect, onLogin, onAuthError, onBusyC
         disabled={busy || creatingBusy || pinSaving} onAuthError={authError} onChange={point => { setLocation(point); setTouched(true); setMessage(''); }}/>
         {pinSaving ? <PinPlaceSave location={location} initialLabel={`${noun}지`} onCreated={created}
           onCancel={() => setPinSaving(false)} onAuthError={authError} onBusyChange={setCreatingBusy}/> : <>
-          <button className="primary wide" disabled={busy || !touched} onClick={() => setPinSaving(true)}>이 위치 저장하고 사용</button>
-          <button className="secondary wide" disabled={busy || !touched} onClick={() => run(signal => validate({ type: 'map_pin', ...location }, signal), 'validating')}>{purpose === 'destination' ? '이 위치로 도착' : '이 위치에서 출발'}</button></>}</>}
+          {!currentPointOnly&&<button className="primary wide" disabled={busy || !touched} onClick={() => setPinSaving(true)}>이 위치 저장하고 사용</button>}
+          <button className="secondary wide" disabled={busy || !touched} onClick={() => run(signal => validate({ type: 'map_pin', ...location }, signal), 'validating')}>{currentPointOnly?'지금 이 위치에 있어요':purpose === 'destination' ? '이 위치로 도착' : '이 위치에서 출발'}</button></>}</>}
       {mode === 'saved' && <><div className="origin-places">{items.map(item => <button className="secondary" key={item.place_id} disabled={busy}
         onClick={() => run(signal => validate({ type: 'saved_place', place_id: item.place_id, location_version: item.location_version }, signal), 'validating')}>
         <strong>{item.label}</strong><span>{item.location_address || item.address}</span></button>)}</div>
