@@ -74,6 +74,7 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
     {d && <>
       {includeDeparture && <>
         {departureReady ? <>
+          {departure.reasons?.includes('NEXT_REACHABLE_VEHICLE')&&<p>접근 시간이 부족한 앞 차량을 제외하고 다음 차량 기준으로 계산했어요.</p>}
           <p><strong>예상 출발 {departureDay}{departureTime}</strong></p>
           <p><strong>{secondsToDeparture>=60?`${Math.ceil(secondsToDeparture/60)}분 뒤 예상 출발`:secondsToDeparture>0?'1분 이내 예상 출발':'지금 출발 기준으로 다시 확인해주세요.'}</strong></p>
           <p>{secondsToDeparture>0?'그때':'지금'} 출발하면 정류장 도착 후 예상 {bufferText(displaySlack)} 여유가 있어요.</p>
