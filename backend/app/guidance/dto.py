@@ -35,6 +35,9 @@ class Departure(BaseModel):
     applied_duration_factor: float|None=None
     profile_version: int
     approach_basis: Literal['provider_personalized']|None=None
+    provider_approach_source: Literal['transit_segment','boarding_walk']|None=None
+    approach_fetched_at: datetime|None=None
+    approach_valid_until: datetime|None=None
     buffer_seconds: int
     slack_seconds: int|None=None
     slack_status: Literal['meets_buffer','below_buffer','unreachable','unknown']='unknown'

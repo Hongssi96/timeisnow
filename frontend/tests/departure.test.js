@@ -10,3 +10,12 @@ it('rejects a transfer claiming success before minimum boarding time',async()=>{
   const d=data();d.connection_status='estimated_feasible';d.transfers=[{connection_id:'link',from_leg_id:'one',to_leg_id:'two',feasibility:'estimated_feasible',time_source:'receipt_estimate',transfer_buffer_seconds:120,transfer_walk_seconds:100,estimated_alighting_at:'2026-10-13T08:20:00Z',minimum_boarding_at:'2026-10-13T08:24:00Z',next_boarding_at:'2026-10-13T08:23:00Z'}];mock(d);
   await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});
 });
+
+it('accepts a separate boarding walk source with original receipt and bounded expiry',async()=>{
+ const d=data();d.provider_approach_source='boarding_walk';d.approach_fetched_at=d.calculated_at;d.approach_valid_until='2026-10-13T08:05:00Z';mock(d);expect((await getFirstDeparture('s','c')).data.provider_approach_source).toBe('boarding_walk');
+});
+it('rejects missing, future or expired separate walking evidence',async()=>{
+ for(const changes of [{approach_fetched_at:null},{approach_fetched_at:'2026-10-13T08:01:00Z'},{approach_valid_until:'2026-10-13T08:01:00Z'},{provider_approach_source:'invented'}]){
+  const d={...data(),provider_approach_source:'boarding_walk',approach_fetched_at:'2026-10-13T08:00:00Z',approach_valid_until:'2026-10-13T08:05:00Z',...changes};mock(d);await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});
+ }
+});

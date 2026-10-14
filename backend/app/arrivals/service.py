@@ -127,7 +127,8 @@ def first_arrivals(user_id,search_id,candidate_id,*,verified_mapping=None):
                 return project(cached,now())
             reserve_refresh(user_id)
             diagnostics={}
-            value=entry.mapping or public_mapping.resolve(entry.context,min(entry.expires_at,current['expires_at']),diagnostics=diagnostics)
+            endpoint={}
+            value=entry.mapping or public_mapping.resolve(entry.context,min(entry.expires_at,current['expires_at']),diagnostics=diagnostics,boarding_endpoint=endpoint)
             if value is None:
                 updated,_,updated_first,updated_snapshot=owned(user_id,search_id,candidate_id)
                 if updated_snapshot!=snapshot: raise AuthError(409,'VERSION_CONFLICT','경로가 변경됐어요. 다시 확인해주세요.')
@@ -140,6 +141,7 @@ def first_arrivals(user_id,search_id,candidate_id,*,verified_mapping=None):
                 checked_mapping(value,updated_first,now())
                 evidence=first_arrivals(user_id,search_id,candidate_id,verified_mapping=value)
                 entry.mapping=value
+                if endpoint:entry.boarding_endpoint=endpoint
             entry.evidence=evidence.model_copy(deep=True);entry.attempted_at=evidence.received_at or now()
             return evidence
         finally: entry.lock.release()
