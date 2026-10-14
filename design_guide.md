@@ -193,3 +193,8 @@ WalkingGuidance는 기존 info-box 위에 lucide Footprints와16px 제목·14px 
 ## 2026-10-14 — F07-03
 
 기존FirstArrivals/info-box/walking-guidance/Clock3에 환승 상태·최소 승차/다음 차량 시각·추정 안내를 추가. 신규CSS/색상/테마 없음. 합성 실컴포넌트1280×800/390×844 화면과 모바일가로넘침없음 확인. 실로그인/실경로 시각 검증 제외.
+
+
+## 2026-10-14 — F07-02a-1 루틴 최신 출발 연결
+
+RoutineDeparture는 기존홈루틴카드/FirstArrivals/info-box/candidate-note/secondary/Clock3를 재사용한다. 로딩·경로불일치/복수/없음·실패/만료·복구 상태와다시확인 제공, 새CSS/팔레트/폰트없음. 합성실컴포넌트1280×800/390×844·모바일가로넘침없음 확인. 실로그인전체시각검증 제외.
