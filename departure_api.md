@@ -27,3 +27,8 @@ F07-03 지원 경기BUS 순차 환승 검사를 추가했다. include_connection
 ## 2026-10-14 — 출발 부족 사유·F07-05
 
 F07-05: 유효한 첫출발에 N분뒤/1분이내/지금재확인과 정류장 도착후 예상여유를 함께 표시한다. 여유초는 floor(차량ETA-max(선택출발,현재서버시각)-접근초), 초를보존·설정미달경고, 음수/만료에는숫자없음. 개인AI 미실행과 승인 공급자추정을 구분하고 접근누락에는 구체적사유를 표시한다. Notion v0.76·development_log.md.
+
+
+## 2026-10-14 — F07-02a-2 누락 접근 도보 보완
+
+F07-02a-2는 루틴의누락접근만 검증경기승차정류소까지 별도카카오도보로보완한다. first.departure.v1에provider_approach_source/approach_fetched_at/approach_valid_until추가·기존개인화수식/기한/첫승차범위유지. 기존제공접근/일반후보GET/명시0초는대체없음. access_walk_api.md·Notion v0.77.

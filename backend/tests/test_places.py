@@ -155,7 +155,8 @@ class PlaceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_quota_empty_cleanup_and_safe_provider_error(self):
         await self.signup_login()
-        with patch.object(places_provider, 'search_candidates', return_value=[]):
+        with database() as connection:frozen=auth.repository.clock_now(connection)
+        with patch.object(auth.repository,'clock_now',return_value=frozen), patch.object(places_provider, 'search_candidates', return_value=[]):
             for _ in range(10):
                 result = await self.call('/place-searches', {'query':'합성'})
                 self.assertEqual(result[0], 200)

@@ -16,7 +16,7 @@ class ArrivalReasonTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_safe_mapping_reason_reuses_failure_cache_without_extra_requests(self):
         await self.setup_route()
-        def missing(context,expiry,diagnostics=None):
+        def missing(context,expiry,diagnostics=None,**kwargs):
             diagnostics.update(reason='NO_ROUTE_AT_BOARDING_STOP',station_id='private',match_checks={'raw':'secret'})
             return None
         with patch.object(mapping,'resolve',side_effect=missing) as resolve,patch.object(provider,'fetch') as fetch:
@@ -28,7 +28,7 @@ class ArrivalReasonTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_raw_reason_is_ignored_without_relaxing_mapping_failure(self):
         await self.setup_route()
-        def missing(context,expiry,diagnostics=None):diagnostics.update(reason='secret raw response');return None
+        def missing(context,expiry,diagnostics=None,**kwargs):diagnostics.update(reason='secret raw response');return None
         with patch.object(mapping,'resolve',side_effect=missing):reply=await self.call(self.path)
         self.assertEqual(reply[2]['data']['reasons'],['PUBLIC_MAPPING_UNCONFIRMED']);self.assertFalse(reply[2]['data']['valid_for_guidance'])
 
