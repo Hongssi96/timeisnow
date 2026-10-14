@@ -17,6 +17,10 @@ export function readFirstDeparture(result,searchId,candidateId) {
   validateArrivalEvidence(d.arrival_evidence,searchId,candidateId);
   if(d.first_leg_id!==d.arrival_evidence.first_leg_id||d.timing_basis!==d.arrival_evidence.timing_basis
     ||Date.parse(d.valid_until)>Date.parse(d.arrival_evidence.expires_at)) throw new ApiError('INVALID_RESPONSE');
+  if(d.provider_approach_source!==undefined && ![null,'transit_segment','boarding_walk'].includes(d.provider_approach_source)) throw new ApiError('INVALID_RESPONSE');
+  if(d.provider_approach_source==='boarding_walk' && (!isServerTime(d.approach_fetched_at)||!isServerTime(d.approach_valid_until)
+    ||Date.parse(d.approach_fetched_at)>Date.parse(d.calculated_at)||Date.parse(d.approach_valid_until)<Date.parse(d.valid_until)
+    ||Date.parse(d.approach_valid_until)<=Date.parse(d.approach_fetched_at))) throw new ApiError('INVALID_RESPONSE');
   if(d.valid_for_guidance && (d.status!=='ready'||!d.arrival_evidence.valid_for_guidance||d.approach_basis!=='provider_personalized'
     ||!Number.isSafeInteger(d.approach_seconds)||d.approach_seconds<=0
     ||!Number.isSafeInteger(d.provider_approach_seconds)||d.provider_approach_seconds<=0

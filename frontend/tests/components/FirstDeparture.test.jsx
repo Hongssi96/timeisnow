@@ -79,3 +79,10 @@ it('separates missing access time from a mapping failure without invented times'
 it('unknown diagnostic content is never rendered as provider text',async()=>{
  const r=response();r.data.valid_for_guidance=false;r.data.arrival_evidence={...r.data.arrival_evidence,status:'mapping_required',valid_for_guidance:false,candidates:[],reasons:['constructor','secret raw response']};getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.queryByText(/secret raw/)).toBeNull();expect(screen.getByText(/버스 정류소와 방향을 아직/)).toBeTruthy();
 });
+
+it('labels a separately queried boarding walk without calling it AI evidence',async()=>{
+ const r=response();r.data.provider_approach_source='boarding_walk';getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText(/확인된 버스 정류소까지 별도로 조회한/)).toBeTruthy();expect(screen.queryByText(/AI 산정으로/)).toBeNull();
+});
+it('walk timeout remains a clear blocker without invented departure numbers',async()=>{
+ const r=response();r.data.status='insufficient_data';r.data.valid_for_guidance=false;r.data.reasons=['ACCESS_TIME_UNCONFIRMED','ACCESS_WALK_TIMEOUT'];getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText(/도보 조회가 늦어/)).toBeTruthy();expect(screen.queryByText(/분 뒤 예상 출발/)).toBeNull();
+});

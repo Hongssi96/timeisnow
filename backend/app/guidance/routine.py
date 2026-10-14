@@ -127,7 +127,7 @@ def result(request:Request,routine_id,search_id,expected_version):
         data['status']='no_routes' if not candidates else 'route_changed' if not matches else 'ambiguous_route' if len(matches)>1 else 'ready'
         if data['status']=='ready':
             candidate=matches[0];data['candidate_id']=candidate['candidate_id']
-            data['departure']=departure.first_departure(user_id,search_id,parsed_id(candidate['candidate_id']),include_connections=True).model_dump(mode='json')
+            data['departure']=departure.first_departure(user_id,search_id,parsed_id(candidate['candidate_id']),include_connections=True,access_origin_ref=binding.place_refs[0]).model_dump(mode='json')
     checked(user_id,routine_id,search_id,expected_version)
     latest=journeys.owned(request,str(search_id))
     if latest['candidates']!=row['candidates'] or latest['status']!=row['status'] or latest['place_refs']!=row['place_refs']:
