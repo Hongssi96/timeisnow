@@ -38,5 +38,19 @@ export function readFirstDeparture(result,searchId,candidateId) {
       ||(c.transfer_walk_seconds!==null&&(!Number.isSafeInteger(c.transfer_walk_seconds)||c.transfer_walk_seconds<=0))
       ||[c.estimated_alighting_at,c.minimum_boarding_at,c.next_boarding_at].some(t=>t!==null&&!isServerTime(t))
       ||(c.feasibility==='estimated_feasible'&&(!isServerTime(c.next_boarding_at)||!isServerTime(c.minimum_boarding_at)||Date.parse(c.next_boarding_at)<Date.parse(c.minimum_boarding_at)))))) throw new ApiError('INVALID_RESPONSE');
+  const target=d.target_evaluation;
+  if(target!==undefined&&target!==null){
+    if(target.model_version!=='target.arrival.v1'||target.scope!=='selected_routine_candidate'||!['not_configured','estimated_meets','estimated_late','target_passed','unknown','stale'].includes(target.status)||!isServerTime(target.evaluated_at)
+      ||(target.target_arrival_at!==null&&!isServerTime(target.target_arrival_at))||!['none','provider_timeline'].includes(target.timing_basis))throw new ApiError('INVALID_RESPONSE');
+    const numeric=['estimated_meets','estimated_late'].includes(target.status);
+    if(numeric){
+      if(!d.valid_for_guidance||d.connection_status!=='estimated_feasible'||!isServerTime(target.target_arrival_at)||!isServerTime(target.estimated_destination_arrival_at)||target.timing_basis!=='provider_timeline'
+        ||!Number.isSafeInteger(target.egress_seconds)||target.egress_seconds<=0||!Number.isSafeInteger(target.margin_seconds)
+        ||target.margin_seconds!==Math.floor((Date.parse(target.target_arrival_at)-Date.parse(target.estimated_destination_arrival_at))/1000)
+        ||(target.status==='estimated_meets')!==(Date.parse(target.estimated_destination_arrival_at)<=Date.parse(target.target_arrival_at))
+        ||!isServerTime(d.estimated_final_alighting_at)||Date.parse(target.estimated_destination_arrival_at)!==Date.parse(d.estimated_final_alighting_at)+target.egress_seconds*1000)throw new ApiError('INVALID_RESPONSE');
+    }else if(target.estimated_destination_arrival_at!==null||target.margin_seconds!==null||target.egress_seconds!==null||target.timing_basis!=='none')throw new ApiError('INVALID_RESPONSE');
+    if((target.status==='not_configured')!==(target.target_arrival_at===null))throw new ApiError('INVALID_RESPONSE');
+  }
   return result;
 }

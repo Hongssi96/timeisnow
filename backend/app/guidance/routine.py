@@ -69,7 +69,7 @@ def put(search_id,binding):
         while len(_bindings)>32:_bindings.popitem(last=False)
 
 
-def checked(user_id,routine_id,search_id,version):
+def checked(user_id,routine_id,search_id,version,*,with_row=False):
     with _guard:
         binding=_bindings.get(str(search_id))
     if binding is None or binding.user_id!=user_id or binding.routine_id!=routine_id or binding.expires_at<=datetime.now(timezone.utc):journeys.missing()
@@ -79,7 +79,7 @@ def checked(user_id,routine_id,search_id,version):
         raise AuthError(409,'VERSION_CONFLICT','루틴 경로가 변경됐어요.')
     if tuple((str(p['id']),p['location_version']) for p in places)!=binding.place_refs:
         raise AuthError(409,'VERSION_CONFLICT','루틴 장소가 변경됐어요.')
-    return binding
+    return (binding,row) if with_row else binding
 
 
 def refresh(request:Request,routine_id,body,background:BackgroundTasks):
@@ -111,7 +111,7 @@ def refresh(request:Request,routine_id,body,background:BackgroundTasks):
 def result(request:Request,routine_id,search_id,expected_version):
     routine_id=parsed_id(routine_id);search_id=parsed_id(search_id)
     with database() as connection:user_id=security.authenticated(connection,request)
-    binding=checked(user_id,routine_id,search_id,expected_version)
+    binding,routine_row=checked(user_id,routine_id,search_id,expected_version,with_row=True)
     row=journeys.owned(request,str(search_id))
     if tuple((r['place_id'],r['location_version']) for r in row['place_refs'])!=binding.place_refs:
         raise AuthError(409,'VERSION_CONFLICT','검색 장소가 변경됐어요.')
@@ -127,7 +127,14 @@ def result(request:Request,routine_id,search_id,expected_version):
         data['status']='no_routes' if not candidates else 'route_changed' if not matches else 'ambiguous_route' if len(matches)>1 else 'ready'
         if data['status']=='ready':
             candidate=matches[0];data['candidate_id']=candidate['candidate_id']
-            data['departure']=departure.first_departure(user_id,search_id,parsed_id(candidate['candidate_id']),include_connections=True,access_origin_ref=binding.place_refs[0]).model_dump(mode='json')
+            value=departure.first_departure(user_id,search_id,parsed_id(candidate['candidate_id']),include_connections=True,access_origin_ref=binding.place_refs[0])
+            from app.guidance import target
+            profile=departure.settings(user_id)
+            if profile['version']!=value.profile_version or (value.applied_duration_factor is not None and profile['factor']!=value.applied_duration_factor) or profile['buffer']!=value.buffer_seconds:
+                raise AuthError(409,'VERSION_CONFLICT','개인 설정이 변경됐어요.')
+            value.target_evaluation=target.evaluate(candidate,value,routine_row['target_arrival_local_time'],profile,departure.arrivals.now())
+            if departure.settings(user_id)!=profile:raise AuthError(409,'VERSION_CONFLICT','개인 설정이 변경됐어요.')
+            data['departure']=value.model_dump(mode='json')
     checked(user_id,routine_id,search_id,expected_version)
     latest=journeys.owned(request,str(search_id))
     if latest['candidates']!=row['candidates'] or latest['status']!=row['status'] or latest['place_refs']!=row['place_refs']:

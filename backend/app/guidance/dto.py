@@ -17,6 +17,18 @@ class TransferCheck(BaseModel):
     time_source: Literal['none','receipt_estimate','source_generation']='none'
     reasons: list[str]=[]
 
+class TargetEvaluation(BaseModel):
+    model_version: Literal['target.arrival.v1']='target.arrival.v1'
+    scope: Literal['selected_routine_candidate']='selected_routine_candidate'
+    status: Literal['not_configured','estimated_meets','estimated_late','target_passed','unknown','stale']
+    evaluated_at: datetime
+    target_arrival_at: datetime|None=None
+    estimated_destination_arrival_at: datetime|None=None
+    margin_seconds: int|None=None
+    egress_seconds: int|None=None
+    timing_basis: Literal['none','provider_timeline']='none'
+    reasons: list[str]=Field(default_factory=list)
+
 class Departure(BaseModel):
     model_version: Literal['first.departure.v1']='first.departure.v1'
     search_id: UUID
@@ -48,6 +60,7 @@ class Departure(BaseModel):
     transfers: list[TransferCheck]=Field(default_factory=list,max_length=2)
     estimated_final_alighting_at: datetime|None=None
     arrival_evidence: Evidence
+    target_evaluation: TargetEvaluation|None=None
 
 class DepartureEnvelope(BaseModel):
     data: Departure
