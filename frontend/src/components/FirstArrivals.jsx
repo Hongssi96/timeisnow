@@ -8,21 +8,22 @@ const connectionTime=value=>new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seou
 const bufferText=seconds=>seconds%60===0?`${seconds/60}분`:`${seconds>=60?`${Math.floor(seconds/60)}분 `:''}${seconds%60}초`;
 const empty = { mapping_required:'이 경로의 버스 정류소와 방향을 아직 확인하지 못했어요.', unsupported:'이 첫 탑승 수단의 도착 조회는 아직 지원하지 않아요.', no_arrivals:'현재 제공된 도착 후보가 없어요.', insufficient_data:'현재 도착 시간을 추정할 근거가 부족해요.', expired:'도착 정보가 만료됐어요. 이전 예상 시간은 사용하지 않아요.' };
 
-export default function FirstArrivals({ searchId, candidateId, includeDeparture=false }) {
+export default function FirstArrivals({ searchId, candidateId, includeDeparture=false, loader=null, initialResponse=null }) {
   const [state, setState] = useState({ phase:'loading' });
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let disposed=false, controller=null, sequence=0, busy=false, terminal=false;
-    setState({ phase:'loading' });
+    if(initialResponse) setState({phase:'ready', evidence:initialResponse.data.arrival_evidence, departure:initialResponse.data, serverAt:Date.parse(initialResponse.meta.server_time), sampledAt:performance.now()});
+    else setState({ phase:'loading' });
     async function load() {
       if (disposed || busy || terminal || document.hidden) return;
       busy=true;controller=new AbortController();const seq=++sequence;
       try {
-        const response=await (includeDeparture?getFirstDeparture:getFirstArrivals)(searchId,candidateId,controller.signal);
+        const response=await (loader || (includeDeparture?getFirstDeparture:getFirstArrivals))(searchId,candidateId,controller.signal);
         if (!disposed && seq===sequence) setState({ phase:'ready', evidence:includeDeparture?response.data.arrival_evidence:response.data, departure:includeDeparture?response.data:null, serverAt:Date.parse(response.meta.server_time), sampledAt:performance.now() });
       } catch (error) {
         if (!disposed && seq===sequence && error.name!=='AbortError') {
-          terminal=['AUTH_REQUIRED','SESSION_EXPIRED','RESOURCE_NOT_FOUND','VERSION_CONFLICT','INVALID_RESPONSE'].includes(error.code);
+          terminal=Boolean(loader)||['AUTH_REQUIRED','SESSION_EXPIRED','RESOURCE_NOT_FOUND','VERSION_CONFLICT','INVALID_RESPONSE'].includes(error.code);
           setState(old=>terminal ? {phase:'blocked',error:error.code} : {...old,phase:old.evidence?'ready':'error',error:true});
         }
       } finally { if (seq===sequence) busy=false; }
@@ -31,10 +32,10 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
       if (document.hidden) { sequence++;controller?.abort();busy=false; }
       else load();
     }
-    load();const polling=setInterval(load,60000);const clock=setInterval(()=>setTick(t=>t+1),1000);
+    if(!initialResponse)load();const polling=setInterval(load,60000);const clock=setInterval(()=>setTick(t=>t+1),1000);
     document.addEventListener('visibilitychange',visibility);
     return ()=>{disposed=true;sequence++;controller?.abort();clearInterval(polling);clearInterval(clock);document.removeEventListener('visibilitychange',visibility);};
-  }, [searchId,candidateId,includeDeparture]);
+  }, [searchId,candidateId,includeDeparture,loader,initialResponse]);
   const d=state.evidence;
   const departure=state.departure;
   const now=d ? state.serverAt+Math.max(0,performance.now()-state.sampledAt) : 0;
