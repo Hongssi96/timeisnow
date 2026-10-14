@@ -51,7 +51,8 @@ def calculate(evidence,base,walking,profile,at,basis='recommended'):
     approved=(evidence.status=='estimated' and evidence.timing_basis=='receipt_estimate' and evidence.source_status=='unknown' and evidence.generated_at is None) or (evidence.status=='fresh' and evidence.timing_basis=='source_generation' and evidence.source_status=='fresh' and evidence.generated_at is not None)
     if not approved or not evidence.valid_for_guidance or not evidence.candidates:
         data.reasons=['ARRIVAL_UNAVAILABLE'];return data
-    candidate=min(evidence.candidates,key=lambda item:(item.predicted_arrival_at,str(item.candidate_id)))
+    ordered=sorted(evidence.candidates,key=lambda item:(item.predicted_arrival_at,str(item.candidate_id)))
+    candidate=next((item for item in ordered if (item.predicted_arrival_at-at).total_seconds()>=walking),ordered[0])
     vehicle=candidate.predicted_arrival_at
     try:
         recommended=vehicle-timedelta(seconds=walking+profile['buffer'])
@@ -65,6 +66,7 @@ def calculate(evidence,base,walking,profile,at,basis='recommended'):
     data.slack_status='unreachable' if slack<0 else 'below_buffer' if slack<profile['buffer'] else 'meets_buffer'
     data.status='not_enough_time' if slack<0 else 'ready';data.valid_for_guidance=slack>=0
     data.reasons=['PROVIDER_ACCESS_ESTIMATE']+(['RECEIPT_BASED_ESTIMATE'] if evidence.timing_basis=='receipt_estimate' else [])
+    if candidate.candidate_id!=ordered[0].candidate_id:data.reasons.append('NEXT_REACHABLE_VEHICLE')
     if data.slack_status=='below_buffer':data.reasons.append('BUFFER_NOT_MET')
     return data
 

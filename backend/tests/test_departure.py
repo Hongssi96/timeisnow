@@ -35,7 +35,7 @@ class DepartureCalculationTests(unittest.TestCase):
         self.assertEqual(value.slack_seconds,180);self.assertEqual(value.slack_status,'below_buffer')
         self.assertIn('BUFFER_NOT_MET',value.reasons)
 
-    def test_negative_slack_is_not_clamped_or_replaced_with_next_vehicle(self):
+    def test_negative_slack_without_another_supplied_vehicle_is_not_clamped(self):
         at,e,p=self.fixture(120);value=service.calculate(e,300,300,p,at)
         self.assertEqual(value.slack_seconds,-180);self.assertEqual(value.status,'not_enough_time')
         self.assertFalse(value.valid_for_guidance);self.assertEqual(value.slack_status,'unreachable')
