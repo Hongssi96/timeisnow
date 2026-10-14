@@ -27,3 +27,8 @@ GET /api/v1/routines/{routine_id}/departure-searches/{search_id}/first-departure
 ## 2026-10-14 — F07-04 목표 도착 평가
 
 루틴출발GET의선택후보에 nullable target_evaluation을추가했다. 현재본인루틴의오늘목표시간/프로필을전후검사하고서버에서평가한다. 일반후보GET는null·기존쿠키/본인/CSRF/no-store/버전·기한유지, 새외부조회/DDL없음. 미래예약/대체노선은후속. target_arrival_api.md.
+
+
+## 2026-10-14 — F07-06a 다음 접근 가능 차량 선택
+
+제공된 유효 도착 후보 중 지금부터 개인화 접근 W를 확보할 수 있는 가장 이른 차량으로 출발·환승·목표를 재계산한다. 설정 B는 별도 여유이며 below_buffer 경고 유지. NEXT_REACHABLE_VEHICLE 고정사유/기존필드·TTL 유지, 새외부조회/DDL/AI 없음. now-s>W/2·수동 departed 미확인 규칙은 실제 이동 이벤트 선행이 없어 F07-06b 미완료 유지. 상세 next_vehicle_api.md.

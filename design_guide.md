@@ -213,3 +213,8 @@ WalkingGuidance의 이전출발준비중문구를 제공접근도보/개인계�
 ## 2026-10-14 — F07-04 목표 도착 평가
 
 기존FirstArrivals/info-box/walking-guidance/Clock3와h3/문단체계로목표도착평가를표시한다. 정류장첫승차여유와목표여유를명시적으로구분하며목표미확인/만료에는목적지숫자없음. 새CSS/색상/폰트없음. 합성실컴포넌트PC/모바일성공·미확인확인·가로넘침없음. target_arrival_api.md.
+
+
+## 2026-10-14 — F07-06a 다음 접근 가능 차량 선택
+
+제공된 유효 도착 후보 중 지금부터 개인화 접근 W를 확보할 수 있는 가장 이른 차량으로 출발·환승·목표를 재계산한다. 설정 B는 별도 여유이며 below_buffer 경고 유지. NEXT_REACHABLE_VEHICLE 고정사유/기존필드·TTL 유지, 새외부조회/DDL/AI 없음. now-s>W/2·수동 departed 미확인 규칙은 실제 이동 이벤트 선행이 없어 F07-06b 미완료 유지. 상세 next_vehicle_api.md.
