@@ -206,7 +206,7 @@ class ConnectedArrivalTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_candidate_changes_during_mapping_block_before_arrival_fetch(self):
         await self.setup_route()
-        def changed(*args):
+        def changed(*args,**kwargs):
             from psycopg.types.json import Jsonb
             with database() as c:
                 row=c.execute('SELECT candidates FROM journey_searches WHERE id=%s',(self.search_id,)).fetchone()
@@ -219,7 +219,7 @@ class ConnectedArrivalTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_search_expires_during_mapping_and_cached_result_cannot_bypass_expiry(self):
         await self.setup_route()
-        def expire(*args):
+        def expire(*args,**kwargs):
             with database() as c:c.execute("UPDATE journey_searches SET expires_at=clock_timestamp()-interval '1 second' WHERE id=%s",(self.search_id,))
             return self.mapping
         with patch.object(service.public_mapping,'resolve',side_effect=expire),patch.object(provider,'fetch') as fetch:
