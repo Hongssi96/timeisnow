@@ -1342,3 +1342,17 @@ Notion v0.71. 사용자 01b 완료 요청에 따라 앞서 제시한 같은 공�
 남음: F12의 혼자 가는 일정·루틴 없는 개인별 출발 안내 연결, 초대 응답 캐시(암호화), 추천 기반 확정(F13)·개인 출발지·출발 안내·공유(F15)·채팅/WS(F14), 프론트 약속 화면. 다음은 사용자와 F13/F14 순서를 확인 후 진행한다. 기능 브랜치 커밋·푸시 후 MR/병합은 사용자가 수행한다.
 
 배운개념: 버전 잠금이 있는 공동 자원은 상태 전이·멤버 변동·초대 발급까지 모두 약속 버전을 올려야 상대 화면이 변화를 감지한다. 멱등 재현을 할 수 없는 생성 응답(토큰 등)은 같은 키 재요청에 409로 명확히 응답하고 재시도 경로를 계약에 남기는 것이 조용한 중복 생성보다 낫다. 여러 테이블을 건드리는 수락/탈퇴는 고유 제약과 행 잠금 위에서 원자적으로 처리해야 동시 요청에 만석이 지켜진다.
+
+## 2026-10-14 — F12 meetings 객체지향 리팩터링(ABC 포트 + 의존성 주입)
+
+목표/이유: 사용자 요청으로 F12에서 새로 나눠진 meetings 부분을 python abc 추상 클래스·상속·의존성 주입 구조로 바꿨다. 계약 변경은 없다.
+
+구조: app/common/ports.py에 협업 포트 4종(Clock·Database·Identity·TokenIssuer)과 기본 어댑터(UtcClock·PostgresDatabase·SessionIdentity·UrlSafeTokenIssuer)를 뒀다. app/meetings/repository.py는 MeetingRepository(ABC, 34개 추상 메서드)와 PostgresMeetingRepository 구현체로 나눴고 psycopg Jsonb 변환은 어댑터가 맡아 서비스는 일반 dict를 넘긴다. app/meetings/service.py는 모듈 함수들에서 MeetingService 클래스로 바꿨고 협업 객체 5개(repository·database·identity·clock·tokens)를 생성자로 주입받는다. 순수 계산(커서 코딩·버전 검사·응답 조립)은 모듈 수준 함수로 유지했다. app/meetings/wiring.py가 조립 지점이며 build_meeting_service()는 인자로 협업 객체 교체를 허용하고 get_meeting_service()가 FastAPI Depends로 쓰인다. 라우터는 service 모듈 참조 대신 Depends(get_meeting_service)로 받는다. journeys/service.py의 /jobs 폴백은 build_meeting_service().job_result로 호출을 고쳤다.
+
+이유: F13(중간 만남 추천)·F14(채팅)가 같은 meeting 테이블과 인증·멱등·락 관심사를 재사용할 예정이라 저장소·인증·시계·토큰 발급을 교체 가능한 포트로 분리해두면 나중 구현과 테스트가 DB 없이 규칙만 검증할 수 있다. product 포팅 때도 이 경계를 그대로 쓴다.
+
+실제 검증: tests/test_meetings_di.py 신규 7개(포트 인스턴스화 불가·Postgres 어댑터가 포트 충족·오래된 버전 409·종료 약속 변경 거부·draft 완료 전이 차단·주최자 탈퇴 차단+쓰기 락 선점 확인·쓰기 경로 CSRF 인증 거치는지 확인) — 메모리 저장소·고정 시계·가짜 인증을 주입해 DB·HTTP 없이 실행. 기존 test_meetings.py 15개(실제 ASGI+PostgreSQL)도 통과해 두 경로가 같은 규칙을 확인한다. 전체 백엔드 365개 137초 통과. 참고: 전체 실행 1회에서 test_connected_arrival_probe 1건 실패가 나왔으나 재실행 2회·단독 3회 모두 통과해 일시적 플레이키로 판단, 이번 변경과 무관한 파일이다.
+
+명세 영향: 없음. 내부 구조 변경으로 요청·응답·오류 코드는 그대로다(AGENTS.md 3절에 따라 Notion 미수정). 문서 갱신도 이 일지뿐이다.
+
+배운개념: 추상 포트는 '무엇이 필요한가'를 계약으로 남기고 어댑터는 '어떻게'를 담는다. 트랜잭션 연결도 Database 포트로 감싸면 서비스 테스트에서 실제 DB를 요구하지 않게 된다. 다만 외부 시간(now())을 SQL에 남겨두는 쿼리는 어댑터 내부에 유지했는데, 저장소별 시계 통일은 F13에서 다시 검토한다.
