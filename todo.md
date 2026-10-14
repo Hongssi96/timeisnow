@@ -1,6 +1,6 @@
 # 지금이니? — TODO
 
-- 마지막 갱신: 2026-10-14 (F07-07a 첫 탑승 전 확인한 현재 위치의 남은 경로 안내)
+- 마지막 갱신: 2026-10-14 (미병합 약속 코어·확인 기록과 이동 기능 main 통합 검증)
 - 프로젝트: `C:/projects/timeisnow`
 - 진행 현황 기준 문서: 이 파일. 상세 요구·완료 기준은 [기능 분리](./feature_breakdown.md), [기획](./planning.md), [약속 확장](./meeting_plan.md), [API 명세](https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa)를 따른다.
 - 현재: 공통 요청/로그와 기본 회원 인증 완료. 가입 입력 안내 및 localhost CSRF 차단 수정(2026-10-06, development_log.md·백엔드56개/프론트27개·Notion v0.33). PostgreSQL 회원 인증 테이블5개 적용, 경로/이동/약속 업무 API는 미구현. 장소 구현 상태는 아래 F03-01 기록을 따른다.
