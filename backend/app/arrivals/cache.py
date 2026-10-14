@@ -18,6 +18,7 @@ class Entry:
     following: dict = field(default_factory=dict)
     boarding_endpoint: object = None
     access_walk: object = None
+    vehicle_keys: dict = field(default_factory=dict)
 
 _searches = OrderedDict()
 _guard = Lock()

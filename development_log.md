@@ -1483,3 +1483,19 @@ frontend/tests/departure.test.js·components/FirstDeparture.test.jsx 신규7개 
 문서/완료: Notion v0.80의5.8.1 구현·범위/시간/중복/보관·기존선행미구현표현·버전/변경이력/호환영향을수정하고재조회저장확인. api_contract.md전체1671행해시대조일치/다른담당F12보존. trip_api.md·planning.md·personalization.md·logging.md·design_guide.md·screen_plan.md·routine_departure_api.md·todo.md·feature_breakdown.md동기화. F08-01과F08-02a만체크, 상위F08-02/04/05·F07-06b/전체06은미완료. 배운개념: 세션생성과실제출발신고는별도사실이며과거안내스냅샷을현재예측으로덮어쓰지않는다. 멱등키/이벤트ID와발생·수신시각을분리하면통신재시도로거짓중복관측을막을수있다. 코드·문서기능브랜치커밋/푸시·MR/병합은사용자수행. 다음은저장된수동departed를F07-06b절반경과선택에연결. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
 
 게시 전 최종 서버 확인: 프로젝트uvicorn숨김재시작 후 health/프론트200·비인증tripsGET401·OpenAPI이동3경로/안내토큰필드존재 확인. 최신origin/main2460bd7재확인. git diff --check 통과, 임시프리뷰없음. Notion게시전재조회와로컬미러일치확인 후기능브랜치커밋/푸시한다.
+
+## 2026-10-14 — F07-06b 지원 루틴 절반 경과 다음 차량 전환
+
+목표/이유: 사용자 요청에 따라 수동 출발 저장을 절반 경과 선택에 연결했다. 출발 확인 부재는 실제 미출발 증거가 아니며 관측/학습으로 저장하지 않는다. 최신 main2460bd7에서 codex/unconfirmed-departure-switch 생성, 미병합 선행 f990370/d27ef97/803b1d0/8cf836f/94720a1/4c6e983/ffcb61c/ea7c9f8/02e5461을 포함했다. 사용자 담당 분리 및 공식 노선 상세 결과없음 대응 후속 보류를 유지했다. MR/병합은 사용자 수행.
+
+구현: arrivals/cache.py와service.py에 공식 매핑+차량 비식별 메모리키 추가. 공개 후보UUID는 검색마다 바뀌므로 같은 차량 비교에 그대로 사용할 수 없다. 원래 ID는 새 DB/응답/로그에 기록하지 않는다. guidance/selection.py의 본인/루틴128개 상태·제외16개·잠금429로 마지막 정상응답 s/W/ETA를 기억한다. now-s > W/2(같음 유지, B 제외)에서 다음 제공 차량 ETA가 현재보다 늦고 W+B를 확보하는지 검사한다. 이미 제외한 차량은 돌아가지 않고 후보/식별 부족은 숫자를 숨긴다. 동일 검색 수신/기한을 보존하고 새로운 첫 차량으로 환승/오늘 목표를 한 번 재계산한다. 프로필/접근/경로/장소/선택ETA경과/메모리소실은 초기화, 공급자 대기중 ETA 경과도 재검사한다. DB active trip/manual event·현재 루틴 버전/서명/장소를 대조하고 조회 전후 변경409에서는 선택 기준을 커밋하지 않는다. 세션만 생성/취소/만료/다른 경로는 출발 억제 근거가 아니다. 동일 차량 운행회 인증은 아니므로 선택 ETA가 끝나면 기준을 폐기한다.
+
+파일: backend/app/arrivals/{cache,service}.py, guidance/{dto,routine,service,selection}.py, trips/repository.py, tests/test_unconfirmed_selection.py·test_walking_recalculation.py. first.departure.v1 departure_state 추가, 유효 신고 후 모든 출발전 시각/여유/환승/목표/토큰 차단 및 공급자 도착 조회 생략. frontend FirstArrivals/ManualDeparture/RoutineDeparture·lib/departure.js 및 관련4개 테스트: 저장/복구 즉시 숫자 제거·60초 도착/300초 검색 자동조회 중지·늦은 성공/오류 무시·취소 뒤 새 검색. 기존 CSS/테마 유지. 신규 DDL 없음.
+
+실제 검증: 신규15개9.401초 후 조회중 ETA 경과 방어/테스트 추가 최종16개10.647초 통과. strict 절반/.001·새검색 차량키·W+B/후보없음·제외복귀차단·프로필/ETA변경·근거없음·동시신고409·잠금/용량/만료·실제 격리 PostgreSQL/인증ASGI의 신고복구/단순생성/취소/재계산 확인. 초기 fixture가 소수 공급자 초를 만들어 실패한 것은 정수 공급자 계약에 맞게 fixture를 고쳤다. 전체 첫 실행421개211.707초에서 기존 access lock 테스트 ASGI3초 타임아웃1개, 동일 테스트 단독2.113초 통과(안내716ms). 다음 전체421개224.349초에서 기존 stale profile/place 테스트409 대신422 한 건, 단독 재현은0.828초 통과하여 당시422 원인을 확정하지 않는다. 버전 테스트가 벽시계와 독립적이도록 해당 테스트의 repository.clock만 verified_at+1초로 고정, 단독0.769초 통과. 운영 검증/시간제한 완화 없음. 최종 전체421개219.786초 통과(마지막 ETA 방어 추가 전), 이후 관련16개 재통과. 전체422개 재실행은 하지 않았다.
+
+프론트 전체248개15.21초 통과 후 마지막 신고 뒤 응답 무시/추가검증 포함 관련4파일57개3.09초 재통과·최종1911모듈 빌드514ms 성공. 최종 전체250개 일괄 실행으로 주장하지 않는다. 실제 엄격 API 클라이언트/실 FirstArrivals/기존 CSS·합성 응답으로 다음차량 전환/다음없음/출발확인 세 상태 PC1280×900 및 모바일390×900 또는844 확인. 모바일 가로넘침 없음(body.scrollWidth=innerWidth390), 임시 half-preview 파일 삭제·탭 종료/viewport 원복. 실제 로그인/사용자 루틴 추천 성공/실이동 정확도/실기기 검증은 미실행. 직접 외부키/AI0회, 기존 추가 승인 잔여9회 미사용.
+
+문서: 구현 전 Notion 최신 v0.80 확인 후5.7.8 v0.81 설계를 먼저 저장했다. 구현 후 범위/상태/시간/메모리/출발저장전후/자동조회/호환성/검증/변경이력 수정 및 재조회 저장 확인. api_contract.md는 최신 페이지 내용과 맞추고 F12 다른 담당 내용 보존. planning/personalization/logging/design_guide/screen_plan/routine_departure_api/departure_api/trip_api/next_vehicle_api와TODO/feature 동기화. F07-06/06b는 지원 경기 BUS 루틴 범위로만 완료, 일반 후보 상세는06a 정책 유지. F07-07 및 나머지 F08 이벤트/정정/학습은 후속. 개념: 화면에 제공한 추정과 실제 행동 신고는 서로 다른 사실이다. 서버 메모리 후보 선택과 저장 이벤트 상태를 재검사해야 동시 신고가 이전 안내를 되살리는 것을 막을 수 있다. 명세 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+게시 전 최종 확인: 최신 origin/main2460bd7 유지·Notion v0.81 재조회 변경없음·로컬미러1683행 해시일치. 프로젝트 uvicorn 숨김 재시작 후 backend health200·frontend200·비인증 routines401·OpenAPI departure_state enum/default 확인. git diff --check 통과·임시프리뷰 없음. 기능 브랜치 커밋/푸시, MR/병합은 사용자 수행.

@@ -16,6 +16,9 @@ export function readFirstDeparture(result,searchId,candidateId) {
     ||!['meets_buffer','below_buffer','unreachable','unknown'].includes(d.slack_status)) throw new ApiError('INVALID_RESPONSE');
   validateArrivalEvidence(d.arrival_evidence,searchId,candidateId);
   if(d.guidance_id!==undefined&&d.guidance_id!==null&&!safeJourneyId(d.guidance_id))throw new ApiError('INVALID_RESPONSE');
+  if(d.departure_state!==undefined&&!['unconfirmed','reported_departed'].includes(d.departure_state))throw new ApiError('INVALID_RESPONSE');
+  if(d.departure_state==='reported_departed'&&(d.valid_for_guidance||d.guidance_id!==null||d.status!=='insufficient_data'
+    ||[d.recommended_departure_at,d.selected_departure_at,d.vehicle_arrival_at,d.arrival_candidate_id,d.slack_seconds,d.estimated_final_alighting_at].some(value=>value!==null)))throw new ApiError('INVALID_RESPONSE');
   if(d.first_leg_id!==d.arrival_evidence.first_leg_id||d.timing_basis!==d.arrival_evidence.timing_basis
     ||Date.parse(d.valid_until)>Date.parse(d.arrival_evidence.expires_at)) throw new ApiError('INVALID_RESPONSE');
   if(d.provider_approach_source!==undefined && ![null,'transit_segment','boarding_walk'].includes(d.provider_approach_source)) throw new ApiError('INVALID_RESPONSE');

@@ -145,13 +145,15 @@ class WalkingRecalculationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_stale_profile_and_place_version_block_before_recalculation(self):
         await self.setup_owner();_,saved=await self.saved();place_id=saved[2]['data']['place_id']
-        self.context['place_refs']=[dict(place_id=place_id,location_version=1)];self.seed()
-        value=self.changed();stale=copy.deepcopy(value);stale['profile']['version']=1
-        with patch('app.ai.provider.fetch_estimate') as upstream,self.assertRaises(AuthError) as error:self.run_cached(stale)
-        self.assertEqual(error.exception.code,'VERSION_CONFLICT');upstream.assert_not_called()
-        with database() as c:c.execute('UPDATE saved_places SET location_version=2 WHERE id=%s',(place_id,))
-        with patch('app.ai.provider.fetch_estimate') as upstream,self.assertRaises(AuthError) as error:self.run_cached(value)
-        self.assertEqual(error.exception.status,409);upstream.assert_not_called();self.assertEqual(self.counts(),(1,1,1,1))
+        # This test isolates version conflicts from unrelated wall-clock adjustments.
+        with patch.object(repository,'clock',return_value=self.context['verified_at']+timedelta(seconds=1)):
+            self.context['place_refs']=[dict(place_id=place_id,location_version=1)];self.seed()
+            value=self.changed();stale=copy.deepcopy(value);stale['profile']['version']=1
+            with patch('app.ai.provider.fetch_estimate') as upstream,self.assertRaises(AuthError) as error:self.run_cached(stale)
+            self.assertEqual(error.exception.code,'VERSION_CONFLICT');upstream.assert_not_called()
+            with database() as c:c.execute('UPDATE saved_places SET location_version=2 WHERE id=%s',(place_id,))
+            with patch('app.ai.provider.fetch_estimate') as upstream,self.assertRaises(AuthError) as error:self.run_cached(value)
+            self.assertEqual(error.exception.status,409);upstream.assert_not_called();self.assertEqual(self.counts(),(1,1,1,1))
 
     async def test_expiry_during_other_miss_rolls_back_recalculation(self):
         await self.setup_owner();self.seed();value=self.changed()
