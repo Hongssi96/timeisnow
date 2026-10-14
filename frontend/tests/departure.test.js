@@ -10,3 +10,26 @@ it('rejects a transfer claiming success before minimum boarding time',async()=>{
   const d=data();d.connection_status='estimated_feasible';d.transfers=[{connection_id:'link',from_leg_id:'one',to_leg_id:'two',feasibility:'estimated_feasible',time_source:'receipt_estimate',transfer_buffer_seconds:120,transfer_walk_seconds:100,estimated_alighting_at:'2026-10-13T08:20:00Z',minimum_boarding_at:'2026-10-13T08:24:00Z',next_boarding_at:'2026-10-13T08:23:00Z'}];mock(d);
   await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});
 });
+
+it('accepts a separate boarding walk source with original receipt and bounded expiry',async()=>{
+ const d=data();d.provider_approach_source='boarding_walk';d.approach_fetched_at=d.calculated_at;d.approach_valid_until='2026-10-13T08:05:00Z';mock(d);expect((await getFirstDeparture('s','c')).data.provider_approach_source).toBe('boarding_walk');
+});
+it('rejects missing, future or expired separate walking evidence',async()=>{
+ for(const changes of [{approach_fetched_at:null},{approach_fetched_at:'2026-10-13T08:01:00Z'},{approach_valid_until:'2026-10-13T08:01:00Z'},{provider_approach_source:'invented'}]){
+  const d={...data(),provider_approach_source:'boarding_walk',approach_fetched_at:'2026-10-13T08:00:00Z',approach_valid_until:'2026-10-13T08:05:00Z',...changes};mock(d);await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});
+ }
+});
+
+function goalData(){const d=data();d.connection_status='estimated_feasible';d.transfers=[];d.estimated_final_alighting_at='2026-10-13T08:20:00Z';d.target_evaluation={model_version:'target.arrival.v1',scope:'selected_routine_candidate',status:'estimated_meets',evaluated_at:d.calculated_at,target_arrival_at:'2026-10-13T08:25:00Z',estimated_destination_arrival_at:'2026-10-13T08:22:00Z',margin_seconds:180,egress_seconds:120,timing_basis:'provider_timeline',reasons:[]};return d;}
+it('accepts a target evaluation anchored to final alighting and egress',async()=>{mock(goalData());expect((await getFirstDeparture('s','c')).data.target_evaluation.margin_seconds).toBe(180);});
+it('rejects goal formula, classification and missing final leg contradictions',async()=>{for(const change of [{margin_seconds:300},{status:'estimated_late'},{egress_seconds:0},{estimated_destination_arrival_at:'2026-10-13T08:21:00Z'}]){const d=goalData();d.target_evaluation={...d.target_evaluation,...change};mock(d);await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});}});
+it('unknown target states cannot carry fabricated arrival or margin numbers',async()=>{const d=goalData();d.target_evaluation.status='unknown';mock(d);await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});});
+
+it('accepts the supplied later vehicle with its recomputed departure',async()=>{
+ const d=data();d.arrival_evidence.candidates.unshift({candidate_id:'early',provider_prediction_seconds:30,predicted_arrival_at:'2026-10-13T08:00:30Z'});d.reasons=['NEXT_REACHABLE_VEHICLE'];mock(d);
+ expect((await getFirstDeparture('s','c')).data.arrival_candidate_id).toBe('bus');
+});
+
+it('rejects claimed departed state carrying departure numbers or an invalid state',async()=>{
+ for(const state of ['reported_departed','gps_departed']){const d=data();d.departure_state=state;mock(d);await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});}
+});

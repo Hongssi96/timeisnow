@@ -94,6 +94,12 @@ def normalize(mapping,values,received_at,at,search_id,candidate_id,search_expire
     return project(evidence,at)
 
 
+def vehicle_keys(mapping,values,search_id,candidate_id):
+    scope=f'{mapping.provider}:{mapping.station_id}:{mapping.route_id}:{mapping.sta_order}:{mapping.route_dest_id}:{mapping.mapping_version}'
+    return {str(uuid5(NAMESPACE_URL,f'{search_id}:{candidate_id}:{scope}:{vehicle}')):
+            str(uuid5(NAMESPACE_URL,f'private.first.vehicle:{scope}:{vehicle}')) for vehicle,_ in values or []}
+
+
 def reserve_refresh(user_id):
     with database() as connection:
         _,secret,_=security.settings()
@@ -111,7 +117,11 @@ def first_arrivals(user_id,search_id,candidate_id,*,verified_mapping=None):
     row,candidate,first,snapshot=owned(user_id,search_id,candidate_id)
     if verified_mapping is None:
         entry=cache.lookup(user_id,search_id,candidate_id,snapshot,now()) if first['type']=='BUS' else None
-        if entry is None: return unmapped(row,first,search_id,candidate_id)
+        if entry is None:
+            evidence=unmapped(row,first,search_id,candidate_id)
+            if first['type']=='BUS':
+                evidence.reasons.append('MULTIPLE_VEHICLE_OPTIONS' if len(first['vehicles'])!=1 else 'MAPPING_CONTEXT_UNAVAILABLE')
+            return evidence
         if not entry.lock.acquire(blocking=False):
             raise AuthError(429,'RATE_LIMITED','도착 정보 조회를 기다려주세요.',{'Retry-After':'2'})
         try:
@@ -122,17 +132,22 @@ def first_arrivals(user_id,search_id,candidate_id,*,verified_mapping=None):
                 cached.expires_at=min(cached.expires_at,current['expires_at'],entry.expires_at)
                 return project(cached,now())
             reserve_refresh(user_id)
-            value=entry.mapping or public_mapping.resolve(entry.context,min(entry.expires_at,current['expires_at']))
+            diagnostics={}
+            endpoint={}
+            value=entry.mapping or public_mapping.resolve(entry.context,min(entry.expires_at,current['expires_at']),diagnostics=diagnostics,boarding_endpoint=endpoint)
             if value is None:
                 updated,_,updated_first,updated_snapshot=owned(user_id,search_id,candidate_id)
                 if updated_snapshot!=snapshot: raise AuthError(409,'VERSION_CONFLICT','경로가 변경됐어요. 다시 확인해주세요.')
                 evidence=unmapped(updated,updated_first,search_id,candidate_id)
+                reason=public_mapping.safe_failure_reason(diagnostics)
+                if reason:evidence.reasons.append(reason)
             else:
                 _,_,updated_first,updated_snapshot=owned(user_id,search_id,candidate_id)
                 if updated_snapshot!=snapshot: raise AuthError(409,'VERSION_CONFLICT','경로가 변경됐어요. 다시 확인해주세요.')
                 checked_mapping(value,updated_first,now())
                 evidence=first_arrivals(user_id,search_id,candidate_id,verified_mapping=value)
                 entry.mapping=value
+                if endpoint:entry.boarding_endpoint=endpoint
             entry.evidence=evidence.model_copy(deep=True);entry.attempted_at=evidence.received_at or now()
             return evidence
         finally: entry.lock.release()
@@ -144,7 +159,10 @@ def first_arrivals(user_id,search_id,candidate_id,*,verified_mapping=None):
     checked_mapping(mapping,new_first,now())
     if new_snapshot!=snapshot:raise AuthError(409,'VERSION_CONFLICT','경로가 변경됐어요. 다시 확인해주세요.')
     # GBIS queryTime is request time, not a verified generation timestamp.
-    return normalize(mapping,values,received,now(),search_id,candidate_id,current['expires_at'])
+    evidence=normalize(mapping,values,received,now(),search_id,candidate_id,current['expires_at'])
+    entry=cache.lookup(user_id,search_id,candidate_id,snapshot,now())
+    if entry is not None:entry.vehicle_keys=vehicle_keys(mapping,values,search_id,candidate_id)
+    return evidence
 
 
 def result(request,search_id,candidate_id):

@@ -16,12 +16,18 @@ class Entry:
     evidence: object = None
     attempted_at: object = None
     following: dict = field(default_factory=dict)
+    boarding_endpoint: object = None
+    access_walk: object = None
+    vehicle_keys: dict = field(default_factory=dict)
 
 _searches = OrderedDict()
 _guard = Lock()
 
 def fingerprint(candidate):
     return hashlib.sha256(json.dumps(candidate,sort_keys=True).encode()).hexdigest()
+
+def mapping_identity(mapping):
+    return hashlib.sha256(mapping.model_dump_json().encode()).hexdigest()
 
 def clear():
     with _guard: _searches.clear()
