@@ -46,12 +46,12 @@ def query(kind,params,deadline):
     except OSError: raise AuthError(503,'PROVIDER_UNAVAILABLE','교통 정보에 연결할 수 없어요.') from None
     except (ValueError,TypeError,KeyError,AttributeError,UnicodeError,RecursionError): provider.invalid()
 
-def resolve(context,expires_at,*,diagnostics=None):
+def resolve(context,expires_at,*,diagnostics=None,deadline=None):
     def record(**values):
         if diagnostics is not None:diagnostics.update(values)
     if diagnostics is not None:diagnostics.clear()
     record(stage='station_search',reason='MAPPING_PENDING')
-    deadline=time.monotonic()+5
+    deadline=min(time.monotonic()+5,deadline) if deadline is not None else time.monotonic()+5
     stops=context['stops'];points=context['points']
     stations=query('stations',{'keyword':stops[0]['name']},deadline)
     nearby=boarding_candidates(stops[0]['name'],points[0],stations,30)

@@ -41,3 +41,12 @@ it('shows the date when departure belongs to a different Seoul day',async()=>{
 it('does not round the configured seconds up to a full minute',async()=>{
   const r=response();r.data.buffer_seconds=30;getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText(/설정 여유 30초/)).toBeTruthy();
 });
+
+it('shows estimated transfer times and keeps unknown later links without numbers',async()=>{
+  const r=response();r.data.connection_status='unknown';r.data.transfers=[{connection_id:'one',feasibility:'estimated_feasible',minimum_boarding_at:'2026-10-13T08:24:00Z',next_boarding_at:'2026-10-13T08:25:00Z'},{connection_id:'two',feasibility:'unknown',minimum_boarding_at:null,next_boarding_at:null}];getFirstDeparture.mockResolvedValue(r);await mount();
+  expect(screen.getByText(/환승 1 · 예상 연결 가능/)).toBeTruthy();expect(screen.getByText(/환승 2 · 연결 정보 확인 필요/)).toBeTruthy();expect(screen.getByText(/최소 승차 시각/)).toBeTruthy();expect(screen.getByText(/다음 차량 예상/)).toBeTruthy();
+});
+it('expired evidence removes earlier transfer timestamps',async()=>{
+  const r=response();r.data.connection_status='estimated_feasible';r.data.transfers=[{connection_id:'one',feasibility:'estimated_feasible',minimum_boarding_at:'2026-10-13T08:24:00Z',next_boarding_at:'2026-10-13T08:25:00Z'}];getFirstDeparture.mockResolvedValue(r);await mount();getFirstDeparture.mockRejectedValue({code:'PROVIDER_TIMEOUT'});elapsed=121000;await act(async()=>{vi.advanceTimersByTime(121000);});
+  expect(screen.queryByText(/다음 차량 예상/)).toBeNull();expect(screen.getByText(/환승 정보가 만료/)).toBeTruthy();
+});

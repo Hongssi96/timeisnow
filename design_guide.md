@@ -188,3 +188,8 @@ WalkingGuidance는 기존 info-box 위에 lucide Footprints와16px 제목·14px 
 
 
 2026-10-13 F07-02: 후보 상세의 기존FirstArrivals/info-box/walking-guidance/Clock3를 재사용해 첫 버스 예상 출발 시각(KST)/접근·정확한 설정여유/공급자 개인화 추정·수신추정/조회경과를 표시한다. 기한/선택차량 경과/접근불가/인증·경로변경 시 이전 출발 숫자를 제거한다. 다른날짜의출발은날짜를붙인다. 신규색상/CSS/테마/폰트변경 없음. 합성브라우저1280×800/390×844 표시·줄바꿈/가로넘침없음 확인. 실제로그인/경로전체 시각 검증은 이번 수행하지 않았다. 루틴 자동갱신/전체환승·목표도착은 후속. departure_api.md·development_log.md·Notion v0.73.
+
+
+## 2026-10-14 — F07-03
+
+기존FirstArrivals/info-box/walking-guidance/Clock3에 환승 상태·최소 승차/다음 차량 시각·추정 안내를 추가. 신규CSS/색상/테마 없음. 합성 실컴포넌트1280×800/390×844 화면과 모바일가로넘침없음 확인. 실로그인/실경로 시각 검증 제외.

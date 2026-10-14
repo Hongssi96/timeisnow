@@ -3,7 +3,7 @@ import { safeJourneyId } from './journeys';
 import { validateArrivalEvidence } from './arrivals';
 export async function getFirstDeparture(searchId,candidateId,signal) {
   if (!safeJourneyId(searchId)||!safeJourneyId(candidateId)) throw new ApiError('INVALID_RESPONSE');
-  const result=await apiRequest(`/api/v1/journey-searches/${searchId}/candidates/${candidateId}/first-departure`,{signal});
+  const result=await apiRequest(`/api/v1/journey-searches/${searchId}/candidates/${candidateId}/first-departure?include_connections=true`,{signal,timeoutMs:25000});
   const d=result.data;
   if(d?.model_version!=='first.departure.v1'||d.search_id!==searchId||d.candidate_id!==candidateId
     ||!['ready','insufficient_data','not_enough_time','stale','unsupported'].includes(d.status)
@@ -22,5 +22,14 @@ export async function getFirstDeparture(searchId,candidateId,signal) {
     ||![d.recommended_departure_at,d.selected_departure_at,d.vehicle_arrival_at].every(isServerTime)
     ||Date.parse(d.recommended_departure_at)!==Date.parse(d.vehicle_arrival_at)-(d.approach_seconds+d.buffer_seconds)*1000
     ||!d.arrival_evidence.candidates.some(c=>c.candidate_id===d.arrival_candidate_id&&c.predicted_arrival_at===d.vehicle_arrival_at))) throw new ApiError('INVALID_RESPONSE');
+  if(d.connection_status!==undefined && (!['not_checked','estimated_feasible','unavailable','unknown','stale'].includes(d.connection_status)
+    ||!Array.isArray(d.transfers)||d.transfers.length>2
+    ||d.transfers.some(c=>!safeJourneyId(c.connection_id)||!safeJourneyId(c.from_leg_id)||!safeJourneyId(c.to_leg_id)
+      ||!['estimated_feasible','unavailable','unknown'].includes(c.feasibility)
+      ||!['none','source_generation','receipt_estimate'].includes(c.time_source)
+      ||!Number.isInteger(c.transfer_buffer_seconds)||c.transfer_buffer_seconds<0||c.transfer_buffer_seconds>1800
+      ||(c.transfer_walk_seconds!==null&&(!Number.isSafeInteger(c.transfer_walk_seconds)||c.transfer_walk_seconds<=0))
+      ||[c.estimated_alighting_at,c.minimum_boarding_at,c.next_boarding_at].some(t=>t!==null&&!isServerTime(t))
+      ||(c.feasibility==='estimated_feasible'&&(!isServerTime(c.next_boarding_at)||!isServerTime(c.minimum_boarding_at)||Date.parse(c.next_boarding_at)<Date.parse(c.minimum_boarding_at)))))) throw new ApiError('INVALID_RESPONSE');
   return result;
 }

@@ -1,8 +1,21 @@
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from app.arrivals.dto import Evidence
+
+class TransferCheck(BaseModel):
+    connection_id: UUID
+    from_leg_id: UUID
+    to_leg_id: UUID
+    estimated_alighting_at: datetime|None=None
+    minimum_boarding_at: datetime|None=None
+    next_boarding_at: datetime|None=None
+    transfer_walk_seconds: int|None=None
+    transfer_buffer_seconds: int
+    feasibility: Literal['estimated_feasible','unavailable','unknown']='unknown'
+    time_source: Literal['none','receipt_estimate','source_generation']='none'
+    reasons: list[str]=[]
 
 class Departure(BaseModel):
     model_version: Literal['first.departure.v1']='first.departure.v1'
@@ -28,6 +41,9 @@ class Departure(BaseModel):
     timing_basis: Literal['none','source_generation','receipt_estimate']='none'
     valid_for_guidance: bool=False
     reasons: list[str]
+    connection_status: Literal['not_checked','estimated_feasible','unavailable','unknown','stale']='not_checked'
+    transfers: list[TransferCheck]=Field(default_factory=list,max_length=2)
+    estimated_final_alighting_at: datetime|None=None
     arrival_evidence: Evidence
 
 class DepartureEnvelope(BaseModel):

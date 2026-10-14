@@ -127,7 +127,9 @@ def normalize(data, preference, *, mapping_contexts=None):
             'missing_segments':missing[:]},vehicle_options))
         first=next(leg for leg in legs if leg['type']!='WALKING')
         if mapping_contexts is not None and first['leg_id'] in bus_contexts:
-            mapping_contexts[candidates[-1]['candidate_id']]=bus_contexts[first['leg_id']]
+            context=bus_contexts[first['leg_id']]
+            following=[bus_contexts[leg['leg_id']] for leg in legs if leg['type']=='BUS' and leg['leg_id']!=first['leg_id'] and leg['leg_id'] in bus_contexts]
+            mapping_contexts[candidates[-1]['candidate_id']]=dict(context,following=following) if following else context
     candidates.sort(key=lambda c: ((c['transfer_count'] if preference == 'fewer_transfers' else c['walking_seconds'] if preference == 'less_walking' else c['total_seconds']), c['total_seconds'],c['transfer_count'],c['walking_seconds']))
     candidates = candidates[:20]
     if mapping_contexts is not None:

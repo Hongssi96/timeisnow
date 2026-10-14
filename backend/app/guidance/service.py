@@ -2,6 +2,7 @@
 from datetime import timedelta
 from decimal import Decimal,ROUND_CEILING
 import math
+import time
 from fastapi import Request
 from app.auth import security
 from app.common.database import database
@@ -18,7 +19,9 @@ def settings(user_id):
     factor=row['walking_duration_factor'];buffer=row['first_boarding_buffer_seconds']
     if type(factor) not in (int,float) or not math.isfinite(factor) or not .5<=factor<=2 or type(buffer) is not int or not 0<=buffer<=1800:
         raise AuthError(422,'VALIDATION_ERROR','개인 이동 설정을 확인해주세요.')
-    return {'version':row['version'],'factor':float(factor),'buffer':buffer}
+    transfer=row['transfer_buffer_seconds']
+    if type(transfer) is not int or not 0<=transfer<=1800:raise AuthError(422,'VALIDATION_ERROR','환승 여유 설정을 확인해주세요.')
+    return {'version':row['version'],'factor':float(factor),'buffer':buffer,'transfer_buffer':transfer}
 
 
 def approach(candidate,factor):
@@ -65,7 +68,8 @@ def calculate(evidence,base,walking,profile,at,basis='recommended'):
     return data
 
 
-def first_departure(user_id,search_id,candidate_id,basis='recommended'):
+def first_departure(user_id,search_id,candidate_id,basis='recommended',include_connections=False):
+    deadline=time.monotonic()+20
     if basis not in ('recommended','now'):raise AuthError(422,'VALIDATION_ERROR','출발 기준을 확인해주세요.')
     user_id=arrivals.parsed_id(str(user_id));search_id=arrivals.parsed_id(str(search_id));candidate_id=arrivals.parsed_id(str(candidate_id))
     before,route,first,fingerprint=arrivals.owned(user_id,search_id,candidate_id)
@@ -75,9 +79,22 @@ def first_departure(user_id,search_id,candidate_id,basis='recommended'):
     if current_fingerprint!=fingerprint or settings(user_id)!=profile:
         raise AuthError(409,'VERSION_CONFLICT','경로 또는 개인 설정이 변경됐어요. 다시 확인해주세요.')
     evidence=evidence.model_copy(deep=True);evidence.expires_at=min(evidence.expires_at,current['expires_at'])
-    return calculate(evidence,base,walking,profile,arrivals.now(),basis)
+    data=calculate(evidence,base,walking,profile,arrivals.now(),basis)
+    if include_connections:
+        from app.guidance.connections import evaluate,following_arrivals
+        data=evaluate(route,data,profile,arrivals.now(),lambda leg:following_arrivals(user_id,search_id,candidate_id,leg,fingerprint,deadline))
+        latest,_,_,latest_fingerprint=arrivals.owned(user_id,search_id,candidate_id)
+        if latest_fingerprint!=fingerprint or settings(user_id)!=profile:
+            raise AuthError(409,'VERSION_CONFLICT','경로 또는 개인 설정이 변경됐어요. 다시 확인해주세요.')
+        data.valid_until=min(data.valid_until,latest['expires_at'])
+        if time.monotonic()>deadline:
+            data.connection_status='unknown';data.transfers=[];data.estimated_final_alighting_at=None;data.reasons.append('CONNECTION_TIME_LIMIT')
+        if arrivals.now()>data.valid_until or (data.vehicle_arrival_at is not None and arrivals.now()>=data.vehicle_arrival_at):
+            data.connection_status='stale';data.transfers=[];data.estimated_final_alighting_at=None
+            data.valid_for_guidance=False;data.status='stale'
+    return data
 
 
-def result(request:Request,search_id,candidate_id,basis):
+def result(request:Request,search_id,candidate_id,basis,include_connections=False):
     with database() as connection:user_id=security.authenticated(connection,request)
-    return answer(request,first_departure(user_id,search_id,candidate_id,basis).model_dump(mode='json'))
+    return answer(request,first_departure(user_id,search_id,candidate_id,basis,include_connections).model_dump(mode='json'))
