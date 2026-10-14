@@ -15,6 +15,7 @@ export function readFirstDeparture(result,searchId,candidateId) {
     ||!Number.isInteger(d.buffer_seconds)||d.buffer_seconds<0||d.buffer_seconds>1800
     ||!['meets_buffer','below_buffer','unreachable','unknown'].includes(d.slack_status)) throw new ApiError('INVALID_RESPONSE');
   validateArrivalEvidence(d.arrival_evidence,searchId,candidateId);
+  if(d.guidance_id!==undefined&&d.guidance_id!==null&&!safeJourneyId(d.guidance_id))throw new ApiError('INVALID_RESPONSE');
   if(d.first_leg_id!==d.arrival_evidence.first_leg_id||d.timing_basis!==d.arrival_evidence.timing_basis
     ||Date.parse(d.valid_until)>Date.parse(d.arrival_evidence.expires_at)) throw new ApiError('INVALID_RESPONSE');
   if(d.provider_approach_source!==undefined && ![null,'transit_segment','boarding_walk'].includes(d.provider_approach_source)) throw new ApiError('INVALID_RESPONSE');

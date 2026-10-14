@@ -1,0 +1,41 @@
+import React,{useEffect,useRef,useState} from 'react';
+import {activeTrip,confirmDeparture,cancelTrip} from '../lib/trips';
+
+const failure=error=>['AUTH_REQUIRED','SESSION_EXPIRED'].includes(error?.code)?'로그인 후 이동 기록을 다시 확인해주세요.':error?.code==='ACTIVE_TRIP_EXISTS'?'다른 이동이 진행 중이에요. 기존 이동을 먼저 확인하거나 취소해주세요.':['VERSION_CONFLICT','RESOURCE_NOT_FOUND'].includes(error?.code)?'안내가 바뀌었거나 만료됐어요. 최신 출발을 다시 확인해주세요.':'출발 확인을 저장하지 못했어요. 다시 시도해주세요.';
+export default function ManualDeparture({routineId,departure,available}){
+ const [state,setState]=useState({phase:'loading',trip:null}),[retry,setRetry]=useState(0);
+ const operation=useRef(null),controller=useRef(null),busy=useRef(false),alive=useRef(false),cancelledGuidance=useRef(null);
+ useEffect(()=>{
+  alive.current=true;const request=new AbortController();controller.current=request;busy.current=true;operation.current=null;
+  setState({phase:'loading',trip:null});
+  activeTrip(routineId,request.signal).then(trip=>{if(alive.current&&!request.signal.aborted)setState({phase:'ready',trip});}).catch(error=>{if(alive.current&&!request.signal.aborted)setState({phase:'error',trip:null,error:failure(error)});}).finally(()=>{if(controller.current===request)busy.current=false;});
+  return()=>{alive.current=false;controller.current?.abort();busy.current=false;};
+ },[routineId,retry]);
+ async function save(cancel=false){
+  if(busy.current)return;busy.current=true;const request=new AbortController();controller.current=request;
+  const previous=state.trip;setState(old=>({...old,phase:'saving',error:null}));
+  try{
+   if(cancel){await cancelTrip(previous,request.signal);cancelledGuidance.current=previous.guidance_id;operation.current=null;if(alive.current&&!request.signal.aborted)setState({phase:'ready',trip:null});}
+   else{
+    operation.current ||= {trip:previous,guidanceId:departure?.guidance_id,routineId,eventId:crypto.randomUUID(),occurredAt:new Date().toISOString()};
+    const trip=await confirmDeparture(operation.current,request.signal);
+    if(alive.current&&!request.signal.aborted)setState({phase:'ready',trip});
+   }
+  }catch(error){if(alive.current&&!request.signal.aborted){if(['RESOURCE_NOT_FOUND','VERSION_CONFLICT'].includes(error.code)&&!operation.current?.trip)operation.current=null;setState(old=>({...old,phase:'ready',error:failure(error),trip:operation.current?.trip||previous}));}}
+  finally{if(controller.current===request)busy.current=false;}
+ }
+ return <div aria-label="수동 출발 확인">
+  <h3>출발 확인</h3>
+  {state.phase==='loading'&&<p role="status">진행 중인 이동을 확인하고 있어요.</p>}
+  {state.phase==='error'&&<><p role="alert">{state.error}</p><button className="secondary" onClick={()=>setRetry(n=>n+1)}>이동 기록 다시 확인</button></>}
+  {state.phase!=='loading'&&state.phase!=='error'&&<>
+   {state.error&&<p role="alert">{state.error}</p>}
+   {state.trip?.departure_event?<p role="status">출발 확인을 저장했어요.</p>:state.trip?<p>진행 중인 이동에 출발 확인을 남길 수 있어요.</p>:null}
+   {!state.trip&&cancelledGuidance.current===departure?.guidance_id&&<p role="status">이동을 취소했어요. 최신 출발을 다시 확인하면 새 이동을 기록할 수 있어요.</p>}
+   <div className="button-row">
+    {!state.trip?.departure_event&&(state.trip||available&&departure?.guidance_id&&departure.guidance_id!==cancelledGuidance.current)&&<button className="primary" disabled={state.phase==='saving'} onClick={()=>save()}>{state.phase==='saving'?'출발 확인 저장 중…':'지금 출발했어요'}</button>}
+    {state.trip&&<button className="secondary" disabled={state.phase==='saving'} onClick={()=>save(true)}>이 이동 취소</button>}
+   </div>
+  </>}
+ </div>;
+}
