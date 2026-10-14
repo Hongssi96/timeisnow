@@ -15,6 +15,7 @@ class Entry:
     mapping: object = None
     evidence: object = None
     attempted_at: object = None
+    following: dict = field(default_factory=dict)
 
 _searches = OrderedDict()
 _guard = Lock()
@@ -46,3 +47,14 @@ def lookup(user_id,search_id,candidate_id,snapshot,at):
         stored=_searches.get((str(user_id),str(search_id)))
         entry=stored[1].get(str(candidate_id)) if stored else None
         return entry if entry and entry.fingerprint==snapshot else None
+
+
+def following_entry(parent,leg_id):
+    contexts=parent.context.get('following',[])
+    if not isinstance(contexts,list) or len(contexts)>2:return None
+    matching=[item for item in contexts if item.get('first_leg_id')==str(leg_id)]
+    if len(matching)!=1:return None
+    with _guard:
+        if str(leg_id) not in parent.following:
+            parent.following[str(leg_id)]=Entry(deepcopy(matching[0]),parent.expires_at,parent.fingerprint)
+        return parent.following[str(leg_id)]
