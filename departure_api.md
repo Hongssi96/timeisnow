@@ -17,3 +17,8 @@
 ## 2026-10-14 — F07-03
 
 F07-03 지원 경기BUS 순차 환승 검사를 추가했다. include_connections=false 기본 호환, 첫 승차 valid_for_guidance와 별도 connection_status/최대2transfers/최종하차를 구분한다. 루틴 자동갱신/목표도착은 후속. 상세 connections_api.md.
+
+
+## 2026-10-14 — F07-02a-1 루틴 최신 출발 연결
+
+루틴 최신검색 연결(F07-02a-1) 완료. 기존 후보GET·공급자 접근×개인계수 추정을 재사용한다. 검증 개인 도보/목표도착·요일기반 출발/이동시작은 미완료이며 F07-02a 전체는미체크. routine_departure_api.md.
