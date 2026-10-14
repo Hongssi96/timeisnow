@@ -1451,3 +1451,17 @@ frontend/tests/departure.test.js·components/FirstDeparture.test.jsx 신규7개 
 ## 2026-10-14 — 노선 상세 결과없음 대응 후속 보류
 
 사용자가 실제 루틴의 공식 노선 상세 결과없음 대응을 나중으로 넘기도록 지시했다. 해당 특정 루틴 지원 확대는 F07-01c 관련 후속으로 보류하고 다음 우선 작업은 기존 F07-06 다음 차량 선택·갱신·기한처리로 복귀한다. 보류 이유는 마감까지 지원 경로의 핵심 출발 흐름을 먼저 완성하기 위함이다. 상세정보/방향 검증을 생략하거나 확인되지 않은 루틴에 출발숫자를 제공하는 변경은 없다. 실제 출발 성공은 여전히 미확인이고 해당 루틴은 확인불가 상태를 유지한다. 추가 외부 호출0회, 이전 이번 승인 잔여9회 자동 사용 없음. 변경 파일 todo.md·development_log.md, API 계약/운영 코드/완료 체크 변경 없음·Notion 변경 불필요, 테스트 재실행 없음. 우선순위만 변경하며 기존 기능 브랜치에 기록한다.
+
+## 2026-10-14 — F07-06a 다음 접근 가능 차량 선택 완료 (F07-06 전체는 미완료)
+
+목표/명세: 사용자 다음 진행 요청으로 최신 Notion v0.78·TODO·기획/개인화/로깅/프롬프트·기존 UI/디자인·실제 guidance/arrivals 코드를 비교했다. 최신 origin/main2460bd7에서 codex/next-reachable-vehicle 생성, 미병합 선행 루틴/외부WIP/문구/도보/목표/실검증·보류 기록을 f000334/110cd8d/29812fc/e564dcf/783388f/ea342c8/4c38dc7로 포함했다. 다른 담당 F12 문서 내용을 보존했다.
+
+범위 판단/이유: 기존 계산은 가장 이른 차량에 접근시간이 부족하면 다음 실제 제공 후보가 있어도 not_enough_time이었다. 먼저 실제 제공 후보의 접근 가능성을 확인하고 출발·환승·목표를 재계산하는 F07-06a를 구현한다. 기존 사용자 확정 now-s>W/2·유효 수동 departed 확인 없음 전환은 운영 /trips 및 이벤트 저장/조회가 현재 코드에 없어 F07-06b로 미완료 유지한다. F07-06 전체를 완료로 표시하지 않는다. 실제 미이동·놓침 관측을 만들지 않고 GPS 판단/공유/학습도 추가하지 않는다. 사용자지시대로 특정 루틴 노선 상세 결과없음 대응은 후속 보류 유지.
+
+계약/구현: 구현 전에 Notion v0.79의5.7.7로 설계와 호환성을 저장 확인. backend/app/guidance/service.py는 유효 도착 목록을 ETA/ID 정렬하고 ETA-now>=개인화 접근W인 가장 이른 후보를 선택한다. 같은W 경계 허용·B별도/기존below_buffer 경고 유지, 가능한 후보가 없으면 기존첫후보 음수slack/not_enough_time 유지. 다음 선택 고정사유 NEXT_REACHABLE_VEHICLE 추가, 기존 추천/선택/차량ETA/여유 숫자를 선택후보로 계산한다. 기존 순차환승/루틴목표 평가에 새 첫차량ETA가 연결되며 원래 도착 후보/수신/TTL·프로필/본인/경로 전후검사 유지. 요청/응답필드/HTTP경로/권한/쿼터/캐시/DDL/AI 변경없고 새외부조회없음. frontend/src/components/FirstArrivals.jsx는 기존카드/색상/CSS로 유효안내에 앞차량 제외이유1문장 표시. 60초/탭복귀/숨김취소·기한/실패 흐름은 그대로 재사용.
+
+실제 검증: backend/tests/test_next_vehicle.py 신규8개2.210초 통과. 접근불가첫차량→다음제공차량·수신/기한/목록보존, 접근가능첫차량의below_buffer 유지, 정확W/미세부족·now 기준, 가능한후보없음 음수보존, 입력순서/동일ETA-ID 결정성, 접근누락/기한/시계오류 무전환, 선택첫ETA로환승최소시각/목적지ETA/목표차이 재계산, 격리 실제PostgreSQL/정상쿠키·CSRF ASGI 루틴GET→다음선택/목표·캐시추가호출0 확인. backend/tests/test_departure.py는 다음후보가없는음수여유테스트 이름만명확히했다. 최종전체394개167.811초 통과, 이번 실패/운영검사완화없음. frontend/tests/departure.test.js 제공다음차량 응답수락·components/FirstDeparture.test.jsx 60초후다음차량/새시각/전환이유/이전숫자제거 검증 추가, 전체231개10.63초·빌드1909모듈436ms통과.
+
+시각/서버: 합성순수계산응답을 실제readFirstDeparture 엄격클라이언트/FirstArrivals·기존CSS에 연결해PC1280×1000/모바일390×1100의 다음차량사유·새출발·여유·환승·목표·추정표기를 확인했다. 모바일body.scrollWidth=innerWidth390·줄바꿈/가로넘침없음. 임시next-preview.html/jsx/json 삭제·검증탭닫기/viewport원복. 실제사용자로그인·실경로양수추천/도착정확도/실기기보행은 미검증. 프로젝트uvicorn만확인후숨김재시작, health/프론트200·비인증루틴GET401 확인. 직접외부실키/AI0회, 이전승인 잔여9회사용없음, 새DDL없음.
+
+문서/완료: Notion v0.79의5.7.7 구현상태·기존첫차량선택정책·버전/변경이력과이유/호환영향/선행미구현을맞추고재조회저장확인. api_contract.md전체1657행 해시대조일치, unrelated F12보존. next_vehicle_api.md·departure_api.md·routine_departure_api.md·planning.md·personalization.md·logging.md·design_guide.md·screen_plan.md·todo.md·feature_breakdown.md 동기화. F07-06a만체크하고F07-06b/전체06은미완료, 다음은실제이동/수동departed 선행연결 준비. 배운개념: 현재 접근불가능한 차량 제외와 출발확인누락의 절반경과 정책은 서로다르다. 차량ETA를바꿨으면환승/목표타임라인도반드시재계산해야한다. 기한이유효한기존후보재선택은수신시각갱신이아니다. 기능브랜치 커밋·푸시, MR/병합은사용자수행. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.

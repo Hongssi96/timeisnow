@@ -92,3 +92,13 @@ it('shows destination goal margin separately from first boarding buffer',async()
 it('late arrival is labelled late and never called goal slack',async()=>{const r=withGoal('estimated_late');r.data.target_evaluation.margin_seconds=-90;getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText('목표 도착 기준 예상 1분 30초 늦음')).toBeTruthy();});
 it('unknown last walking leg cannot show destination numbers',async()=>{const r=withGoal('unknown');r.data.target_evaluation.reasons=['EGRESS_TIME_UNCONFIRMED'];getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText(/하차 후 목적지까지 도보 시간이 없어/)).toBeTruthy();expect(screen.queryByText(/예상 목적지 도착/)).toBeNull();});
 it('expiry removes old goal destination and margin numbers',async()=>{getFirstDeparture.mockResolvedValue(withGoal());await mount();getFirstDeparture.mockRejectedValue({code:'PROVIDER_TIMEOUT'});elapsed=121000;await act(async()=>{vi.advanceTimersByTime(121000);});expect(screen.queryByText(/예상 목적지 도착/)).toBeNull();expect(screen.queryByText(/목표 도착 기준 예상/)).toBeNull();expect(screen.getByText(/목표 도착 평가가 만료/)).toBeTruthy();});
+
+it('poll refresh displays the next supplied vehicle and the updated clock',async()=>{
+ await mount();
+ const r=response();r.meta.server_time=new Date(start+60000).toISOString();r.data.reasons=['NEXT_REACHABLE_VEHICLE'];
+ r.data.vehicle_arrival_at=new Date(start+1080000).toISOString();r.data.recommended_departure_at=r.data.selected_departure_at=new Date(start+480000).toISOString();
+ r.data.arrival_candidate_id='later';r.data.arrival_evidence.candidates=[{candidate_id:'early',predicted_arrival_at:new Date(start+90000).toISOString()},{candidate_id:'later',predicted_arrival_at:r.data.vehicle_arrival_at}];
+ getFirstDeparture.mockResolvedValue(r);elapsed=60000;await act(async()=>{vi.advanceTimersByTime(60000);});
+ expect(getFirstDeparture).toHaveBeenCalledTimes(2);expect(screen.queryByText('예상 출발 17:03')).toBeNull();expect(screen.getByText('예상 출발 17:08')).toBeTruthy();
+ expect(screen.getByText(/접근 시간이 부족한 앞 차량/)).toBeTruthy();
+});

@@ -24,3 +24,8 @@ function goalData(){const d=data();d.connection_status='estimated_feasible';d.tr
 it('accepts a target evaluation anchored to final alighting and egress',async()=>{mock(goalData());expect((await getFirstDeparture('s','c')).data.target_evaluation.margin_seconds).toBe(180);});
 it('rejects goal formula, classification and missing final leg contradictions',async()=>{for(const change of [{margin_seconds:300},{status:'estimated_late'},{egress_seconds:0},{estimated_destination_arrival_at:'2026-10-13T08:21:00Z'}]){const d=goalData();d.target_evaluation={...d.target_evaluation,...change};mock(d);await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});}});
 it('unknown target states cannot carry fabricated arrival or margin numbers',async()=>{const d=goalData();d.target_evaluation.status='unknown';mock(d);await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});});
+
+it('accepts the supplied later vehicle with its recomputed departure',async()=>{
+ const d=data();d.arrival_evidence.candidates.unshift({candidate_id:'early',provider_prediction_seconds:30,predicted_arrival_at:'2026-10-13T08:00:30Z'});d.reasons=['NEXT_REACHABLE_VEHICLE'];mock(d);
+ expect((await getFirstDeparture('s','c')).data.arrival_candidate_id).toBe('bus');
+});
