@@ -95,3 +95,6 @@ AI 실패 원문·키·전체 URL·본문은 출력하지 않는다. DTO/JSON Sc
 정상/실패/중복실행·검산·본인/장소/프로필/근거기한·30일유효/90일품질·삭제/청소 계약은 walking_api.md·Notion v0.54 참고. 원문/키/좌표/모델 자유문reason 비저장. 테스트는 실제DB 임시스키마·합성AI로 test_walking_history.py를 실행한다. 서버코드 반영 후 백엔드 재시작이 필요하다.
 
 동시 실행 보강: estimate_and_store는 사용자/request_id별DB 세션advisory 잠금으로 두 번째 AI 호출을 차단하고 내부409 EXECUTION_IN_PROGRESS를 반환한다. 완료한 동일 실행은 모델 재호출 없이 조회한다. 장소 수정 잠금은 모델 호출 동안 유지하지 않고 저장 전 위치 버전을 다시 검사한다.
+
+
+F07-02(2026-10-13): 본인 활성 검색 후보의 first-departure GET으로 첫 버스 예상 출발을 계산한다. 사용자 승인 공급자 접근 도보×개인 계수 추정·기본여유300초, 후보 상세 표시/60초 재평가·기한/부족 차단. 로컬DB head0012_departure_profile·기존 데이터 보존 확인. 계수의 기본1.0/0.5~2.0은 GET /auth/me의 profile에 추가된다. 루틴 자동갱신/전체환승·목표도착/실제 보행·예측 정확도 확인은 후속이다. 상세 departure_api.md·Notion v0.73.
