@@ -34,3 +34,9 @@ it('cancelled guidance cannot start again until a fresh guidance token arrives',
  await act(async()=>fireEvent.click(screen.getByText('이 이동 취소')));expect(screen.queryByText('지금 출발했어요')).toBeNull();expect(screen.getByText(/최신 출발을 다시 확인하면/)).toBeTruthy();
  view.rerender(<ManualDeparture routineId="r" departure={{guidance_id:'fresh'}} available/>);expect(screen.getByText('지금 출발했어요')).toBeTruthy();
 });
+
+it('server reported state refreshes manual recovery without creating another event',async()=>{
+ const view=await mount();activeTrip.mockResolvedValue({...trip,departure_event:{event_id:'e'}});
+ view.rerender(<ManualDeparture routineId="r" departure={{departure_state:'reported_departed',guidance_id:null}} available={false}/>);await act(async()=>{});
+ expect(screen.getByText('출발 확인을 저장했어요.')).toBeTruthy();expect(confirmDeparture).not.toHaveBeenCalled();expect(activeTrip).toHaveBeenCalledTimes(2);
+});

@@ -94,6 +94,12 @@ def normalize(mapping,values,received_at,at,search_id,candidate_id,search_expire
     return project(evidence,at)
 
 
+def vehicle_keys(mapping,values,search_id,candidate_id):
+    scope=f'{mapping.provider}:{mapping.station_id}:{mapping.route_id}:{mapping.sta_order}:{mapping.route_dest_id}:{mapping.mapping_version}'
+    return {str(uuid5(NAMESPACE_URL,f'{search_id}:{candidate_id}:{scope}:{vehicle}')):
+            str(uuid5(NAMESPACE_URL,f'private.first.vehicle:{scope}:{vehicle}')) for vehicle,_ in values or []}
+
+
 def reserve_refresh(user_id):
     with database() as connection:
         _,secret,_=security.settings()
@@ -153,7 +159,10 @@ def first_arrivals(user_id,search_id,candidate_id,*,verified_mapping=None):
     checked_mapping(mapping,new_first,now())
     if new_snapshot!=snapshot:raise AuthError(409,'VERSION_CONFLICT','경로가 변경됐어요. 다시 확인해주세요.')
     # GBIS queryTime is request time, not a verified generation timestamp.
-    return normalize(mapping,values,received,now(),search_id,candidate_id,current['expires_at'])
+    evidence=normalize(mapping,values,received,now(),search_id,candidate_id,current['expires_at'])
+    entry=cache.lookup(user_id,search_id,candidate_id,snapshot,now())
+    if entry is not None:entry.vehicle_keys=vehicle_keys(mapping,values,search_id,candidate_id)
+    return evidence
 
 
 def result(request,search_id,candidate_id):

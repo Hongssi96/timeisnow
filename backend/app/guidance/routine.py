@@ -119,31 +119,38 @@ def result(request:Request,routine_id,search_id,expected_version):
         raise AuthError(502,'PROVIDER_RESPONSE_INVALID','경로 후보를 확인할 수 없어요.')
     data={'model_version':'routine.departure.v1','routine_id':str(routine_id),'routine_version':binding.version,
         'search_id':str(search_id),'status':'searching','candidate_id':None,'departure':None,'expires_at':iso(row['expires_at'])}
-    if row['status']=='failed':
-        error=row['error'] or {};raise AuthError(503,error.get('code','PROVIDER_UNAVAILABLE'),'최신 경로를 확인하지 못했어요. 다시 확인해주세요.')
-    if row['status']=='succeeded':
-        candidates=[common_candidate(c) for c in row['candidates']]
-        matches=[c for c in candidates if signature(c)==binding.signature]
-        data['status']='no_routes' if not candidates else 'route_changed' if not matches else 'ambiguous_route' if len(matches)>1 else 'ready'
-        if data['status']=='ready':
-            candidate=matches[0];data['candidate_id']=candidate['candidate_id']
-            value=departure.first_departure(user_id,search_id,parsed_id(candidate['candidate_id']),include_connections=True,access_origin_ref=binding.place_refs[0])
-            from app.guidance import target
-            profile=departure.settings(user_id)
-            if profile['version']!=value.profile_version or (value.applied_duration_factor is not None and profile['factor']!=value.applied_duration_factor) or profile['buffer']!=value.buffer_seconds:
-                raise AuthError(409,'VERSION_CONFLICT','개인 설정이 변경됐어요.')
-            value.target_evaluation=target.evaluate(candidate,value,routine_row['target_arrival_local_time'],profile,departure.arrivals.now())
-            if departure.settings(user_id)!=profile:raise AuthError(409,'VERSION_CONFLICT','개인 설정이 변경됐어요.')
-            data['departure']=value.model_dump(mode='json')
-    checked(user_id,routine_id,search_id,expected_version)
-    latest=journeys.owned(request,str(search_id))
-    if latest['candidates']!=row['candidates'] or latest['status']!=row['status'] or latest['place_refs']!=row['place_refs']:
-        raise AuthError(409,'VERSION_CONFLICT','최신 경로가 변경됐어요.')
-    if data['departure'] is not None:
-        from app.guidance import issued
-        data['departure']['guidance_id']=issued.publish(binding,candidate,value,profile)
-        if data['departure']['guidance_id'] is not None:data['departure']['guidance_id']=str(data['departure']['guidance_id'])
-    data['expires_at']=iso(min(row['expires_at'],latest['expires_at'],binding.expires_at))
-    response=answer(request,data)
-    if data['status']=='searching':response.headers['Retry-After']='2'
-    return response
+    lease=None
+    try:
+        if row['status']=='failed':
+            error=row['error'] or {};raise AuthError(503,error.get('code','PROVIDER_UNAVAILABLE'),'최신 경로를 확인하지 못했어요. 다시 확인해주세요.')
+        if row['status']=='succeeded':
+            candidates=[common_candidate(c) for c in row['candidates']]
+            matches=[c for c in candidates if signature(c)==binding.signature]
+            data['status']='no_routes' if not candidates else 'route_changed' if not matches else 'ambiguous_route' if len(matches)>1 else 'ready'
+            if data['status']=='ready':
+                candidate=matches[0];data['candidate_id']=candidate['candidate_id']
+                from app.guidance import selection
+                lease=selection.begin(binding)
+                value=departure.first_departure(user_id,search_id,parsed_id(candidate['candidate_id']),include_connections=True,access_origin_ref=binding.place_refs[0],selector=lease.choose,reported_departure=lease.reported)
+                from app.guidance import target
+                profile=departure.settings(user_id)
+                if profile['version']!=value.profile_version or (value.applied_duration_factor is not None and profile['factor']!=value.applied_duration_factor) or profile['buffer']!=value.buffer_seconds:
+                    raise AuthError(409,'VERSION_CONFLICT','개인 설정이 변경됐어요.')
+                value.target_evaluation=target.evaluate(candidate,value,routine_row['target_arrival_local_time'],profile,departure.arrivals.now())
+                if departure.settings(user_id)!=profile:raise AuthError(409,'VERSION_CONFLICT','개인 설정이 변경됐어요.')
+                data['departure']=value.model_dump(mode='json')
+        checked(user_id,routine_id,search_id,expected_version)
+        latest=journeys.owned(request,str(search_id))
+        if latest['candidates']!=row['candidates'] or latest['status']!=row['status'] or latest['place_refs']!=row['place_refs']:
+            raise AuthError(409,'VERSION_CONFLICT','최신 경로가 변경됐어요.')
+        if data['departure'] is not None:
+            lease.commit(value)
+            from app.guidance import issued
+            data['departure']['guidance_id']=issued.publish(binding,candidate,value,profile)
+            if data['departure']['guidance_id'] is not None:data['departure']['guidance_id']=str(data['departure']['guidance_id'])
+        data['expires_at']=iso(min(row['expires_at'],latest['expires_at'],binding.expires_at))
+        response=answer(request,data)
+        if data['status']=='searching':response.headers['Retry-After']='2'
+        return response
+    finally:
+        if lease is not None:lease.close()

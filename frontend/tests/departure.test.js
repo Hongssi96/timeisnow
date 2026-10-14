@@ -29,3 +29,7 @@ it('accepts the supplied later vehicle with its recomputed departure',async()=>{
  const d=data();d.arrival_evidence.candidates.unshift({candidate_id:'early',provider_prediction_seconds:30,predicted_arrival_at:'2026-10-13T08:00:30Z'});d.reasons=['NEXT_REACHABLE_VEHICLE'];mock(d);
  expect((await getFirstDeparture('s','c')).data.arrival_candidate_id).toBe('bus');
 });
+
+it('rejects claimed departed state carrying departure numbers or an invalid state',async()=>{
+ for(const state of ['reported_departed','gps_departed']){const d=data();d.departure_state=state;mock(d);await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});}
+});

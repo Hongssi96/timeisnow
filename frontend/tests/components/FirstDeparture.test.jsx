@@ -3,6 +3,8 @@ import { afterEach,beforeEach,expect,it,vi } from 'vitest';
 import { render,screen,act,cleanup } from '@testing-library/react';
 import FirstArrivals from '../../src/components/FirstArrivals';
 import { getFirstDeparture } from '../../src/lib/departure';
+import {activeTrip,confirmDeparture} from '../../src/lib/trips';
+vi.mock('../../src/lib/trips',()=>({activeTrip:vi.fn().mockResolvedValue(null),confirmDeparture:vi.fn(),cancelTrip:vi.fn()}));
 vi.mock('../../src/lib/departure',()=>({getFirstDeparture:vi.fn()}));
 const start=Date.parse('2026-10-13T08:00:00Z');
 let elapsed;
@@ -101,4 +103,25 @@ it('poll refresh displays the next supplied vehicle and the updated clock',async
  getFirstDeparture.mockResolvedValue(r);elapsed=60000;await act(async()=>{vi.advanceTimersByTime(60000);});
  expect(getFirstDeparture).toHaveBeenCalledTimes(2);expect(screen.queryByText('예상 출발 17:03')).toBeNull();expect(screen.getByText('예상 출발 17:08')).toBeTruthy();
  expect(screen.getByText(/접근 시간이 부족한 앞 차량/)).toBeTruthy();
+});
+
+it('shows half-time unconfirmed departure switch separately from unreachable access',async()=>{
+ const r=response();r.data.reasons=['DEPARTURE_UNCONFIRMED_NEXT_VEHICLE'];getFirstDeparture.mockResolvedValue(r);await mount();
+ expect(screen.getByText(/접근 시간의 절반이 지나/)).toBeTruthy();expect(screen.getByText('예상 출발 17:03')).toBeTruthy();
+});
+it('no supplied next vehicle hides clocks and explains unconfirmed departure',async()=>{
+ const r=response();r.data.valid_for_guidance=false;r.data.status='insufficient_data';r.data.reasons=['DEPARTURE_UNCONFIRMED_NO_NEXT'];getFirstDeparture.mockResolvedValue(r);await mount();
+ expect(screen.queryByText(/예상 출발 17/)).toBeNull();expect(screen.getByText(/이용 가능한 다음 차량 정보가 없어/)).toBeTruthy();
+});
+it('reported departure hides pre-departure arrival, transfer and target numbers',async()=>{
+ const r=response();r.data.departure_state='reported_departed';r.data.valid_for_guidance=false;r.data.connection_status='estimated_feasible';r.data.transfers=[{connection_id:'one',feasibility:'estimated_feasible',minimum_boarding_at:'2026-10-13T08:24:00Z',next_boarding_at:'2026-10-13T08:25:00Z'}];getFirstDeparture.mockResolvedValue(r);await mount();
+ expect(screen.queryByText(/예상 출발 17/)).toBeNull();expect(screen.queryByText(/다음 차량 예상/)).toBeNull();expect(screen.queryByText(/수신 기준 예상/)).toBeNull();expect(screen.getByText(/출발 전 안내를 종료/)).toBeTruthy();
+});
+
+it('persisted manual departure immediately hides clocks and stops periodic departure requests',async()=>{
+ activeTrip.mockResolvedValue(null);confirmDeparture.mockResolvedValue({trip_id:'t',guidance_id:'g',routine_id:'r',status:'active',version:1,departure_event:{event_id:'e'}});
+ const r=response();r.data.guidance_id='g';getFirstDeparture.mockResolvedValue(r);const onReported=vi.fn();
+ render(<FirstArrivals includeDeparture searchId="search" candidateId="candidate" routineId="r" onReported={onReported}/>);await act(async()=>{});
+ await act(async()=>{screen.getByText('지금 출발했어요').click();});expect(screen.queryByText('예상 출발 17:03')).toBeNull();expect(onReported).toHaveBeenCalledTimes(1);
+ elapsed=300000;await act(async()=>{vi.advanceTimersByTime(300000);});expect(getFirstDeparture).toHaveBeenCalledTimes(1);expect(screen.getByText(/출발 전 안내를 종료/)).toBeTruthy();
 });

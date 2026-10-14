@@ -20,6 +20,13 @@ def same_guidance(c,owner,gid):
 def active(c,owner):
     return c.execute("SELECT id FROM manual_trips WHERE user_id=%s AND status='active' AND expires_at>clock_timestamp()",(owner,)).fetchone()
 
+def selection_observation(c,owner,routine_id):
+    return c.execute('''SELECT t.id,t.version,g.snapshot,e.id AS event_id,e.version AS event_version,
+      e.source,e.type,e.excluded FROM manual_trips t JOIN guidance_snapshots g ON g.id=t.guidance_id
+      LEFT JOIN manual_trip_events e ON e.trip_id=t.id
+      WHERE t.user_id=%s AND g.routine_id=%s AND t.status='active'
+      AND t.expires_at>clock_timestamp() AND g.expires_at>clock_timestamp()''',(owner,routine_id)).fetchone()
+
 def source(c,owner,binding,search_id):
     row=c.execute('''SELECT r.version AS routine_version,r.status AS routine_status,r.journey_plan_id,
       r.origin_place_id,r.destination_place_id,p.candidate AS plan_candidate,s.candidates,s.place_refs,

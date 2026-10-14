@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState,useRef } from 'react';
 import { Clock3 } from 'lucide-react';
 import { getFirstArrivals } from '../lib/arrivals';
 import { getFirstDeparture } from '../lib/departure';
@@ -24,21 +24,28 @@ const mappingMessage=evidence=>Array.isArray(evidence?.reasons)?evidence.reasons
 const walkFailure=departure=>departure?.reasons?.includes('ACCESS_WALK_MAPPING_REQUIRED')?'접근 도보를 조회할 승차 정류소가 아직 확인되지 않았어요.':departure?.reasons?.includes('ACCESS_WALK_TIMEOUT')?'승차 정류소까지 도보 조회가 늦어 출발 시각을 계산하지 못했어요.':departure?.reasons?.includes('ACCESS_WALK_UNAVAILABLE')?'승차 정류소까지 도보 경로를 얻지 못해 출발 시각을 계산할 수 없어요.':departure?.reasons?.includes('ACCESS_WALK_TIME_LIMIT')?'조회 시간이 부족해 접근 도보를 확인하지 못했어요. 다시 확인해주세요.':null;
 const empty = { mapping_required:'이 경로의 버스 정류소와 방향을 아직 확인하지 못했어요.', unsupported:'이 첫 탑승 수단의 도착 조회는 아직 지원하지 않아요.', no_arrivals:'현재 제공된 도착 후보가 없어요.', insufficient_data:'현재 도착 시간을 추정할 근거가 부족해요.', expired:'도착 정보가 만료됐어요. 이전 예상 시간은 사용하지 않아요.' };
 
-export default function FirstArrivals({ searchId, candidateId, includeDeparture=false, loader=null, initialResponse=null, routineId=null }) {
+export default function FirstArrivals({ searchId, candidateId, includeDeparture=false, loader=null, initialResponse=null, routineId=null,onReported=null,onCancelled=null }) {
   const [state, setState] = useState({ phase:'loading' });
   const [tick, setTick] = useState(0);
+  const [localReported,setLocalReported]=useState(false),reportRef=useRef(false);
+  function markReported(){reportRef.current=true;setLocalReported(true);onReported?.();}
   useEffect(() => {
     let disposed=false, controller=null, sequence=0, busy=false, terminal=false;
+    reportRef.current=initialResponse?.data?.departure_state==='reported_departed';setLocalReported(reportRef.current);
+    if(reportRef.current)onReported?.();
     if(initialResponse) setState({phase:'ready', evidence:initialResponse.data.arrival_evidence, departure:initialResponse.data, serverAt:Date.parse(initialResponse.meta.server_time), sampledAt:performance.now()});
     else setState({ phase:'loading' });
     async function load() {
-      if (disposed || busy || terminal || document.hidden) return;
+      if (disposed || busy || terminal || document.hidden || reportRef.current) return;
       busy=true;controller=new AbortController();const seq=++sequence;
       try {
         const response=await (loader || (includeDeparture?getFirstDeparture:getFirstArrivals))(searchId,candidateId,controller.signal);
-        if (!disposed && seq===sequence) setState({ phase:'ready', evidence:includeDeparture?response.data.arrival_evidence:response.data, departure:includeDeparture?response.data:null, serverAt:Date.parse(response.meta.server_time), sampledAt:performance.now() });
+        if (!disposed && seq===sequence && !reportRef.current) {
+          setState({ phase:'ready', evidence:includeDeparture?response.data.arrival_evidence:response.data, departure:includeDeparture?response.data:null, serverAt:Date.parse(response.meta.server_time), sampledAt:performance.now() });
+          if(response.data.departure_state==='reported_departed')markReported();
+        }
       } catch (error) {
-        if (!disposed && seq===sequence && error.name!=='AbortError') {
+        if (!disposed && seq===sequence && !reportRef.current && error.name!=='AbortError') {
           terminal=Boolean(loader)||['AUTH_REQUIRED','SESSION_EXPIRED','RESOURCE_NOT_FOUND','VERSION_CONFLICT','INVALID_RESPONSE'].includes(error.code);
           setState(old=>terminal ? {phase:'blocked',error:error.code} : {...old,phase:old.evidence?'ready':'error',error:true});
         }
@@ -51,9 +58,11 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
     if(!initialResponse)load();const polling=setInterval(load,60000);const clock=setInterval(()=>setTick(t=>t+1),1000);
     document.addEventListener('visibilitychange',visibility);
     return ()=>{disposed=true;sequence++;controller?.abort();clearInterval(polling);clearInterval(clock);document.removeEventListener('visibilitychange',visibility);};
-  }, [searchId,candidateId,includeDeparture,loader,initialResponse]);
+  }, [searchId,candidateId,includeDeparture,loader,initialResponse,onReported]);
   const d=state.evidence;
   const departure=state.departure;
+  const reported=localReported||departure?.departure_state==='reported_departed';
+  const selectionFailure=departure?.reasons?.includes('DEPARTURE_UNCONFIRMED_NO_NEXT')?'출발 확인이 저장되지 않았고, 이용 가능한 다음 차량 정보가 없어 새 출발 시각을 안내할 수 없어요.':departure?.reasons?.includes('SELECTION_IDENTITY_UNCONFIRMED')?'안내한 차량을 대조할 근거가 부족해요. 최신 경로를 다시 확인해주세요.':departure?.reasons?.includes('SELECTION_HISTORY_LIMIT')?'현재 근거로 다음 차량을 계속 선택할 수 없어요. 잠시 후 다시 확인해주세요.':null;
   const now=d ? state.serverAt+Math.max(0,performance.now()-state.sampledAt) : 0;
   const expired=d && now>Date.parse(d.expires_at);
   const candidates=d?.valid_for_guidance && !expired ? d.candidates.filter(c=>c.predicted_arrival_at && Date.parse(c.predicted_arrival_at)>now) : [];
@@ -72,9 +81,11 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
     {state.phase==='loading' && <p role="status">도착 정보를 확인하고 있어요.</p>}
     {state.phase==='blocked' && <p role="alert">{['AUTH_REQUIRED','SESSION_EXPIRED'].includes(state.error)?'로그인 후 다시 확인해주세요.':'경로를 다시 검색해 도착 정보를 확인해주세요.'}</p>}
     {state.error && state.phase!=='blocked' && <p role="alert">도착 정보를 다시 조회하지 못했어요. 이전 정보의 유효시간은 늘리지 않아요.</p>}
-    {d && <>
+    {reported&&<p role="status">출발 확인이 저장되어 출발 전 안내를 종료했어요. 이동 중 도착 안내는 아직 준비 중이에요.</p>}
+    {d && !reported && <>
       {includeDeparture && <>
         {departureReady ? <>
+          {departure.reasons?.includes('DEPARTURE_UNCONFIRMED_NEXT_VEHICLE')&&<p>출발 확인 없이 권장 시각에서 접근 시간의 절반이 지나, 다음 차량 기준으로 다시 계산했어요.</p>}
           {departure.reasons?.includes('NEXT_REACHABLE_VEHICLE')&&<p>접근 시간이 부족한 앞 차량을 제외하고 다음 차량 기준으로 계산했어요.</p>}
           <p><strong>예상 출발 {departureDay}{departureTime}</strong></p>
           <p><strong>{secondsToDeparture>=60?`${Math.ceil(secondsToDeparture/60)}분 뒤 예상 출발`:secondsToDeparture>0?'1분 이내 예상 출발':'지금 출발 기준으로 다시 확인해주세요.'}</strong></p>
@@ -83,7 +94,7 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
           <p className="candidate-note">{departure.provider_approach_source==='boarding_walk'?'확인된 버스 정류소까지 별도로 조회한 공급자 도보에':'공급자 접근 도보에'} 개인 계수 {departure.applied_duration_factor}를 적용한 추정이에요.</p>
           {now>Date.parse(departure.recommended_departure_at) && <p>권장 출발 시각이 지났어요. 설정 여유를 확보할 수 있는지 다시 확인해주세요.</p>}
           {displaySlack<departure.buffer_seconds && <p>지금 출발 기준 예상 여유가 설정한 여유보다 적어요.</p>}
-        </> : <p role="status">{expired||now>Date.parse(departure?.valid_until)?'출발 정보가 만료됐어요. 이전 출발 시각은 사용하지 않아요.':departure?.status==='not_enough_time'||(departure?.valid_for_guidance&&!departureReachable)?'이 차량에 맞춰 출발하기에는 접근 시간이 부족해요.':walkFailure(departure)|| (departure?.reasons?.includes('ACCESS_TIME_UNCONFIRMED')?'출발지에서 승차 지점까지 도보 시간이 제공되지 않아 출발 시각을 계산할 수 없어요.':'출발 시각을 계산할 접근 시간 또는 도착 근거가 부족해요.')}</p>}
+        </> : <p role="status">{expired||now>Date.parse(departure?.valid_until)?'출발 정보가 만료됐어요. 이전 출발 시각은 사용하지 않아요.':departure?.status==='not_enough_time'||(departure?.valid_for_guidance&&!departureReachable)?'이 차량에 맞춰 출발하기에는 접근 시간이 부족해요.':selectionFailure||walkFailure(departure)|| (departure?.reasons?.includes('ACCESS_TIME_UNCONFIRMED')?'출발지에서 승차 지점까지 도보 시간이 제공되지 않아 출발 시각을 계산할 수 없어요.':'출발 시각을 계산할 접근 시간 또는 도착 근거가 부족해요.')}</p>}
       </>}
       {includeDeparture&&departure?.connection_status&&<>
         {expired||now>Date.parse(departure.valid_until)?<p>환승 정보가 만료됐어요. 이전 연결 시각은 사용하지 않아요.</p>:<>
@@ -114,6 +125,6 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
         {!includeDeparture&&<p>개인 접근 시간을 반영한 출발 시각은 아직 계산하지 않아요.</p>}
       </> : <p role="status">{expired?empty.expired:(d.status==='mapping_required'&&mappingMessage(d)) || empty[d.status] || '이전 도착 예상이 지났어요. 새 정보를 확인해주세요.'}</p>}
     </>}
-    {routineId&&<ManualDeparture routineId={routineId} departure={departure} available={Boolean(departureReady)}/>}
+    {routineId&&<ManualDeparture routineId={routineId} departure={departure} available={Boolean(departureReady&&!reported)} onReported={markReported} onCancelled={onCancelled}/>}
   </section>;
 }
