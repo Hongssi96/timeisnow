@@ -16,6 +16,15 @@ OPERATIONS={
  'stops':('busrouteservice','getBusRouteStationListv2','busRouteStationList'),
  'info':('busrouteservice','getBusRouteInfoItemv2','busRouteInfoItem')}
 
+PUBLIC_FAILURE_REASONS=frozenset({
+    'STATION_CANDIDATES_UNCONFIRMED','NO_ROUTE_AT_BOARDING_STOP','ROUTE_CANDIDATE_LIMIT',
+    'VISIT_CANDIDATE_LIMIT','ROUTE_SEQUENCE_UNCONFIRMED','ROUTE_MATCH_AMBIGUOUS',
+    'ROUTE_INFO_UNCONFIRMED','TURNAROUND_UNCONFIRMED','DIRECTION_MATCH_AMBIGUOUS'})
+
+def safe_failure_reason(diagnostics):
+    reason=diagnostics.get('reason')
+    return reason if isinstance(reason,str) and reason in PUBLIC_FAILURE_REASONS else None
+
 def timeout(): raise AuthError(504,'PROVIDER_TIMEOUT','교통 정보 응답이 늦어요.')
 
 def query(kind,params,deadline):
