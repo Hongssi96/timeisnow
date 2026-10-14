@@ -201,3 +201,8 @@ Notion v0.71. 사용자 01b 완료 요청에 따라 앞서 제시한 같은 공�
 ## 2026-10-14 — 출발 부족 사유·F07-05
 
 기존v2 reasons에 고정 매핑실패코드만 추가한다. 프로세스근거없음/복수노선/정류소/경유노선/정차순서/방향 미확인을 구분하며 raw diagnostics·ID/좌표/개수/키는 비노출. mapper의 기존한조회에서사유를수집, 호출수/30m/방향/TTL/캐시/상태 정책변경없음. Notion v0.76의5.7.4.
+
+
+## 2026-10-14 — F07-02a-2 누락 접근 도보 보완
+
+성공경기매핑은공식stationId/staOrder행의승차좌표를별도비공개endpoint sink로 Entry에전달한다. 공개Mapping/diagnostics/DB·로그에좌표미포함, 매핑identity/후보fingerprint/TTL로연결한다. 기존도착v2/매핑30m/방향·기한변경없음. 접근도보조회까지외부상한22회/전체20초는access_walk_api.md.

@@ -6,7 +6,7 @@ from dotenv import dotenv_values
 from app.common.database import ROOT
 from app.common.http import NoRedirect
 from app.common.errors import AuthError
-from app.arrivals import provider
+from app.arrivals import provider,cache
 from app.arrivals.dto import Mapping
 from app.arrivals.matching import boarding_candidates,station_route_scopes,match_route,scoped_matches,direction_candidate,diagnose_match
 
@@ -55,10 +55,11 @@ def query(kind,params,deadline):
     except OSError: raise AuthError(503,'PROVIDER_UNAVAILABLE','교통 정보에 연결할 수 없어요.') from None
     except (ValueError,TypeError,KeyError,AttributeError,UnicodeError,RecursionError): provider.invalid()
 
-def resolve(context,expires_at,*,diagnostics=None,deadline=None):
+def resolve(context,expires_at,*,diagnostics=None,deadline=None,boarding_endpoint=None):
     def record(**values):
         if diagnostics is not None:diagnostics.update(values)
     if diagnostics is not None:diagnostics.clear()
+    if boarding_endpoint is not None:boarding_endpoint.clear()
     record(stage='station_search',reason='MAPPING_PENDING')
     deadline=min(time.monotonic()+5,deadline) if deadline is not None else time.monotonic()+5
     stops=context['stops'];points=context['points']
@@ -107,6 +108,10 @@ def resolve(context,expires_at,*,diagnostics=None,deadline=None):
     if at>=expires_at:
         record(reason='SEARCH_EXPIRED');return None
     record(stage='complete',reason='MAPPING_CONFIRMED')
-    return Mapping(provider='gyeonggi-bus',first_leg_id=UUID(context['first_leg_id']),station_id=match['board_station_id'],
+    value=Mapping(provider='gyeonggi-bus',first_leg_id=UUID(context['first_leg_id']),station_id=match['board_station_id'],
                    route_id=match['route_id'],sta_order=match['board_order'],route_dest_id=direction['route_dest_id'],
                    mapping_version='gbis.station-scope.v2.30m.ordered',verified_at=at,valid_until=expires_at)
+    if boarding_endpoint is not None:
+        row=next(row for row in dict(routes)[rid] if str(row['stationId'])==value.station_id and int(row['stationSeq'])==value.sta_order)
+        boarding_endpoint.update(point=(float(row['x']),float(row['y'])),mapping_identity=cache.mapping_identity(value))
+    return value
