@@ -20,6 +20,7 @@ from app.walking.router import router as walking_router
 from app.arrivals.router import router as arrivals_router
 from app.guidance.router import router as guidance_router
 from app.trips.router import router as trips_router
+from app.meetings.router import router as meetings_router
 
 app = FastAPI(title="지금이니? API", version="0.1.0")
 app.include_router(auth_router)
@@ -31,6 +32,7 @@ app.include_router(walking_router)
 app.include_router(arrivals_router)
 app.include_router(guidance_router)
 app.include_router(trips_router)
+app.include_router(meetings_router)
 
 
 def error_response(request, status, code, message, details=None, headers=None):
@@ -45,7 +47,7 @@ def error_response(request, status, code, message, details=None, headers=None):
 
 @app.exception_handler(AuthError)
 async def auth_error(request: Request, exception: AuthError):
-    return error_response(request, exception.status, exception.code, exception.message,
+    return error_response(request, exception.status, exception.code, exception.message, exception.details,
                           headers={'Cache-Control': 'no-store', **(exception.headers or {})})
 
 
@@ -63,7 +65,7 @@ async def request_identity(request: Request, call_next):
     response.headers["X-Request-ID"] = request.state.request_id
     if (request.url.path.startswith('/api/v1/auth/') or request.url.path == '/api/v1/me'
             or request.url.path in ('/api/v1/place-searches', '/api/v1/map-config', '/api/v1/place-location-confirmations', '/api/v1/origin-validations')
-            or request.url.path.startswith(('/api/v1/places', '/api/v1/journey-searches', '/api/v1/jobs', '/api/v1/routines', '/api/v1/trips'))):
+            or request.url.path.startswith(('/api/v1/places', '/api/v1/journey-searches', '/api/v1/jobs', '/api/v1/routines', '/api/v1/trips', '/api/v1/meetings', '/api/v1/meeting-invite'))):
         response.headers['Cache-Control'] = 'no-store'
     record_request(request, response.status_code, started_at, unexpected)
     return response

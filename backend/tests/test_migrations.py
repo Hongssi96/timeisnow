@@ -62,11 +62,12 @@ class MigrationTest(unittest.TestCase):
                     command.upgrade(config, 'head')
                     self.assertEqual(connection.execute(text(
                         "SELECT version_num FROM alembic_version")).scalars().all(),
-                        ["0013_manual_trips"])
+                        ["0014_integrated_features"])
                     self.assertEqual(sorted(inspect(connection).get_table_names(schema=schema)),
                                      ['ai_executions', 'alembic_version', 'auth_credentials', 'auth_rate_limit_buckets',
-                                      'auth_sessions', 'guidance_snapshots', 'journey_plans', 'journey_search_keys', 'journey_searches',
+                                      'auth_sessions', 'guidance_snapshots', 'jobs', 'journey_plans', 'journey_search_keys', 'journey_searches',
                                       'manual_trip_creation_keys', 'manual_trip_events', 'manual_trips',
+                                      'meeting_idempotency_keys', 'meeting_invites', 'meeting_members', 'meeting_revisions', 'meetings',
                                       'place_creation_keys', 'place_location_confirmations', 'place_searches',
                                       'routine_creation_keys', 'routines', 'saved_places', 'user_profiles', 'users',
                                       'walking_estimate_revisions', 'walking_estimates', 'walking_paths'])

@@ -1521,3 +1521,44 @@ Git: 최신 origin/main2460bd7에서 codex/moving-remaining-guidance 생성 후 
 최종 검증/서버: 전체 백엔드430개242.547초 재실행 통과(운영 시간제한 변경 없음). 프론트 최종 관련33개4.43초/빌드1913모듈521ms 재통과. 개발 서버 숨김 재시작·backend health200/frontend200·비인증 remaining GET401·OpenAPI 신규2경로/stage 상수 확인. Notion v0.82 구현 상태/전체F07-07 미완료 범위/새 API 목록/호환성·변경이력/검증 저장 및 재조회 확인. 로컬 api_contract.md 동기화·F12 보존, 추가 외부 승인 잔여9회 미사용.
 
 게시 전 확인: 최신 origin/main2460bd7 유지, Notion v0.82 재조회 변경없음/로컬미러 1706행 해시일치, git diff --check 통과·임시 프리뷰 없음. codex/moving-remaining-guidance 기능 브랜치에 커밋·푸시하며 MR/병합은 사용자 수행.
+
+## 2026-10-14 — F12 일회성 약속 코어 REST·초대
+
+목표/이유: 사용자 지시로 F07-02a 이후 작업을 F12(일회성 약속)부터 진행하고 C:\Users\태휘\Desktop\day2-json-api-practice\middle-meeting\홍태휘\product의 완성 서비스("절반" — 방·정적 지하철 추천·채팅 컨텍스트·AI 해설)를 참고해 속도를 올리기로 했다. product는 F13 추천·F14 채팅 단계에서 본격 참조하고, F12 코어는 확정된 계약(meeting_api.md·Notion 16절)이 이미 상세하므로 계약을 그대로 구현했다. 사용자가 직접 F07-02a-1/-2를 구현·검증 완료(codex/departure-guidance-clarity·Notion v0.77)해 착수 순서를 F12로 조정했고, 표시 명확성 미커밋 파일은 해당 브랜치에 WIP 커밋(fd1d8d1)으로 보존했다. 작업 트리 공유 충돌을 피하려 git worktree(C:\projects\timeisnow-f12)에서 codex/meeting-core(최신 main2460bd7)로 진행했다.
+
+구현 파일: backend/migrations/versions/0013_meeting_core.py(meetings·meeting_members·meeting_revisions·meeting_invites·meeting_idempotency_keys·jobs), backend/app/meetings/{__init__,dto,repository,service,router}.py, backend/app/main.py(라우터·no-store 경로), backend/app/common/errors.py(AuthError details), backend/app/journeys/service.py(/jobs가 약속 삭제 작업 폴백 조회), backend/tests/test_meetings.py 신규15개·test_migrations.py 갱신. 약속 생성은 Idempotency-Key 필수(meeting_idempotency_keys, 같은 본문 재현·다른 본문 409 IDEMPOTENCY_CONFLICT), 확정은 직접 목적지(name 1~100자·위도 -90~90·경도 -180~180·provider/place_ref null만·Asia/Seoul·미래 시각)로 revision_no 순차 저장, 상태 전이는 draft→completed를 409 MEETING_NOT_CONFIRMED로 차단, 삭제는 202 job(succeeded 동기 완료)과 즉시 CASCADE 차단. 초대는 token_urlsafe(32) 원문 응답·sha256 해시만 저장·24시간·활성 1개(재발급 시 기존 철회)·발급/철회마다 약속 버전 증가, 미리보기는 사용자당 10회/분, 수락은 약속 행 잠금 하 원자적 잔여 인원·토큰 소비·재수락 200/재활성(탈퇴 후 새 초대)·만석 409 MEETING_FULL, 탈퇴는 주최자 409 ORGANIZER_CANNOT_LEAVE·member 버전 검사.
+
+실제 검증: test_meetings.py 신규15개 통과(생성 멱등·목록 커서/필터 재사용 422·확정 검증/과거 시각/타임존/좌표 경계·전이 규칙·초대 만석/재발급 철회/만료 404/멱등 409·수락 경쟁 만석 재현 fixture·재활성·탈퇴·삭제 job 조회·401/403/404/409/422). 전체 백엔드 358개 132.6초 통과. 프론트 변경 없음. 이번 실제 외부 키/AI 호출 0회.
+
+디버그 기록: 초안 테스트에서 404/503이 났는데 원인은 테스트 헬퍼가 쿼리스트링을 path에 붙인 것(? 포함 경로는 ASGI scope.path에 그대로 들어가 라우트 미매칭)과 repository insert_invite의 SQL 자리표시자 5개/값 4개 불일치였다. 후자는 발급 응답에 token 해시 대신 원문이 들어가려던 실수로 수정했다. 비참여자 PATCH 403 기대도 비참여자는 404가 올바른 계약 동작이라 테스트에서 먼저 참여시키도록 고쳤다. DATABASE_ERROR 추적을 위해 database.py에 임시 traceback print를 넣었다가 되돌렸다.
+
+문서/상태: Notion v0.78로 갱신(16절 상태·일부 구현, 3절 /jobs 설명, 4절 구현 상태, 직접 목적지 F12 검증 규칙, 초대 응답 캐시 미구현/409 동작, 변경 이력) 후 재조회해 저장 확인. api_contract.md를 v0.78 본문으로 전체 재생성(BOM 없음). meeting_api.md v0.3·database_schema.md 구현 상태·todo.md·feature_breakdown.md 동기화. product 포팅은 F13/F14에서 진행 예정이며 이번에는 참고만 했다. 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+남음: F12의 혼자 가는 일정·루틴 없는 개인별 출발 안내 연결, 초대 응답 캐시(암호화), 추천 기반 확정(F13)·개인 출발지·출발 안내·공유(F15)·채팅/WS(F14), 프론트 약속 화면. 다음은 사용자와 F13/F14 순서를 확인 후 진행한다. 기능 브랜치 커밋·푸시 후 MR/병합은 사용자가 수행한다.
+
+배운개념: 버전 잠금이 있는 공동 자원은 상태 전이·멤버 변동·초대 발급까지 모두 약속 버전을 올려야 상대 화면이 변화를 감지한다. 멱등 재현을 할 수 없는 생성 응답(토큰 등)은 같은 키 재요청에 409로 명확히 응답하고 재시도 경로를 계약에 남기는 것이 조용한 중복 생성보다 낫다. 여러 테이블을 건드리는 수락/탈퇴는 고유 제약과 행 잠금 위에서 원자적으로 처리해야 동시 요청에 만석이 지켜진다.
+
+## 2026-10-14 — F12 meetings 객체지향 리팩터링(ABC 포트 + 의존성 주입)
+
+목표/이유: 사용자 요청으로 F12에서 새로 나눠진 meetings 부분을 python abc 추상 클래스·상속·의존성 주입 구조로 바꿨다. 계약 변경은 없다.
+
+구조: app/common/ports.py에 협업 포트 4종(Clock·Database·Identity·TokenIssuer)과 기본 어댑터(UtcClock·PostgresDatabase·SessionIdentity·UrlSafeTokenIssuer)를 뒀다. app/meetings/repository.py는 MeetingRepository(ABC, 34개 추상 메서드)와 PostgresMeetingRepository 구현체로 나눴고 psycopg Jsonb 변환은 어댑터가 맡아 서비스는 일반 dict를 넘긴다. app/meetings/service.py는 모듈 함수들에서 MeetingService 클래스로 바꿨고 협업 객체 5개(repository·database·identity·clock·tokens)를 생성자로 주입받는다. 순수 계산(커서 코딩·버전 검사·응답 조립)은 모듈 수준 함수로 유지했다. app/meetings/wiring.py가 조립 지점이며 build_meeting_service()는 인자로 협업 객체 교체를 허용하고 get_meeting_service()가 FastAPI Depends로 쓰인다. 라우터는 service 모듈 참조 대신 Depends(get_meeting_service)로 받는다. journeys/service.py의 /jobs 폴백은 build_meeting_service().job_result로 호출을 고쳤다.
+
+이유: F13(중간 만남 추천)·F14(채팅)가 같은 meeting 테이블과 인증·멱등·락 관심사를 재사용할 예정이라 저장소·인증·시계·토큰 발급을 교체 가능한 포트로 분리해두면 나중 구현과 테스트가 DB 없이 규칙만 검증할 수 있다. product 포팅 때도 이 경계를 그대로 쓴다.
+
+실제 검증: tests/test_meetings_di.py 신규 7개(포트 인스턴스화 불가·Postgres 어댑터가 포트 충족·오래된 버전 409·종료 약속 변경 거부·draft 완료 전이 차단·주최자 탈퇴 차단+쓰기 락 선점 확인·쓰기 경로 CSRF 인증 거치는지 확인) — 메모리 저장소·고정 시계·가짜 인증을 주입해 DB·HTTP 없이 실행. 기존 test_meetings.py 15개(실제 ASGI+PostgreSQL)도 통과해 두 경로가 같은 규칙을 확인한다. 전체 백엔드 365개 137초 통과. 참고: 전체 실행 1회에서 test_connected_arrival_probe 1건 실패가 나왔으나 재실행 2회·단독 3회 모두 통과해 일시적 플레이키로 판단, 이번 변경과 무관한 파일이다.
+
+명세 영향: 없음. 내부 구조 변경으로 요청·응답·오류 코드는 그대로다(AGENTS.md 3절에 따라 Notion 미수정). 문서 갱신도 이 일지뿐이다.
+
+배운개념: 추상 포트는 '무엇이 필요한가'를 계약으로 남기고 어댑터는 '어떻게'를 담는다. 트랜잭션 연결도 Database 포트로 감싸면 서비스 테스트에서 실제 DB를 요구하지 않게 된다. 다만 외부 시간(now())을 SQL에 남겨두는 쿼리는 어댑터 내부에 유지했는데, 저장소별 시계 통일은 F13에서 다시 검토한다.
+
+
+## 2026-10-14 — 미병합 브랜치 main 통합
+
+사용자가 모든 브랜치를 확인해 미병합 커밋을 main에 합치도록 명시 요청했다. 이번 요청이 기존 기능별 사용자 MR/병합 규칙보다 우선하므로 MR 없이 직접 main 반영한다. 최신 main772885f에는 moving-remaining-guidance까지 이미 병합되어 있었다. 로컬/원격 전체 브랜치를 git cherry 패치 동등성으로 대조해 실제 미반영은 meeting-core 2cc3d3f/8420f17과 journey-method-priority-main 5126e5e만 확인했다. 과거 출발/루틴/도보 브랜치는 SHA가 달라도 패치가 이미 반영되어 중복 적용하지 않는다. 다른 담당 worktree는 읽기만 확인(깨끗함)했고 변경/메시지 전송 없음.
+
+최신main 기반 codex/integrate-unmerged-branches에서 meeting-core merge. API/서버 라우터·마이그레이션 테스트/개발일지/TODO 충돌은 두 기능을 보존하여 해결하고 최신 Notion v0.82의 로컬 API 미러는 유지했다. trips와meetings 등록/no-store 모두 유지, 공통 AuthError.details를 전달해 약속 오래된 버전의 current_version을 보존한다. 최초 관련23개17.028초 실행의3개 오류는 충돌 해결 중 details 전달을 빠뜨린 것이며 수정 후23개17.172초 통과. 기존 정책/입력/오류계약을 변경하지 않은 통합 수정이다.
+
+0013_manual_trips와0013_meeting_core는 둘다0012 부모를 가진 독립 migration이다. 기존 revision ID/부모를 다시 쓰지 않고 no-op0014_integrated_features merge revision으로 연결해 어느 기존 설치도 누락된 부모를 적용한 후 단일 head로 올라가게 했다. test_migrations는 두 도메인 테이블의 합집합과 통합 head·기존 데이터·반복 upgrade/downgrade를 검증한다. 개발DB 사전 head0013_manual_trips·회원21/장소35/루틴12/이동0/안내스냅샷0 확인. 적용/최종전체 검증은 후속기록에 남긴다.
+
+Notion 최신 읽기 최초 시도는 도구 오류로 응답을 받지 못했고 동일 페이지 URL 재시도는 v0.82 구현 상태 조회 성공. 관련 F12 계약과 기존 로컬 기획/meeting_api/기능TODO·기록/DB설계를 비교했다. 신규 API/계산/보관 변경 없음, F12 코어 계약을 기존 명세대로 통합하는 것이므로 Notion 계약 수정 없음. 프론트 UI 변경 없음. 명세 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.

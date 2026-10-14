@@ -1,7 +1,8 @@
 # 지금이니? — 친구 약속·채팅 상세 API 초안
 
-- 문서 버전: 0.2 / 2026-10-06 / 대응 Notion API 버전: 0.26
-- 상태: **상세 설계 초안, 전체 미구현**. 요청/응답 예시는 합성 데이터다.
+- 문서 버전: 0.3 / 2026-10-14 / 대응 Notion API 버전: 0.78
+- 상태: **상세 설계, 일부 구현**. 요청/응답 예시는 합성 데이터다.
+- F12 코어 구현·검증 완료(2026-10-14, migration 0013): POST/GET /meetings, GET/PATCH/DELETE /meetings/{meeting_id}, POST /meetings/{meeting_id}/confirmations(직접 목적지만), POST /meetings/{meeting_id}/transitions, POST/DELETE /meetings/{meeting_id}/invites(/{invite_id}), POST /meeting-invite-previews, POST /meeting-invite-acceptances, DELETE /meetings/{meeting_id}/members/me. 직접 목적지는 name 1~100자·위도 -90~90·경도 -180~180이고 provider/place_ref는 null만 허용하며, timezone은 Asia/Seoul만 받는다. 초대 응답 캐시는 미구현이라 같은 키 재요청은 409 INVITE_RESPONSE_EXPIRED다. 추천 기반 확정, 개인 출발지, 출발 안내, 공유, 채팅, WebSocket은 미구현이다.
 - 기존 공통 계약과 함께 사용한다. 사용자 위임으로 D03~D05 수치/보관/공유 정책을 확정했다. [policy_decisions.md](./policy_decisions.md)와 Notion20절을 따른다. 구현 완료와 구분한다.
 - 범위: 약속 생성·초대·중간 만남 추천·확정·개인 출발 안내·채팅·출발 공유·재접속.
 - 친구 목록/친구 요청, 공개 신뢰 점수, 파일 채팅, 읽음 표시, 상시 위치 추적은 포함하지 않는다.

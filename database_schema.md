@@ -149,6 +149,8 @@ reset 시 generation 증가 및 기본 계수 기록. reset 이전에 측정한 
 
 아래는 후속 설계 제안이다. 루틴 기반 API에 meeting_id를 바로 추가하는 변경이 아니다.
 
+구현 상태(2026-10-14): meetings·meeting_members·meeting_revisions·meeting_invites는 migration 0013으로 생성됐다. 멱등 처리는 meeting_idempotency_keys(user_id, scope, idempotency_key, body_hash, meeting_id NULL 허용, expires_at)로, 비동기 작업은 jobs(id, user_id, type='meeting_delete', status, error, result_ref, finished_at, expires_at)로 별도 두었다. meeting_recommendations·meeting_messages·meeting_journeys·meeting_share_events·realtime 계열은 아직 생성 전이다.
+
 ```mermaid
 erDiagram
     users ||--o{ meeting_members : participates
