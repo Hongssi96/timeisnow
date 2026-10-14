@@ -50,3 +50,7 @@ it.each(['toString','constructor','__proto__'])('safely ignores inherited proper
   render(<WalkingGuidance phase="error" errorCode={errorCode}/>);
   expect(screen.getByText('도보 정보를 확인하지 못했어요. 경로를 다시 확인해주세요.')).toBeTruthy();
 });
+
+it('separates verified personal walking from approved provider departure estimation',()=>{
+ render(<WalkingGuidance source="routine" route={{type:'BUS'}}/>);expect(screen.queryByText(/실제 출발 시간 안내는 준비 중/)).toBeNull();expect(screen.getByText(/접근 도보 시간에 개인 계수/)).toBeTruthy();
+});

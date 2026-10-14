@@ -23,7 +23,7 @@ it('never fabricates numbers for missing approach evidence',async()=>{
   const r=response();r.data.status='insufficient_data';r.data.valid_for_guidance=false;getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.queryByText(/예상 출발 17/)).toBeNull();expect(screen.getByText(/접근 시간 또는 도착 근거/)).toBeTruthy();
 });
 it('warns when an already passed recommendation cannot assure the configured buffer',async()=>{
-  const r=response();r.data.recommended_departure_at=new Date(start-10000).toISOString();r.data.selected_departure_at=new Date(start).toISOString();r.data.slack_status='below_buffer';getFirstDeparture.mockResolvedValue(r);
+  const r=response();r.data.recommended_departure_at=new Date(start-10000).toISOString();r.data.selected_departure_at=new Date(start).toISOString();r.data.slack_status='below_buffer';r.data.vehicle_arrival_at=new Date(start+480000).toISOString();r.data.arrival_evidence.candidates[0].predicted_arrival_at=r.data.vehicle_arrival_at;getFirstDeparture.mockResolvedValue(r);
   await mount();expect(screen.getByText(/권장 출발 시각이 지났/)).toBeTruthy();expect(screen.getByText(/설정한 여유보다 적/)).toBeTruthy();
 });
 it('removes earlier recommendation when reaching the vehicle becomes impossible',async()=>{
@@ -57,4 +57,25 @@ it('routine loader failure removes unexpired numbers and requires an explicit fr
  expect(screen.getByText('예상 출발 17:03')).toBeTruthy();expect(loader).not.toHaveBeenCalled();
  elapsed=60000;await act(async()=>{vi.advanceTimersByTime(60000);});expect(screen.queryByText('예상 출발 17:03')).toBeNull();
  elapsed=120000;await act(async()=>{vi.advanceTimersByTime(60000);});expect(loader).toHaveBeenCalledTimes(1);
+});
+
+it('displays departure countdown together with first stop slack',async()=>{
+ await mount();expect(screen.getByText('3분 뒤 예상 출발')).toBeTruthy();expect(screen.getByText('그때 출발하면 정류장 도착 후 예상 5분 여유가 있어요.')).toBeTruthy();
+ elapsed=61000;await act(async()=>{vi.advanceTimersByTime(61000);});expect(screen.getByText('2분 뒤 예상 출발')).toBeTruthy();
+});
+it('past selected time recomputes current slack instead of preserving five minutes',async()=>{
+ const r=response();r.data.selected_departure_at=new Date(start-10000).toISOString();r.data.recommended_departure_at=r.data.selected_departure_at;r.data.vehicle_arrival_at=new Date(start+480000).toISOString();r.data.arrival_evidence.candidates[0].predicted_arrival_at=r.data.vehicle_arrival_at;getFirstDeparture.mockResolvedValue(r);
+ await mount();expect(screen.getByText('지금 출발 기준으로 다시 확인해주세요.')).toBeTruthy();expect(screen.getByText('지금 출발하면 정류장 도착 후 예상 3분 여유가 있어요.')).toBeTruthy();
+ elapsed=15000;await act(async()=>{vi.advanceTimersByTime(15000);});expect(screen.getByText('지금 출발하면 정류장 도착 후 예상 2분 45초 여유가 있어요.')).toBeTruthy();
+});
+it('less than one minute is described without rounding a zero departure',async()=>{
+ const r=response();r.data.selected_departure_at=new Date(start+30000).toISOString();getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText('1분 이내 예상 출발')).toBeTruthy();
+});
+it('separates missing access time from a mapping failure without invented times',async()=>{
+ const r=response();r.data.status='insufficient_data';r.data.valid_for_guidance=false;r.data.reasons=['ACCESS_TIME_UNCONFIRMED'];r.data.arrival_evidence={...r.data.arrival_evidence,status:'mapping_required',valid_for_guidance:false,candidates:[],reasons:['PUBLIC_MAPPING_UNCONFIRMED','NO_ROUTE_AT_BOARDING_STOP']};getFirstDeparture.mockResolvedValue(r);
+ await mount();expect(screen.getByText(/도보 시간이 제공되지 않아/)).toBeTruthy();expect(screen.getByText(/해당 노선을 경기 교통 정보에서/)).toBeTruthy();expect(screen.queryByText(/분 뒤 예상 출발/)).toBeNull();
+});
+
+it('unknown diagnostic content is never rendered as provider text',async()=>{
+ const r=response();r.data.valid_for_guidance=false;r.data.arrival_evidence={...r.data.arrival_evidence,status:'mapping_required',valid_for_guidance:false,candidates:[],reasons:['constructor','secret raw response']};getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.queryByText(/secret raw/)).toBeNull();expect(screen.getByText(/버스 정류소와 방향을 아직/)).toBeTruthy();
 });

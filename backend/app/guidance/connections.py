@@ -27,11 +27,15 @@ def following_arrivals(user_id,search_id,candidate_id,leg,snapshot,deadline):
             return arrivals.project(evidence,at)
         if deadline-time.monotonic()<=3:return unconfirmed(search_id,candidate_id,leg,expiry,'CONNECTION_TIME_LIMIT')
         arrivals.reserve_refresh(user_id)
-        value=entry.mapping or arrivals.public_mapping.resolve(entry.context,expiry,deadline=deadline)
+        diagnostics={}
+        value=entry.mapping or arrivals.public_mapping.resolve(entry.context,expiry,deadline=deadline,diagnostics=diagnostics)
         updated,_,_,after=arrivals.owned(user_id,search_id,candidate_id)
         if after!=snapshot:raise AuthError(409,'VERSION_CONFLICT','경로가 변경됐어요.')
         expiry=min(expiry,updated['expires_at'])
-        if value is None:evidence=unconfirmed(search_id,candidate_id,leg,expiry,'LEG_MAPPING_UNCONFIRMED')
+        if value is None:
+            evidence=unconfirmed(search_id,candidate_id,leg,expiry,'LEG_MAPPING_UNCONFIRMED')
+            reason=arrivals.public_mapping.safe_failure_reason(diagnostics)
+            if reason:evidence.reasons.append(reason)
         else:
             mapping=arrivals.checked_mapping(value,leg,arrivals.now())
             if deadline-time.monotonic()<=3:return unconfirmed(search_id,candidate_id,leg,expiry,'CONNECTION_TIME_LIMIT')
