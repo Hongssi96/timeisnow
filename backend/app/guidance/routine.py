@@ -139,6 +139,10 @@ def result(request:Request,routine_id,search_id,expected_version):
     latest=journeys.owned(request,str(search_id))
     if latest['candidates']!=row['candidates'] or latest['status']!=row['status'] or latest['place_refs']!=row['place_refs']:
         raise AuthError(409,'VERSION_CONFLICT','최신 경로가 변경됐어요.')
+    if data['departure'] is not None:
+        from app.guidance import issued
+        data['departure']['guidance_id']=issued.publish(binding,candidate,value,profile)
+        if data['departure']['guidance_id'] is not None:data['departure']['guidance_id']=str(data['departure']['guidance_id'])
     data['expires_at']=iso(min(row['expires_at'],latest['expires_at'],binding.expires_at))
     response=answer(request,data)
     if data['status']=='searching':response.headers['Retry-After']='2'

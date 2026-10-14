@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Clock3 } from 'lucide-react';
 import { getFirstArrivals } from '../lib/arrivals';
 import { getFirstDeparture } from '../lib/departure';
+import ManualDeparture from './ManualDeparture';
 
 const connectionText={estimated_feasible:'예상 연결 가능',unavailable:'현재 제공된 차량으로 연결 어려움',unknown:'연결 정보 확인 필요',not_checked:'환승 연결 확인 전',stale:'환승 정보 만료'};
 const connectionTime=value=>new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(value));
@@ -23,7 +24,7 @@ const mappingMessage=evidence=>Array.isArray(evidence?.reasons)?evidence.reasons
 const walkFailure=departure=>departure?.reasons?.includes('ACCESS_WALK_MAPPING_REQUIRED')?'접근 도보를 조회할 승차 정류소가 아직 확인되지 않았어요.':departure?.reasons?.includes('ACCESS_WALK_TIMEOUT')?'승차 정류소까지 도보 조회가 늦어 출발 시각을 계산하지 못했어요.':departure?.reasons?.includes('ACCESS_WALK_UNAVAILABLE')?'승차 정류소까지 도보 경로를 얻지 못해 출발 시각을 계산할 수 없어요.':departure?.reasons?.includes('ACCESS_WALK_TIME_LIMIT')?'조회 시간이 부족해 접근 도보를 확인하지 못했어요. 다시 확인해주세요.':null;
 const empty = { mapping_required:'이 경로의 버스 정류소와 방향을 아직 확인하지 못했어요.', unsupported:'이 첫 탑승 수단의 도착 조회는 아직 지원하지 않아요.', no_arrivals:'현재 제공된 도착 후보가 없어요.', insufficient_data:'현재 도착 시간을 추정할 근거가 부족해요.', expired:'도착 정보가 만료됐어요. 이전 예상 시간은 사용하지 않아요.' };
 
-export default function FirstArrivals({ searchId, candidateId, includeDeparture=false, loader=null, initialResponse=null }) {
+export default function FirstArrivals({ searchId, candidateId, includeDeparture=false, loader=null, initialResponse=null, routineId=null }) {
   const [state, setState] = useState({ phase:'loading' });
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -113,5 +114,6 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
         {!includeDeparture&&<p>개인 접근 시간을 반영한 출발 시각은 아직 계산하지 않아요.</p>}
       </> : <p role="status">{expired?empty.expired:(d.status==='mapping_required'&&mappingMessage(d)) || empty[d.status] || '이전 도착 예상이 지났어요. 새 정보를 확인해주세요.'}</p>}
     </>}
+    {routineId&&<ManualDeparture routineId={routineId} departure={departure} available={Boolean(departureReady)}/>}
   </section>;
 }

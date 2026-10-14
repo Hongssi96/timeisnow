@@ -31,6 +31,7 @@ class TargetEvaluation(BaseModel):
 
 class Departure(BaseModel):
     model_version: Literal['first.departure.v1']='first.departure.v1'
+    guidance_id: UUID|None=None
     search_id: UUID
     candidate_id: UUID
     first_leg_id: UUID
