@@ -14,6 +14,47 @@ from app.common.database import connect_db
 
 
 class MigrationTest(unittest.TestCase):
+    def test_upgrade_from_either_published_parent_preserves_domain_data(self):
+        engine = create_engine("postgresql+psycopg://", creator=connect_db,
+                               poolclass=pool.NullPool, hide_parameters=True)
+        try:
+            for parent in ('0013_manual_trips', '0013_meeting_core'):
+                schema = 'migration_parent_' + uuid4().hex
+                with engine.connect() as connection:
+                    connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+                    connection.commit()
+                    try:
+                        connection.execute(text(f'SET search_path TO "{schema}"'))
+                        connection.commit()
+                        config = Config(str(BACKEND.parent / "alembic.ini"))
+                        config.attributes["connection"] = connection
+                        command.upgrade(config, parent)
+                        uid, item = str(uuid4()), str(uuid4())
+                        connection.execute(text("INSERT INTO users(id,display_name) VALUES(:id,'parent fixture')"), {'id':uid})
+                        if parent == '0013_manual_trips':
+                            connection.execute(text("""INSERT INTO guidance_snapshots(id,user_id,snapshot,expires_at)
+                                VALUES(:id,:uid,'{}',now()+interval '90 days')"""), {'id':item,'uid':uid})
+                            table = 'guidance_snapshots'
+                        else:
+                            connection.execute(text("INSERT INTO meetings(id,user_id,title) VALUES(:id,:uid,'parent fixture')"),
+                                               {'id':item,'uid':uid})
+                            table = 'meetings'
+                        connection.commit()
+                        command.upgrade(config, 'head')
+                        self.assertEqual(connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one(),
+                                         '0014_integrated_features')
+                        self.assertEqual(str(connection.execute(text(f'SELECT id FROM {table}')).scalar_one()), item)
+                        self.assertTrue({'meetings','manual_trips','guidance_snapshots'} <=
+                                        set(inspect(connection).get_table_names(schema=schema)))
+                        connection.commit()
+                    finally:
+                        connection.rollback()
+                        connection.execute(text('SET search_path TO public'))
+                        connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+                        connection.commit()
+        finally:
+            engine.dispose()
+
     def test_baseline_roundtrip(self):
         schema = "migration_test_" + uuid4().hex
         engine = create_engine("postgresql+psycopg://", creator=connect_db,

@@ -1570,3 +1570,15 @@ Git: 최신 origin/main2460bd7에서 codex/moving-remaining-guidance 생성 후 
 0013_manual_trips와0013_meeting_core는 둘다0012 부모를 가진 독립 migration이다. 기존 revision ID/부모를 다시 쓰지 않고 no-op0014_integrated_features merge revision으로 연결해 어느 기존 설치도 누락된 부모를 적용한 후 단일 head로 올라가게 했다. test_migrations는 두 도메인 테이블의 합집합과 통합 head·기존 데이터·반복 upgrade/downgrade를 검증한다. 개발DB 사전 head0013_manual_trips·회원21/장소35/루틴12/이동0/안내스냅샷0 확인. 적용/최종전체 검증은 후속기록에 남긴다.
 
 Notion 최신 읽기 최초 시도는 도구 오류로 응답을 받지 못했고 동일 페이지 URL 재시도는 v0.82 구현 상태 조회 성공. 관련 F12 계약과 기존 로컬 기획/meeting_api/기능TODO·기록/DB설계를 비교했다. 신규 API/계산/보관 변경 없음, F12 코어 계약을 기존 명세대로 통합하는 것이므로 Notion 계약 수정 없음. 프론트 UI 변경 없음. 명세 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+
+통합 후 추가 검증: 5126e5e 개발 기록을 병합하면서 옛 TODO 갱신일/후속 계획으로 되돌리지 않았다. 프론트264개16.24초·1913모듈 빌드580ms 통과. 최초 전체 백엔드453개278.502초에서 약속 preview limit와 도보 decimal reuse 2건 실패, 동일2건 단독2.375초 통과. preview 로그는07:52:59→07:53:00 실제 분 경계를 넘어 새버킷이 생성됐음을 확인했다. 제한10회/분을 바꾸지 않고 해당 테스트의 auth.repository.clock_now만 같은 창으로 고정했다.
+
+도보 재사용의 최초 실패 원인은 당시 시계 변경을 직접 관측하지 않아 확정하지 않는다. 다만 cache_candidate가 계산시각/UUID 순으로 과거 revision을 선택할 수 있음을 별도 재현했다. 이후 revision의 계산시각이 더 이르도록 격리DB에서 구성한 신규 테스트는 수정 전1개0.921초 실패(reusedfalse). 동일 estimate의 최대 revision_no로 현재본을 먼저 제한하고 명시 revision_id를 지정한 원본 재검사는 그대로 허용하는 내부 선택 수정으로 바로잡았다. 이력/기한·계수/원본·API/보관 계약 변화 없음. 기존 GET 최신revision 계약과 일치하며 추가Notion 변경 없음. 최종 도보 재계산/초대창/마이그레이션 관련23개16.625초 통과. 새로운 양쪽0013 부모에서 각각 업그레이드할 때 기존 도메인 행 보존·단일0014 및 양쪽테이블을 확인하는 검증도 포함했다. 최종 전체 재실행 결과는 아래 기록한다.
+
+개발DB는0013_manual_trips→0014_integrated_features 적용했고 회원21/장소35/루틴12/이동0/안내0 개수 보존, 약속6테이블 생성 확인. 서버 숨김 재시작 후 health/프론트200, 비인증meetings/trips401, OpenAPI약속/초대/이동/남은경로 경로 공존 확인. API 계약 v0.82 게시전 재조회 변경없음/로컬미러 유지, UI/직접외부키/AI 변경·호출 없음. 최종 walking repository 수정 서버 반영은 아래 기록.
+
+
+최종 통합 검증: 전체 백엔드454개269.269초 통과, 프론트264개16.24초·1913모듈 빌드580ms 통과. 양쪽0013 출발점의 기존 도메인 행 보존/통합 head 및 반복 upgrade/downgrade 검증 포함. 직접 외부키/AI0회·사용자 승인 잔여9회 미사용·UI 변경 없음. 최신 원격main772885f 재확인, 전체 로컬/원격 브랜치 git cherry(통합HEAD기준) 미반영패치0 확인. git diff --check/충돌표식 검사 통과, 최신 Notion v0.82 계약/로컬 API 미러 유지. 충돌 해결·부모 migration 연결·도보 현재 revision 선택 버그 수정은 기존 계약 유지이므로 Notion 추가수정 없음. 사용자 명시 요청대로 검증된 통합 커밋을 로컬 main에 fast-forward하고 원격 main에 push한다. 이후 main/원격 동일SHA·패치감사·서버 최신모듈 확인 결과는 최종 보고한다.
+
+배운 개념: 미병합 SHA와 미반영 패치는 다르므로 체리픽된 과거 브랜치를 중복 적용하지 않는다. 독립 migration은 기존 ID를 바꾸지 않고 merge revision으로 연결해야 각 설치의 업그레이드 경로를 보존할 수 있다. 현재 산정 버전은 벽시계/랜덤UUID 대신 순차 revision으로 식별해야 시계 보정에도 재사용이 안정적이다. 다음: 루틴 담당은 F08-02b→F07-07b, 약속/채팅 후속은 기존 다른 담당 범위다.

@@ -298,3 +298,7 @@ ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조�
 ## F05-06 재계산 revision — 2026-10-13
 
 0011_walking_recalculation: source 제약에 profile_recalculation 추가, parent_revision_id uuid/candidate_id varchar(200) 추가. 부모는(id,user_id,estimate_id) 복합FK로 같은 회원의 같은 산정만 연결하고 삭제CASCADE. AI 원본은부모/candidate_id null, 재계산은둘다필수이며자기자신참조금지. 기존 원본 revision은 보존하고 estimate별 revision_no 증가를 기존 회원/물리 키 잠금 안에서 처리한다. 새 실행과 현재 후보를 연결하지만 최초 AI 근거 버전과 원본 기한은 유지한다. walking_api.md·Notion v0.56.
+
+## 이동·약속 migration 통합 — 2026-10-14
+
+단일 head는0014_integrated_features다. 부모0013_manual_trips와0013_meeting_core는 기존 ID/0012 부모를 보존하며 no-op merge revision으로 연결한다. 어느0013 설치에서도 누락된 다른 도메인 DDL을 적용한 뒤 같은head로 업그레이드한다. 이동의 guidance_snapshots/manual_trips/manual_trip_events/manual_trip_creation_keys와 약속의 meetings/meeting_members/meeting_revisions/meeting_invites/meeting_idempotency_keys/jobs를 함께 유지한다. 통합으로 입력/보관/권한/API 계약 변경 없음. 개발DB0013_manual_trips→0014 적용·회원21/장소35/루틴12/기존이동0/스냅샷0 개수 유지, 약속6테이블 생성 확인. 상세 development_log.md 통합 검증 기록.

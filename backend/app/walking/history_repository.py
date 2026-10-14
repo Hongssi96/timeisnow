@@ -65,7 +65,10 @@ def cache_candidate(connection,user_id,cache_key,revision_id=None):
         AND p.expires_at>clock_timestamp() AND r.expires_at>clock_timestamp()
         AND p.retained_until>clock_timestamp() AND r.retained_until>clock_timestamp() AND a.retained_until>clock_timestamp()
         AND a.validation_status='validated'
-        ORDER BY r.calculated_at DESC,r.id DESC LIMIT 1""",(user_id,cache_key,revision_id,revision_id)).fetchone()
+        AND (%s::uuid IS NOT NULL OR r.revision_no=(
+            SELECT MAX(current_revision.revision_no) FROM walking_estimate_revisions current_revision
+            WHERE current_revision.estimate_id=e.id AND current_revision.user_id=e.user_id))
+        ORDER BY r.calculated_at DESC,r.id DESC LIMIT 1""",(user_id,cache_key,revision_id,revision_id,revision_id)).fetchone()
 
 
 def summary(connection,user_id,estimate_id):

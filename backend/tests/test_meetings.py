@@ -362,10 +362,12 @@ class MeetingTests(unittest.IsolatedAsyncioTestCase):
         meeting = await self.make_meeting()
         issued = await self.invite(meeting['meeting_id'])
         token = issued[2]['data']['token']
-        for _ in range(10):
-            status, _, _ = await self.call('/meeting-invite-previews', {'token': token}, user='visitor')
-            self.assertEqual(status, 200)
-        limited = await self.call('/meeting-invite-previews', {'token': token}, user='visitor')
+        fixed_window = datetime.now(timezone.utc) + timedelta(minutes=1)
+        with patch('app.auth.repository.clock_now', return_value=fixed_window):
+            for _ in range(10):
+                status, _, _ = await self.call('/meeting-invite-previews', {'token': token}, user='visitor')
+                self.assertEqual(status, 200)
+            limited = await self.call('/meeting-invite-previews', {'token': token}, user='visitor')
         self.assertEqual(limited[0], 429)
         self.assertEqual(limited[2]['error']['code'], 'RATE_LIMITED')
 

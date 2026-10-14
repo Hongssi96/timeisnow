@@ -281,3 +281,5 @@ GET /meetings/{meeting_id}/sync
 - [ ] 수동 출발과 자동 감지 구분, ETA 만료·공유 철회·정정 반영.
 - [ ] 삭제·탈퇴·기간 청소가 메시지 본문·개인 입력·티켓·캐시에 함께 반영.
 - [ ] 기존 루틴 안내 요청·응답의 회귀 검증과 약속 여유/탑승 여유 분리.
+
+2026-10-14 main 통합: meeting-core 2cc3d3f/8420f17의 코어·초대·포트 주입을 기존 루틴/수동 이동과 함께 유지한다. DBhead는0014_integrated_features로 두0013 이력을 연결한다. 요청/응답/버전 충돌 details/current_version·보관·권한 계약은 Notion v0.82와 동일하며 후속 추천·개인 출발·채팅은 미구현 상태 유지. 상세 development_log.md 미병합 브랜치 main 통합 기록.

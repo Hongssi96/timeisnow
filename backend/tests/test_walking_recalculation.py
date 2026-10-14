@@ -103,6 +103,19 @@ class WalkingRecalculationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second['result']['results'][0]['estimated_seconds'],seconds)
         self.assertEqual(reused['result']['results'][0]['estimated_seconds'],seconds);self.assertTrue(reused['estimates'][0]['reused'])
 
+    async def test_current_revision_reuse_ignores_reversed_calculation_clock(self):
+        await self.setup_owner();self.seed()
+        with patch('app.ai.provider.fetch_estimate') as upstream:
+            self.run_cached(self.changed(1.1,2,'req_clock_first'))
+            latest=self.run_cached(self.changed(1.2,3,'req_clock_latest'))
+            with database() as c:
+                # A later revision may have an earlier wall-clock timestamp.
+                c.execute("UPDATE walking_estimate_revisions SET calculated_at=clock_timestamp()-CASE WHEN revision_no=3 THEN interval '1 second' ELSE interval '0 second' END WHERE revision_no>=2")
+            reused=self.run_cached(self.changed(1.2,3,'req_clock_reuse'))
+        upstream.assert_not_called()
+        self.assertTrue(reused['estimates'][0]['reused'])
+        self.assertEqual(reused['estimates'][0]['revision_id'],latest['estimates'][0]['revision_id'])
+
     async def test_mixed_reuse_recalculation_and_fresh_only_fresh_calls_ai(self):
         await self.setup_owner();self.seed();value=self.changed()
         second=copy.deepcopy(value);second['request_id']='req_seed_current';second['candidates'][0]['destination_ref']='stop_current'
