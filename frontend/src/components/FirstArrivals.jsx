@@ -19,7 +19,7 @@ const mappingMessages={
   TURNAROUND_UNCONFIRMED:'이 노선의 회차와 승차 방향을 확인하지 못했어요.',
   DIRECTION_MATCH_AMBIGUOUS:'승차 방향을 하나로 확정하지 못했어요.',
 };
-const mappingMessage=evidence=>evidence?.reasons?.map(reason=>Object.hasOwn(mappingMessages,reason)?mappingMessages[reason]:null).find(Boolean);
+const mappingMessage=evidence=>Array.isArray(evidence?.reasons)?evidence.reasons.map(reason=>typeof reason==='string'&&Object.hasOwn(mappingMessages,reason)?mappingMessages[reason]:null).find(Boolean):null;
 const empty = { mapping_required:'이 경로의 버스 정류소와 방향을 아직 확인하지 못했어요.', unsupported:'이 첫 탑승 수단의 도착 조회는 아직 지원하지 않아요.', no_arrivals:'현재 제공된 도착 후보가 없어요.', insufficient_data:'현재 도착 시간을 추정할 근거가 부족해요.', expired:'도착 정보가 만료됐어요. 이전 예상 시간은 사용하지 않아요.' };
 
 export default function FirstArrivals({ searchId, candidateId, includeDeparture=false, loader=null, initialResponse=null }) {

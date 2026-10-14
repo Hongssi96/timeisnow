@@ -61,7 +61,7 @@ it('routine loader failure removes unexpired numbers and requires an explicit fr
 
 it('displays departure countdown together with first stop slack',async()=>{
  await mount();expect(screen.getByText('3분 뒤 예상 출발')).toBeTruthy();expect(screen.getByText('그때 출발하면 정류장 도착 후 예상 5분 여유가 있어요.')).toBeTruthy();
- elapsed=61000;await act(async()=>{vi.advanceTimersByTime(61000);});expect(screen.getByText('2분 뒤 예상 출발')).toBeTruthy();
+ const refreshed=response();refreshed.meta.server_time=new Date(start+61000).toISOString();getFirstDeparture.mockResolvedValue(refreshed);elapsed=61000;await act(async()=>{vi.advanceTimersByTime(61000);});expect(screen.getByText('2분 뒤 예상 출발')).toBeTruthy();
 });
 it('past selected time recomputes current slack instead of preserving five minutes',async()=>{
  const r=response();r.data.selected_departure_at=new Date(start-10000).toISOString();r.data.recommended_departure_at=r.data.selected_departure_at;r.data.vehicle_arrival_at=new Date(start+480000).toISOString();r.data.arrival_evidence.candidates[0].predicted_arrival_at=r.data.vehicle_arrival_at;getFirstDeparture.mockResolvedValue(r);
