@@ -1326,3 +1326,19 @@ Notion v0.71. 사용자 01b 완료 요청에 따라 앞서 제시한 같은 공�
 마감계획/선택이유: 사용자마감에 맞춰 기능순번보다 실제 흐름 완성을 우선한다. 다음F07-02a 루틴선택→최신출발연결, 이후약속·참여자F12→채팅저장/전달/재접속F14→통합검증. TODO에14~15일출발/16~17일약속/18~19일채팅/20일통합/21일수정 계획을 기록하며 확정완료/보장으로 표시하지 않는다. 최신main146c59a 게시전재확인·git diff --check 통과. 기능브랜치커밋·푸시후 MR/병합은사용자가수행한다.
 
 배운개념: 환승의 최소승차시각과 현재공급자가제공한차량예측을 비교할 수는 있지만 미래운행을 보장할 수는 없다. 제공후보 연결불가와 근거미확인은다르며 앞승차가확인되지 않으면 뒤연결 숫자를만들지 않아야한다. 여러외부조회에는개별timeout 외 전체시간상한과 원래캐시기한을 함께 적용해야한다.
+
+## 2026-10-14 — F12 일회성 약속 코어 REST·초대
+
+목표/이유: 사용자 지시로 F07-02a 이후 작업을 F12(일회성 약속)부터 진행하고 C:\Users\태휘\Desktop\day2-json-api-practice\middle-meeting\홍태휘\product의 완성 서비스("절반" — 방·정적 지하철 추천·채팅 컨텍스트·AI 해설)를 참고해 속도를 올리기로 했다. product는 F13 추천·F14 채팅 단계에서 본격 참조하고, F12 코어는 확정된 계약(meeting_api.md·Notion 16절)이 이미 상세하므로 계약을 그대로 구현했다. 사용자가 직접 F07-02a-1/-2를 구현·검증 완료(codex/departure-guidance-clarity·Notion v0.77)해 착수 순서를 F12로 조정했고, 표시 명확성 미커밋 파일은 해당 브랜치에 WIP 커밋(fd1d8d1)으로 보존했다. 작업 트리 공유 충돌을 피하려 git worktree(C:\projects\timeisnow-f12)에서 codex/meeting-core(최신 main2460bd7)로 진행했다.
+
+구현 파일: backend/migrations/versions/0013_meeting_core.py(meetings·meeting_members·meeting_revisions·meeting_invites·meeting_idempotency_keys·jobs), backend/app/meetings/{__init__,dto,repository,service,router}.py, backend/app/main.py(라우터·no-store 경로), backend/app/common/errors.py(AuthError details), backend/app/journeys/service.py(/jobs가 약속 삭제 작업 폴백 조회), backend/tests/test_meetings.py 신규15개·test_migrations.py 갱신. 약속 생성은 Idempotency-Key 필수(meeting_idempotency_keys, 같은 본문 재현·다른 본문 409 IDEMPOTENCY_CONFLICT), 확정은 직접 목적지(name 1~100자·위도 -90~90·경도 -180~180·provider/place_ref null만·Asia/Seoul·미래 시각)로 revision_no 순차 저장, 상태 전이는 draft→completed를 409 MEETING_NOT_CONFIRMED로 차단, 삭제는 202 job(succeeded 동기 완료)과 즉시 CASCADE 차단. 초대는 token_urlsafe(32) 원문 응답·sha256 해시만 저장·24시간·활성 1개(재발급 시 기존 철회)·발급/철회마다 약속 버전 증가, 미리보기는 사용자당 10회/분, 수락은 약속 행 잠금 하 원자적 잔여 인원·토큰 소비·재수락 200/재활성(탈퇴 후 새 초대)·만석 409 MEETING_FULL, 탈퇴는 주최자 409 ORGANIZER_CANNOT_LEAVE·member 버전 검사.
+
+실제 검증: test_meetings.py 신규15개 통과(생성 멱등·목록 커서/필터 재사용 422·확정 검증/과거 시각/타임존/좌표 경계·전이 규칙·초대 만석/재발급 철회/만료 404/멱등 409·수락 경쟁 만석 재현 fixture·재활성·탈퇴·삭제 job 조회·401/403/404/409/422). 전체 백엔드 358개 132.6초 통과. 프론트 변경 없음. 이번 실제 외부 키/AI 호출 0회.
+
+디버그 기록: 초안 테스트에서 404/503이 났는데 원인은 테스트 헬퍼가 쿼리스트링을 path에 붙인 것(? 포함 경로는 ASGI scope.path에 그대로 들어가 라우트 미매칭)과 repository insert_invite의 SQL 자리표시자 5개/값 4개 불일치였다. 후자는 발급 응답에 token 해시 대신 원문이 들어가려던 실수로 수정했다. 비참여자 PATCH 403 기대도 비참여자는 404가 올바른 계약 동작이라 테스트에서 먼저 참여시키도록 고쳤다. DATABASE_ERROR 추적을 위해 database.py에 임시 traceback print를 넣었다가 되돌렸다.
+
+문서/상태: Notion v0.78로 갱신(16절 상태·일부 구현, 3절 /jobs 설명, 4절 구현 상태, 직접 목적지 F12 검증 규칙, 초대 응답 캐시 미구현/409 동작, 변경 이력) 후 재조회해 저장 확인. api_contract.md를 v0.78 본문으로 전체 재생성(BOM 없음). meeting_api.md v0.3·database_schema.md 구현 상태·todo.md·feature_breakdown.md 동기화. product 포팅은 F13/F14에서 진행 예정이며 이번에는 참고만 했다. 명세: https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+남음: F12의 혼자 가는 일정·루틴 없는 개인별 출발 안내 연결, 초대 응답 캐시(암호화), 추천 기반 확정(F13)·개인 출발지·출발 안내·공유(F15)·채팅/WS(F14), 프론트 약속 화면. 다음은 사용자와 F13/F14 순서를 확인 후 진행한다. 기능 브랜치 커밋·푸시 후 MR/병합은 사용자가 수행한다.
+
+배운개념: 버전 잠금이 있는 공동 자원은 상태 전이·멤버 변동·초대 발급까지 모두 약속 버전을 올려야 상대 화면이 변화를 감지한다. 멱등 재현을 할 수 없는 생성 응답(토큰 등)은 같은 키 재요청에 409로 명확히 응답하고 재시도 경로를 계약에 남기는 것이 조용한 중복 생성보다 낫다. 여러 테이블을 건드리는 수락/탈퇴는 고유 제약과 행 잠금 위에서 원자적으로 처리해야 동시 요청에 만석이 지켜진다.

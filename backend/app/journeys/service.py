@@ -171,7 +171,14 @@ def result(request, search_id):
 
 
 def job_result(request, job_id):
-    row = owned(request,job_id,True)
+    try:
+        row = owned(request, job_id, True)
+    except AuthError as error:
+        if error.status != 404 or error.code != 'RESOURCE_NOT_FOUND':
+            raise
+        # Meeting deletion jobs live in the meetings domain; the shared /jobs view resolves them here.
+        from app.meetings.service import job_result as meeting_job_result
+        return meeting_job_result(request, job_id)
     expired = row['expires_at'] <= datetime.now(timezone.utc)
     response = answer(request,{'job_id':str(row['job_id']),'status':row['status'],'error':row['error'],
         'result_ref':f"/api/v1/journey-searches/{row['id']}" if row['status'] == 'succeeded' and not expired else None,
