@@ -32,3 +32,8 @@ F07-05: 유효한 첫출발에 N분뒤/1분이내/지금재확인과 정류장 �
 ## 2026-10-14 — F07-02a-2 누락 접근 도보 보완
 
 F07-02a-2는 루틴의누락접근만 검증경기승차정류소까지 별도카카오도보로보완한다. first.departure.v1에provider_approach_source/approach_fetched_at/approach_valid_until추가·기존개인화수식/기한/첫승차범위유지. 기존제공접근/일반후보GET/명시0초는대체없음. access_walk_api.md·Notion v0.77.
+
+
+## 2026-10-14 — F07-04 목표 도착 평가
+
+F07-04는 선택 루틴의 현재 유일후보를 오늘 한국시간 목표와 평가한다. target_evaluation을추가해 마지막양수도보/모든환승타임라인이맞을때만 목적지ETA·목표차이를추정한다. 미설정/지난목표/근거부족·만료는숫자없음, 첫승차/목표여유구분·기존기한유지. target_arrival_api.md·Notion v0.78.

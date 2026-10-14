@@ -42,7 +42,7 @@ export default function RoutineDeparture({routine,onRouteChange}) {
     {wrapper?.status==='ready'&&<FirstArrivals key={searchId} searchId={searchId} candidateId={wrapper.candidate_id} includeDeparture loader={loader}
       initialResponse={state.initial}/>}
     {wrapper&&wrapper.status!=='ready'&&<div className="info-box" role="status"><p>{unavailable[wrapper.status]||'경로 검색이 아직 진행 중이에요.'}</p><button className="secondary" onClick={()=>onRouteChange(routine)}>경로 다시 선택</button></div>}
-    <p className="candidate-note">저장한 장소에서 출발하는 첫 승차 기준 추정이에요. 목표 도착 시각에 맞춘 출발과 실제 이동 시작은 아직 지원하지 않아요.</p>
+    <p className="candidate-note">저장한 장소에서 출발하는 첫 승차 기준 추정이에요. 목표 도착은 현재 선택 경로의 추정 평가이며, 미래 예약 출발과 실제 이동 시작은 아직 지원하지 않아요.</p>
     <button className="secondary" disabled={state.phase==='loading'} onClick={()=>setAttempt(n=>n+1)}>최신 출발 다시 확인</button>
   </div>;
 }
