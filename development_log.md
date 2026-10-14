@@ -1398,3 +1398,28 @@ frontend/tests/components/FirstDeparture.test.jsx·WalkingGuidance.test.jsx 신�
 문서/완료: Notion v0.77의활성API목록/상태·5.7.5·기존21회조건의루틴22회예외/이전미정설계해소·구현검증·변경이력을갱신하고재조회해저장확인, api_contract.md전체미러대조일치. access_walk_api.md·departure_api.md·routine_departure_api.md·planning.md·personalization.md·provider_plan.md·arrivals_api.md·logging.md·design_guide.md·screen_plan.md·todo.md·feature_breakdown.md를동기화했다. F07-02a-2는지원경기BUS루틴누락복구범위로완료. 검증개인도보F07-02a전체·미지원매핑/지역지원·원천시간·목표도착/다음차량은미완료유지한다. 다음F07-04 목표도착후보평가, 약속·참여자/채팅은사용자지정다른LLM담당이다. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa. 게시전main2460bd7재확인·git diff --check 통과, 기능브랜치커밋/푸시·MR/병합은사용자수행.
 
 배운 개념: 누락된접근도보는경로전체예상시간과분리해확보해야한다. 매핑된공식승차점과길찾기제공근사점을구분하고도보양끝과진행방향을확인해야한다. 캐시에는개인화후초가아닌원래공급자초를보관해야계수변경시두번곱하지않는다. 매핑/도착/도보조회가각각빠르더라도전체시간제한과원래근거기한을공유해야안내가늦거나오래된정보를새정보처럼쓰지않는다.
+
+
+## 2026-10-14 — F07-04 선택 루틴의 오늘 목표 도착 평가
+
+목표/기준: 사용자가 다음 작업 진행을 요청해 TODO의F07-04와 최신Notion v0.77·목표/요일/시간단위/개인화·루틴/도착/출발/환승과디자인/로깅문서를확인했다. 최신main2460bd7에서codex/target-arrival-evaluation을생성하고 미병합선행루틴/문구/접근도보7ba99d8·f0b560f·5bd56d4·1e60b8c를b54be48/31bc7cf/f2801ab/d277426으로보존해포함했다. 구현전Notion v0.78의5.7.6에선택루틴의현재후보 목표평가범위/날짜·순차타임라인/기한/호환·실패계약을추가했다. 다른담당이추가한F12명세상태/기록을보존했고 해당기능을이작업에서구현/검증했다고주장하지않는다.
+
+날짜 정책과 이유: 수동선택은이번에출발할루틴을고른동작이므로오늘Asia/Seoul의설정목표와비교한다. 반복요일은일정참고이고수동선택을차단하지않는다. 이미지난목표는target_passed로남기며다음날/다음주로이월해가능하다고표시하지않는다. 이는이번구현선택이며사용자가별도날짜정책을확정한사실로기록하지않는다. 미래예약시간표/arrive_by검색·다른노선자동선택은후속이며기존UNSUPPORTED_TIMING계약도유지한다. 선택후보의추정충족평가와목표기반최적경로/최적출발검색은구분한다.
+
+구현 파일: backend/app/guidance/{target,dto,routine}.py. 기존 first.departure.v1에 nullable target_evaluation(target.arrival.v1)을추가했다. scope=selected_routine_candidate·status는not_configured/estimated_meets/estimated_late/target_passed/unknown/stale. evaluated_at·오늘목표·예상목적지도착·signed margin_seconds·egress_seconds·timing_basis/reasons를반환하고미확인시숫자null이다. 일반후보GET는null, 본인루틴GET의유일선택후보에서만계산한다. 기존첫승차valid_for_guidance/connection_status는별도범위로유지한다.
+
+계산과 경계: 유효첫승차·현재접근가능·모든지원BUS의양수차량시간·전체환승estimated_feasible·연결ID/개인화도보/설정환승여유/하차·최소승차·선택다음승차타임라인·최종하차일치가필요하다. 마지막차량이후양수egress WALKING합에개인계수를한번곱해ceil, 목적지ETA=마지막하차+개인화마지막도보다. 마지막도보없음/0초·환승미확인·불일치/만료는목적지시각을만들지않는다. 하차를목적지도착으로대체하지않는다. provider total inconsistent는unknown, 미배분시간은임의도보/대기에더하지않고선택된차량/환승ETA와제공구간을쓰는추정으로고정사유를남긴다.
+
+목표 비교: ETA<=오늘목표는estimated_meets, 늦으면estimated_late·floor(목표-ETA)초를음수그대로보존한다. 목표미설정/지난목표/근거부족·만료구분, 첫정류장버퍼와목표여유는다르며자동여유축소없음. 계산전후프로필버전/계수/버퍼와루틴·장소/검색/후보를재검사해변경409로차단한다. 기존출발기한을공유하며새기한연장/외부API/AI·DB·DDL추가없음.
+
+프론트: lib/departure.js는목표모델/허용상태·시각/차이·마지막하차+egress수식·충족/늦음분류·미확인숫자null을검증한다. FirstArrivals.jsx는기존h3/카드/CSS로오늘목표·예상목적지도착·목표기준예상여유/늦음·추정한계를표시하고미설정/지난목표/마지막도보·환승부족/실패·만료를구분한다. 클라이언트시계경과로첫승차접근불가·목표/기한이지나면이전목적지숫자를숨긴다. RoutineDeparture.jsx의이전목표미지원설명을현재선택평가와미래예약미지원으로맞췄다. 새색상/CSS/폰트/내비게이션체계없음.
+
+실제 검증: backend/tests/test_target_arrival.py 신규11개5.199초 포함 최종전체386개147.203초통과. 같은시각정확한목표경계·늦음음수보존·마지막도보개인계수올림1회·2회환승/불일치·마지막도보누락/0초·미설정/이미지난목표무이월·UTC날짜와다른한국자정·기한/현재첫승차접근불가/총합불일치·미배분시간무가산을확인했다. 실제격리PostgreSQL/ASGI·합성도착으로본인루틴GET 목표평가/도착캐시무추가호출·평가중목표/프로필변경409를검증했다. 최초신규/전체모두통과해운영조건/시간정책을완화하지않았다.
+
+frontend/tests/departure.test.js·components/FirstDeparture.test.jsx 신규7개 포함 전체229개10.04초·빌드1909모듈438ms통과. 목표수식/분류·부족마지막하차/도보·미확인숫자거부, 목표여유와정류장5분여유구분·늦음음수표시·마지막도보부족목적지숫자없음·만료시목표도착/차이제거를확인했다. 이번새외부조회/직접실키/AI호출0회다.
+
+시각/서버: 합성응답·실제엄격클라이언트/FirstArrivals와기존CSS로1280×1400/390×2100에서목표충족추정/정류장여유와목표여유구분을확인했다. 화면캡처의아래부분제한을고려해미확인상태를단독렌더링하여1280×800/390×844에서마지막도보부족·목적지숫자없음도시각확인했다. 모바일body.scrollWidth=innerWidth=390, 줄바꿈/가로넘침없음. 실제사용자로그인·실경로도착정확도/보행·실휴대전화는검증제외. 임시goal-preview.html/jsx·검증탭삭제/viewport원복. 기존프로젝트uvicorn확인후숨김재시작, health/프론트200·비인증루틴GET401·OpenAPI target_evaluation필드존재확인. 새DDL없어0012유지.
+
+문서/완료: Notion v0.78의활성API목록/설명·상태/5.7.6·날짜선택과후속범위·구현검증/변경이력을수정하고다시읽어저장을확인했다. F12관련다른담당변경/헤더를보존해목표평가내용만추가하고 api_contract.md전체미러대조일치를확인했다. target_arrival_api.md·departure_api.md·routine_departure_api.md·planning.md·personalization.md·logging.md·design_guide.md·screen_plan.md·todo.md·feature_breakdown.md동기화, F07-04는선택루틴현재후보의오늘평가범위로완료한다. 미지원매핑/원천시간·검증개인도보/F07-02a전체·미래예약/대체노선자동조회와다음차량은미완료유지. 다음F07-06 다음차량선택/갱신, 약속·참여자/채팅은사용자지정다른LLM담당이다. 게시전main2460bd7재확인·git diff --check 통과, 기능브랜치커밋/푸시·MR/병합은사용자수행. 명세:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa.
+
+배운 개념: 정류소탑승가능·환승연결가능·목적지목표도착은서로다른조건이다. 마지막도보가없으면차량하차시각으로목표충족을판정하면안된다. UTC날짜가아닌사용자의한국날짜로오늘목표를만들고지난목표를이월하지않아야한다. 개인화초/환승여유와타임라인이하나의프로필버전으로일치해야하며미배분총시간을임의로추가해서새근거로만들면안된다.

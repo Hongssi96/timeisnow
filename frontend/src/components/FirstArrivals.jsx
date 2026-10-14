@@ -63,6 +63,8 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
   const departureTime=departureReady?new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(departure.selected_departure_at)):null;
   const dayFormat=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'});
   const departureDay=departureReady&&dayFormat.format(new Date(departure.selected_departure_at))!==dayFormat.format(new Date(now))?new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric'}).format(new Date(departure.selected_departure_at))+' ':'';
+  const goal=departure?.target_evaluation;
+  const goalPassed=goal?.target_arrival_at&&now>Date.parse(goal.target_arrival_at);
   const age=d?.received_at ? Math.max(0,Math.floor((now-Date.parse(d.received_at))/1000)) : null;
   return <section className="info-box walking-guidance first-arrivals" aria-label={includeDeparture?'첫 탑승 출발 정보':'첫 탑승 도착 정보'}>
     <h3><Clock3 size={18}/>{includeDeparture?'첫 탑승 예상 출발':'첫 탑승 도착 예상'}</h3>
@@ -91,6 +93,16 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
           </li>)}</ul>}
           {!!departure.transfers?.length&&<p>환승 도보와 차량 시각은 추정값이에요. 실제 환승 성공을 보장하지 않아요.</p>}
         </>}
+      </>}
+      {includeDeparture&&goal&&<>
+        <h3>목표 도착 평가</h3>
+        {goal.target_arrival_at&&<p>오늘 목표 도착 {connectionTime(goal.target_arrival_at)}</p>}
+        {expired||now>Date.parse(departure.valid_until)?<p>목표 도착 평가가 만료됐어요. 이전 예상 도착은 사용하지 않아요.</p>:goal.status==='target_passed'||goalPassed?<p>오늘 목표 도착 시각이 지났어요. 다음 날로 자동 변경하지 않아요.</p>:['estimated_meets','estimated_late'].includes(goal.status)&&departureReady?<>
+          <p><strong>{goal.status==='estimated_meets'?'현재 근거로는 목표 시각까지 도착할 것으로 예상해요.':'현재 근거로는 목표 시각보다 늦게 도착할 것으로 예상해요.'}</strong></p>
+          <p>예상 목적지 도착 {connectionTime(goal.estimated_destination_arrival_at)}</p>
+          <p>목표 도착 기준 예상 {bufferText(Math.abs(goal.margin_seconds))} {goal.status==='estimated_meets'?'여유':'늦음'}</p>
+          <p className="candidate-note">환승과 마지막 도보를 포함한 공급자 기반 추정이에요. 실제 도착을 보장하지 않아요.</p>
+        </>:goal.status==='not_configured'?<p>목표 도착 시각을 설정하면 현재 경로의 예상 도착을 비교할 수 있어요.</p>:<p>{goal.reasons?.includes('EGRESS_TIME_UNCONFIRMED')?'하차 후 목적지까지 도보 시간이 없어 목표 도착을 확인할 수 없어요.':goal.reasons?.includes('CONNECTIONS_UNCONFIRMED')?'환승 연결이 확인되지 않아 목표 도착을 확인할 수 없어요.':'현재 이동 근거로는 목표 도착을 확인할 수 없어요.'}</p>}
       </>}
       {age!==null && <p className="candidate-note">{age}초 전 조회</p>}
       {!!candidates.length ? <>
