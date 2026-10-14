@@ -53,8 +53,11 @@ async def run(maximum):
     original_open=urllib.request.OpenerDirector.open
     original_resolve=mapping.resolve
     diagnostics={}
-    def traced_resolve(context,expires_at):
-        return original_resolve(context,expires_at,diagnostics=diagnostics)
+    def traced_resolve(context,expires_at,**kwargs):
+        caller_diagnostics=kwargs.pop('diagnostics',None)
+        result=original_resolve(context,expires_at,diagnostics=diagnostics,**kwargs)
+        if caller_diagnostics is not None:caller_diagnostics.update(diagnostics)
+        return result
     def guarded_open(opener,url,*args,**kwargs):
         budget.before(url)
         return original_open(opener,url,*args,**kwargs)
