@@ -1,8 +1,41 @@
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
-from pydantic import BaseModel,Field
+from pydantic import BaseModel,Field,model_validator
 from app.arrivals.dto import Evidence
+
+class PersonalWalk(BaseModel):
+    estimate_id: UUID
+    revision_id: UUID
+    base_seconds: float=Field(gt=0)
+    applied_duration_factor: float=Field(ge=.5,le=2)
+    estimated_seconds: int=Field(gt=0)
+    profile_version: int=Field(ge=1)
+    source: Literal['ai_estimate','profile_recalculation']
+    reused: bool
+    expires_at: datetime
+
+class SupplementalWalk(BaseModel):
+    role: Literal['transfer','egress']
+    connection_id: UUID|None=None
+    from_leg_id: UUID
+    to_leg_id: UUID|None=None
+    source: Literal['walking_route','same_stop']='walking_route'
+    provider_seconds: int=Field(ge=0,le=86400)
+    walking_seconds: int=Field(ge=0,le=172800)
+    applied_duration_factor: float=Field(ge=.5,le=2)
+    fetched_at: datetime
+    valid_until: datetime
+
+    @model_validator(mode='after')
+    def consistent_source(self):
+        if self.role=='transfer' and (self.connection_id is None or self.to_leg_id is None):raise ValueError('Missing transfer reference')
+        if self.role=='egress' and (self.connection_id is not None or self.to_leg_id is not None):raise ValueError('Invalid egress reference')
+        if self.source=='same_stop':
+            if self.role!='transfer' or self.provider_seconds!=0 or self.walking_seconds!=0:raise ValueError('Invalid same-stop evidence')
+        elif self.provider_seconds<=0 or self.walking_seconds<=0:raise ValueError('Missing walking time')
+        if self.valid_until<=self.fetched_at:raise ValueError('Expired walking evidence')
+        return self
 
 class TransferCheck(BaseModel):
     connection_id: UUID
@@ -48,7 +81,7 @@ class Departure(BaseModel):
     provider_approach_seconds: int|None=None
     applied_duration_factor: float|None=None
     profile_version: int
-    approach_basis: Literal['provider_personalized']|None=None
+    approach_basis: Literal['provider_personalized','ai_validated']|None=None
     provider_approach_source: Literal['transit_segment','boarding_walk']|None=None
     approach_fetched_at: datetime|None=None
     approach_valid_until: datetime|None=None
@@ -63,6 +96,8 @@ class Departure(BaseModel):
     estimated_final_alighting_at: datetime|None=None
     arrival_evidence: Evidence
     target_evaluation: TargetEvaluation|None=None
+    supplemental_walks: list[SupplementalWalk]=Field(default_factory=list,max_length=3)
+    personal_walk: PersonalWalk|None=None
 
 class DepartureEnvelope(BaseModel):
     data: Departure

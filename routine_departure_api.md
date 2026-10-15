@@ -61,3 +61,12 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 ## 2026-10-15 F07-02a-3 실제 예상 출발 복구
 
 이전에 보류했던 정상 노선 상세 무결과를 공식 정류소 방향 근거로 처리하고, PASS 운행 및 카카오 도보 정수 합계 오차를 수정했다. 도보 검증은 각 하위 묶음 수-1 이내 초/미터 차이만 허용하며 제공 totalTime·양끝/연결30m·기한/권한 검사를 유지한다. 기존 전체 앱과 실제 카카오/GBIS를 연결해 예상 출발·도보·여유를 PC/모바일에서 확인했다. 새로운 API/응답 필드/DDL은 없다. 계약은 Notion v0.86/API 명세5.7.11, 검증 근거는 development_log.md.
+
+## 2026-10-15 후속 핵심 도보 연결
+
+본인 루틴의 누락 환승·마지막 도보를 실제 공식 승하차 근거로 보완하고 supplemental_walks 응답과 연결/목표 계산에 사용한다. 원본 경로/시간/ID는 유지한다. source=walking_route/same_stop 및 실패·만료를 기존 출발 화면에서 구분한다. 상세는 connections_api.md·target_arrival_api.md 및 Notion v0.87/API명세5.7.12.
+
+
+## 2026-10-15 F07-02a-4 검증 접근 도보 AI 연결
+
+본인 루틴/최신 검색에 POST /api/v1/routines/{routine_id}/departure-searches/{search_id}/walking-estimates(expected_version/client_request_id)로 명시 산정한다. 정상 세션/CSRF·활성 루틴/장소/유일 후보·공식 BUS 승차 매핑을 확인하고, 새 카카오 양수 도보의 경로/양끝30m 검증 후 기존 AI 서비스와 이력·물리 캐시를 사용한다. GET은 모델을 호출하지 않는다. 출발 personal_walk(nullable), approach_basis=ai_validated를 추가해 기준초×현재계수를 한 번 적용한다. 실패/불일치/만료는 기존 공급자 추정이며 출발 신고 이후에는409다. 최대5분/새 검색 명시 적용·프론트80초/모델35초×최대2회·기존GET예산 유지. 상세 계약은 api_contract.md 5.7.13/Notion v0.88.

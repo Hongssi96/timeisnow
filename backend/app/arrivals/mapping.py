@@ -114,5 +114,7 @@ def resolve(context,expires_at,*,diagnostics=None,deadline=None,boarding_endpoin
                    mapping_version='gbis.station-scope.v3.30m.ordered',verified_at=at,valid_until=expires_at)
     if boarding_endpoint is not None:
         row=next(row for row in dict(routes)[rid] if str(row['stationId'])==value.station_id and int(row['stationSeq'])==value.sta_order)
-        boarding_endpoint.update(point=(float(row['x']),float(row['y'])),mapping_identity=cache.mapping_identity(value))
+        alight=next(row for row in dict(routes)[rid] if str(row['stationId'])==match['alight_station_id'] and int(row['stationSeq'])==match['alight_order'])
+        boarding_endpoint.update(point=(float(row['x']),float(row['y'])),alighting_point=(float(alight['x']),float(alight['y'])),
+            station_id=value.station_id,alighting_station_id=match['alight_station_id'],mapping_identity=cache.mapping_identity(value))
     return value

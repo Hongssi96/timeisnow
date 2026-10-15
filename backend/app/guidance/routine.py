@@ -131,7 +131,7 @@ def result(request:Request,routine_id,search_id,expected_version):
                 candidate=matches[0];data['candidate_id']=candidate['candidate_id']
                 from app.guidance import selection
                 lease=selection.begin(binding)
-                value=departure.first_departure(user_id,search_id,parsed_id(candidate['candidate_id']),include_connections=True,access_origin_ref=binding.place_refs[0],selector=lease.choose,reported_departure=lease.reported)
+                value=departure.first_departure(user_id,search_id,parsed_id(candidate['candidate_id']),include_connections=True,access_origin_ref=binding.place_refs[0],destination_ref=binding.place_refs[1],selector=lease.choose,reported_departure=lease.reported)
                 from app.guidance import target
                 profile=departure.settings(user_id)
                 if profile['version']!=value.profile_version or (value.applied_duration_factor is not None and profile['factor']!=value.applied_duration_factor) or profile['buffer']!=value.buffer_seconds:

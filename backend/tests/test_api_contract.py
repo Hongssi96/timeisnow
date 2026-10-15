@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.main import app
 
 
-async def request(path, method="GET", query=b"", headers=None, body=b""):
+async def request(path, method="GET", query=b"", headers=None, body=b"", timeout=3):
     messages = []
     supplied = False
     async def receive():
@@ -24,7 +24,7 @@ async def request(path, method="GET", query=b"", headers=None, body=b""):
              "method": method, "scheme": "http", "path": path, "raw_path": path.encode(),
              "query_string": query, "root_path": "", "headers": headers or [],
              "client": ("127.0.0.1", 12345), "server": ("test", 80), "http_version": "1.1"}
-    await asyncio.wait_for(app(scope, receive, send), timeout=3)
+    await asyncio.wait_for(app(scope, receive, send), timeout=timeout)
     start = next(item for item in messages if item["type"] == "http.response.start")
     raw = b"".join(item.get("body", b"") for item in messages if item["type"] == "http.response.body")
     return start["status"], dict(start["headers"]), json.loads(raw) if raw else None

@@ -2,12 +2,12 @@ import React from 'react';
 import {render,screen,act,cleanup,fireEvent} from '@testing-library/react';
 import {afterEach,beforeEach,it,expect,vi} from 'vitest';
 import RoutineDeparture from '../../src/components/RoutineDeparture';
-import {refreshRoutine,getRoutineDeparture} from '../../src/lib/routineDeparture';
-vi.mock('../../src/lib/routineDeparture',()=>({refreshRoutine:vi.fn(),getRoutineDeparture:vi.fn(),routineDepartureError:()=> '최신 안내 실패'}));
+import {refreshRoutine,getRoutineDeparture,estimateRoutineWalk} from '../../src/lib/routineDeparture';
+vi.mock('../../src/lib/routineDeparture',()=>({refreshRoutine:vi.fn(),getRoutineDeparture:vi.fn(),estimateRoutineWalk:vi.fn(),routineDepartureError:()=> '최신 안내 실패'}));
 vi.mock('../../src/components/FirstArrivals',()=>({default:({initialResponse,onReported,onCancelled})=><><p>예상 출발 {initialResponse.data.selected_departure_at}</p><button onClick={onReported}>합성 출발 확인</button><button onClick={onCancelled}>합성 이동 취소</button></>}));
 const routine={routine_id:'r1',version:1,status:'active',origin_place:{place_id:'p1'},destination_place:{place_id:'p2'}};
 const value=(id='s1')=>({search:{search_id:id,deadline:Date.now()+300000},response:{meta:{server_time:new Date().toISOString()},data:{status:'ready',candidate_id:'c1',departure:{selected_departure_at:id}}}});
-beforeEach(()=>{vi.useFakeTimers();refreshRoutine.mockReset();getRoutineDeparture.mockReset();Object.defineProperty(document,'hidden',{configurable:true,value:false});refreshRoutine.mockResolvedValue(value());});
+beforeEach(()=>{vi.useFakeTimers();refreshRoutine.mockReset();estimateRoutineWalk.mockReset();getRoutineDeparture.mockReset();Object.defineProperty(document,'hidden',{configurable:true,value:false});refreshRoutine.mockResolvedValue(value());});
 afterEach(()=>{cleanup();vi.useRealTimers();});
 async function mount(r=routine){const view=render(<RoutineDeparture key={r.routine_id+':'+r.version} routine={r} onRouteChange={()=>{}}/>);await act(async()=>{});return view;}
 it('selecting routine shows fresh response instead of stored duration',async()=>{await mount();expect(screen.getByText('예상 출발 s1')).toBeTruthy();expect(refreshRoutine).toHaveBeenCalledTimes(1);});
@@ -22,4 +22,34 @@ it('failure does not trigger endless retries on visibility changes',async()=>{re
 it('confirmed departure stops search expiry refresh and cancellation starts a fresh query',async()=>{
  await mount();fireEvent.click(screen.getByText('합성 출발 확인'));await act(async()=>{vi.advanceTimersByTime(300000);});expect(refreshRoutine).toHaveBeenCalledTimes(1);
  refreshRoutine.mockResolvedValue(value('s2'));await act(async()=>{fireEvent.click(screen.getByText('합성 이동 취소'));});expect(refreshRoutine).toHaveBeenCalledTimes(2);expect(screen.getByText('예상 출발 s2')).toBeTruthy();
+});
+
+it('AI is explicit and replaces pending guidance only after applying validated response',async()=>{
+ await mount();expect(estimateRoutineWalk).not.toHaveBeenCalled();
+ estimateRoutineWalk.mockResolvedValue({data:{status:'validated'}});
+ const v=value();v.response.data.departure.personal_walk={source:'ai_estimate',reused:false};getRoutineDeparture.mockResolvedValue(v.response);
+ await act(async()=>{fireEvent.click(screen.getByText('개인 도보 산정·저장값 적용'));});
+ expect(estimateRoutineWalk).toHaveBeenCalledTimes(1);expect(screen.getByText('AI 도보 산정을 적용했어요')).toBeTruthy();expect(screen.queryByText(/개인 도보 AI 산정은 아직 실행하지/)).toBeNull();
+});
+it('late AI response from an expired search cannot update the new search',async()=>{
+ let resolve;estimateRoutineWalk.mockImplementation(()=>new Promise(r=>resolve=r));await mount();
+ await act(async()=>{fireEvent.click(screen.getByText('개인 도보 산정·저장값 적용'));});
+ const signal=estimateRoutineWalk.mock.calls[0][3];refreshRoutine.mockResolvedValue(value('s2'));
+ await act(async()=>{fireEvent.click(screen.getByText('최신 출발 다시 확인'));});
+ await act(async()=>{resolve({data:{status:'validated'}});});
+ expect(signal.aborted).toBe(true);expect(getRoutineDeparture).not.toHaveBeenCalled();expect(screen.getByText('예상 출발 s2')).toBeTruthy();
+});
+
+it('departure confirmation hides AI action and aborts an in-flight estimate',async()=>{
+ estimateRoutineWalk.mockImplementation(()=>new Promise(()=>{}));await mount();
+ await act(async()=>{fireEvent.click(screen.getByText('개인 도보 산정·저장값 적용'));});
+ const signal=estimateRoutineWalk.mock.calls[0][3];await act(async()=>{fireEvent.click(screen.getByText('합성 출발 확인'));});
+ expect(signal.aborted).toBe(true);expect(screen.queryByText('개인 도보 산정 중…')).toBeNull();
+});
+
+it('AI indicator expires at the original estimate deadline without calling a model',async()=>{
+ const v=value();v.response.data.departure.personal_walk={source:'ai_estimate',reused:false,expires_at:new Date(Date.now()+1000).toISOString()};refreshRoutine.mockResolvedValue(v);
+ await mount();expect(screen.getByText('AI 도보 산정을 적용했어요')).toBeTruthy();
+ await act(async()=>{vi.advanceTimersByTime(1000);});
+ expect(screen.queryByText('AI 도보 산정을 적용했어요')).toBeNull();expect(screen.getByText('도보 정보를 다시 확인해주세요')).toBeTruthy();expect(estimateRoutineWalk).not.toHaveBeenCalled();
 });

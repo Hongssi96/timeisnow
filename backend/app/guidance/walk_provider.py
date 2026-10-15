@@ -1,5 +1,5 @@
 """Fixed Kakao walking endpoint, ephemeral parsing; never persist geometry."""
-import json,math,os,time,urllib.request,urllib.parse,urllib.error
+import hashlib,json,math,os,time,urllib.request,urllib.parse,urllib.error
 from dotenv import dotenv_values
 from app.common.database import ROOT
 from app.common.http import NoRedirect
@@ -18,7 +18,7 @@ def totals_agree(total,parts,count):
     # permit only the sub-unit accumulation bound, never an arbitrary percentage.
     return abs(total-parts)<=count-1
 
-def parse(data,start,end):
+def parse(data,start,end,*,details=False):
     if not isinstance(data,dict):invalid()
     status=data.get('status')
     if isinstance(status,str) and status in NO_ROUTE:return None
@@ -47,11 +47,12 @@ def parse(data,start,end):
             if not totals_agree(lt,st,len(steps)) or not totals_agree(ld,sd,len(steps)):invalid()
         if not totals_agree(seconds,leg_time,len(legs)) or not totals_agree(meters,leg_distance,len(legs)):invalid()
         if distance_meters(start,points[0])>30 or distance_meters(end,points[-1])>30:invalid()
+        if details:return {'seconds':seconds,'distance_meters':meters,'path_fingerprint':hashlib.sha256(json.dumps(points,separators=(',',':'),allow_nan=False).encode()).hexdigest()}
         return seconds
     except (KeyError,TypeError,ValueError,AttributeError,OverflowError):invalid()
 
 
-def fetch(start,end,deadline):
+def fetch(start,end,deadline,*,details=False):
     left=deadline-time.monotonic()
     if left<=0:raise AuthError(504,'PROVIDER_TIMEOUT','접근 도보 조회 시간이 지났어요.')
     key={**dotenv_values(ROOT/'.env'),**os.environ}.get('KAKAO_REST_API_KEY')
@@ -64,7 +65,7 @@ def fetch(start,end,deadline):
         if time.monotonic()>deadline:raise TimeoutError()
         if len(raw)>1048576:invalid()
         data=json.loads(raw,object_pairs_hook=unique_object,parse_constant=reject_constant)
-        return parse(data,start,end)
+        return parse(data,start,end,details=details)
     except urllib.error.HTTPError:raise AuthError(503,'PROVIDER_UNAVAILABLE','도보 경로에 연결할 수 없어요.') from None
     except (TimeoutError,urllib.error.URLError) as error:
         timed=isinstance(error,TimeoutError) or isinstance(getattr(error,'reason',None),TimeoutError)
