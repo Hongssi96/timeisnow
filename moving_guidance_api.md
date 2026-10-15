@@ -26,3 +26,5 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 ## 2026-10-15 F07-07b-2 차량 확인 기반 하차 안내
 
 POST /trips/{trip_id}/onboard-confirmations(expected_version/anchor_event_id/leg_id/plate_suffix4자리)와 GET /trips/{trip_id}/onboard-guidance?expected_version 추가. 본인 활성 onboard/현재 anchor·루틴/장소/프로필을 전후 확인하고, 명시 차량번호 확인·공식 노선 순번/방향·위치 목록의 유일 차량·같은 vehId의 공식 하차 정류소 양수 예측이 모두 있을 때만 수신 기준 하차 추정을 제공한다. 경과시간/정류소 수로 잔여초를 만들지 않는다. 확인 메모리32개/30분·근거120초/공식 매핑300초·조회60초·원기한 비연장. 공개 응답 trip.onboard.v1의 하차 ETA/남은초/출처·만료·needs_data 및 상세 계약은 api_contract.md 5.7.14. 구현/합성 검증은 완료, 실제 위치 API403으로 권한/키 적용 상태 확인과 실제 같은 차량 재검증 대기다. F07-07b-2 체크는 미완료 유지.
+
+2026-10-15 후속: 현재 .env로 위치19대와 공식 방향·같은vehId의 다음 정류소 예측129초 실호출 성공. 이전403 해소 확인, 정확한 원인은 미확정. 실서버 정상 이동 세션 통합 검증은 후속이며 F07-07b-2 미완료 유지. development_log.md 근거.
