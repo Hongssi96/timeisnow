@@ -69,5 +69,39 @@ it('onboard state has no invented ETA and alighting opens confirmed transfer gui
 });
 it('saved final alighting does not claim destination arrival',async()=>{
  activeTrip.mockResolvedValue(stageTrip('transit_finished',{}));await mount();
- expect(screen.getByText(/목적지 도착을 뜻하지 않아요/)).toBeTruthy();expect(screen.queryByText('이 차량에 탑승했어요')).toBeNull();
+ expect(screen.getByText(/목적지까지 이동한 뒤 도착을 직접 확인/)).toBeTruthy();expect(screen.queryByText('이 차량에 탑승했어요')).toBeNull();
+});
+it('saves explicit destination arrival then shows completed recovery and fresh-start action',async()=>{
+ const before=stageTrip('transit_finished',{arrived:'last-walk'});activeTrip.mockResolvedValue(before);
+ confirmProgress.mockResolvedValue({...before,status:'completed',version:2,progress:{...before.progress,stage:'completed',actions:{}}});
+ const onCancelled=vi.fn();await mount({onCancelled});
+ await act(async()=>fireEvent.click(screen.getByText('목적지에 도착했어요')));
+ expect(confirmProgress.mock.calls[0][0].type).toBe('arrived');expect(screen.getByText(/이동을 완료했어요/)).toBeTruthy();
+ expect(screen.queryByText('이 이동 취소')).toBeNull();
+ fireEvent.click(screen.getByText('새 이동 준비'));expect(onCancelled).toHaveBeenCalledTimes(1);
+});
+it('missed save failure hides remaining numbers and retries the same terminal report',async()=>{
+ const before=stageTrip('transfer',{boarded:'bus2',missed:'bus2'});activeTrip.mockResolvedValue(before);
+ confirmProgress.mockRejectedValueOnce({code:'TIMEOUT'});await mount();
+ await act(async()=>fireEvent.click(screen.getByText('놓침을 기록하고 이동 종료')));
+ const pending=confirmProgress.mock.calls[0][0];expect(screen.queryByText('환승 중 남은 경로 확인')).toBeNull();
+ expect(screen.getByText('이 차량에 탑승했어요').disabled).toBe(true);
+ confirmProgress.mockResolvedValue({...before,status:'missed',version:2,progress:{...before.progress,stage:'missed',actions:{}}});
+ await act(async()=>fireEvent.click(screen.getByText('놓침을 기록하고 이동 종료')));
+ expect(confirmProgress.mock.calls[1][0]).toBe(pending);expect(screen.getByText(/이번 이동을 종료했어요/)).toBeTruthy();
+});
+it('preparing a new trip prevents polling from restoring the dismissed old completion',async()=>{
+ vi.useFakeTimers();
+ const saved={...stageTrip('completed',{}),status:'completed'};activeTrip.mockResolvedValue(saved);
+ const view=await mount();fireEvent.click(screen.getByText('새 이동 준비'));
+ view.rerender(<ManualDeparture routineId="r" departure={{guidance_id:'fresh'}} available/>);
+ await act(async()=>vi.advanceTimersByTimeAsync(60000));
+ expect(screen.queryByText(/이동을 완료했어요/)).toBeNull();expect(screen.getByText('지금 출발했어요')).toBeTruthy();
+ vi.useRealTimers();
+});
+it('a concurrent cancellation recovered during a terminal retry clears the old active view',async()=>{
+ const before=stageTrip('transfer',{missed:'bus2'});activeTrip.mockResolvedValue(before);
+ confirmProgress.mockResolvedValue({...before,status:'cancelled',version:2});const onCancelled=vi.fn();
+ await mount({onCancelled});await act(async()=>fireEvent.click(screen.getByText('놓침을 기록하고 이동 종료')));
+ expect(screen.queryByText(/다음 차량:/)).toBeNull();expect(screen.queryByText('놓침을 기록하고 이동 종료')).toBeNull();expect(onCancelled).toHaveBeenCalledTimes(1);
 });

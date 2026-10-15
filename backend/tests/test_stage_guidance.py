@@ -56,7 +56,7 @@ class StageGuidanceTests(unittest.IsolatedAsyncioTestCase):
    self.assertEqual((await self.call('/trips/'+self.trip['trip_id']+'/events',body))[0],200)
    self.assertEqual((await self.report('alighted'))[0][0],201)
   after=await self.detail();self.assertEqual(after['trip']['progress']['stage'],'transit_finished')
-  self.assertEqual(after['trip']['progress']['actions'],{});self.assertEqual(after['guidance'],before['guidance'])
+  self.assertEqual(after['trip']['progress']['actions'],{'arrived':after['guidance']['candidate']['ordered_legs'][-1]['leg_id']});self.assertEqual(after['guidance'],before['guidance'])
   self.assertEqual(after['trip']['boarding_event'],first_board);self.assertEqual(len(after['events']),10)
   self.assertIsNone(after['outcome'])
  async def test_out_of_order_wrong_vehicle_and_concurrent_alighting(self):

@@ -42,6 +42,7 @@ def trip_data(c,row):
         'measurement_mode':row['measurement_mode'],'status':row['status'],'version':row['version'],
         'created_at':iso(row['created_at']),'expires_at':iso(row['expires_at']),
         'progress':progress_state(row['snapshot']['candidate'],values),
+        'terminal_event':next((event_data(e) for e in values if e['type'] in ('missed','arrived')),None),
         **{field:next((event_data(e) for e in values if e['type']==kind and str(e['leg_id'])==lid),None)
            for field,kind,lid in [('departure_event','departed',legs[0]['leg_id']),('approach_event','approach_arrived',access),('boarding_event','boarded',legs[first]['leg_id'])]}}
 
@@ -87,7 +88,7 @@ def detail(request,trip_id):
         row=repo.owned(c,owner,parsed_id(trip_id))
         if row is None:missing()
         return answer(request,{'trip':trip_data(c,row),'guidance':row['snapshot'],
-            'events':[event_data(e) for e in repo.events(c,row['id'])],'outcome':None if row['status']=='active' else 'cancelled'})
+            'events':[event_data(e) for e in repo.events(c,row['id'])],'outcome':None if row['status']=='active' else row['status']})
 
 def listed(request,limit,cursor,routine_id,status):
     owner=authenticate(request)
@@ -120,6 +121,7 @@ def add_event(request,trip_id,body):
         if str(body.leg_id)!=expected or not lower<=body.occurred_at<=now:
             raise AuthError(422,'VALIDATION_ERROR','이동 구간과 발생 시각을 확인해주세요.')
         event=repo.add_event(c,row['id'],uuid4(),body,digest,now)
+        if body.type in ('missed','arrived'):repo.finish(c,row['id'],'completed' if body.type=='arrived' else 'missed')
         return answer(request,event_data(event),201)
 
 def cancel(request,trip_id,body):
@@ -129,5 +131,6 @@ def cancel(request,trip_id,body):
         row=repo.owned(c,owner,parsed_id(trip_id),True)
         if row is None:missing()
         if row['version']!=body.expected_version:conflict()
+        if row['status'] not in ('active','cancelled'):order()
         if row['status']=='active':repo.cancel(c,row['id'])
         return answer(request,trip_data(c,repo.owned(c,owner,row['id'])))

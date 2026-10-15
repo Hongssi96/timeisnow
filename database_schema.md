@@ -310,3 +310,7 @@ ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조�
 ## 구간별 반복 이벤트 (2026-10-15)
 
 0016_transfer_events는0015를 잇고 manual_trip_events.type에 alighted를 추가한다. 고유 제약은(trip_id,type,leg_id)이며 세션 잠금/서비스에서 departed 하나·차량 순서를 검증한다. 기존 행 보존, 하차/반복type이 있는 downgrade는 실패하고 자동 삭제하지 않는다.
+
+## 이동 종료 결과 (2026-10-15)
+
+0017_trip_outcomes는0016을 잇고 manual_trip_events.type에 missed/arrived, manual_trips.status에 missed/completed를 추가한다. 이벤트와 version+1/종료 상태는 같은 트랜잭션이다. 종료 후 active 고유 인덱스에서 제외하며 기존 관측 보존·종료 데이터가 있는 downgrade 거부.

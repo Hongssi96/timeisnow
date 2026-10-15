@@ -3,34 +3,39 @@ import {safeJourneyId} from './journeys';
 
 const invalid=()=>{throw new ApiError('INVALID_RESPONSE');};
 export function readEvent(event,tripId){
- if(!event||!['event_id','client_event_id','leg_id'].every(key=>safeJourneyId(event[key]))||event.trip_id!==tripId||!['departed','approach_arrived','boarded','alighted'].includes(event.type)||event.source!=='manual'
+ if(!event||!['event_id','client_event_id','leg_id'].every(key=>safeJourneyId(event[key]))||event.trip_id!==tripId||!['departed','approach_arrived','boarded','alighted','missed','arrived'].includes(event.type)||event.source!=='manual'
   ||!isServerTime(event.occurred_at)||!isServerTime(event.received_at)||Date.parse(event.occurred_at)>Date.parse(event.received_at)
   ||!Number.isSafeInteger(event.input_delay_seconds)||event.input_delay_seconds<0||event.excluded!==false||event.version!==1)invalid();
  return event;
 }
 export function readTrip(value){
  if(!value||!safeJourneyId(value.trip_id)||!safeJourneyId(value.guidance_id)||(value.routine_id!==null&&!safeJourneyId(value.routine_id))
-  ||!['active','cancelled'].includes(value.status)||!['assisted','baseline'].includes(value.measurement_mode)||!Number.isSafeInteger(value.version)||value.version<1
+  ||!['active','cancelled','missed','completed'].includes(value.status)||!['assisted','baseline'].includes(value.measurement_mode)||!Number.isSafeInteger(value.version)||value.version<1
   ||!isServerTime(value.created_at)||!isServerTime(value.expires_at)||Date.parse(value.expires_at)<=Date.parse(value.created_at))invalid();
  for(const [key,type] of [['departure_event','departed'],['approach_event','approach_arrived'],['boarding_event','boarded']]){
   if(value[key]!=null){readEvent(value[key],value.trip_id);if(value[key].type!==type)invalid();}
  }
+ if(['completed','missed'].includes(value.status)){
+  readEvent(value.terminal_event,value.trip_id);
+  if(value.terminal_event.type!==(value.status==='completed'?'arrived':'missed'))invalid();
+ }else if(value.terminal_event!=null)invalid();
  if(value.progress){
   const p=value.progress;
-  if(!['not_departed','approaching','waiting','onboard','transfer','transfer_waiting','transit_finished'].includes(p.stage)
+  if(!['not_departed','approaching','waiting','onboard','transfer','transfer_waiting','transit_finished','completed','missed'].includes(p.stage)
    ||!['current_leg_id','next_leg_id','anchor_event_id'].every(k=>p[k]===null||safeJourneyId(p[k]))
    ||!p.actions||Array.isArray(p.actions)||typeof p.actions!=='object'
-   ||!Object.entries(p.actions).every(([k,v])=>['departed','approach_arrived','boarded','alighted'].includes(k)&&safeJourneyId(v))
+   ||!Object.entries(p.actions).every(([k,v])=>['departed','approach_arrived','boarded','alighted','missed','arrived'].includes(k)&&safeJourneyId(v))
    ||!['boarding_stop','alighting_stop','vehicle_name'].every(k=>p[k]===null||typeof p[k]==='string'&&p[k].length<=1000))invalid();
  }
  return value;
 }
 async function csrf(signal){const response=await apiRequest('/api/v1/auth/csrf',{signal});if(typeof response.data?.csrf_token!=='string')invalid();return response.data.csrf_token;}
-export async function activeTrip(routineId,signal){
+export async function activeTrip(routineId,signal,includeEnded=false){
  if(!safeJourneyId(routineId))invalid();
- const response=await apiRequest(`/api/v1/trips?routine_id=${routineId}&status=active&limit=1`,{signal});
+ const response=await apiRequest(`/api/v1/trips?routine_id=${routineId}${includeEnded?'':'&status=active'}&limit=1`,{signal});
  if(!Array.isArray(response.data?.items)||response.data.items.length>1)invalid();
- const trip=response.data.items[0];if(trip){readTrip(trip);if(trip.routine_id!==routineId||trip.status!=='active')invalid();}
+ const trip=response.data.items[0];if(trip){readTrip(trip);if(trip.routine_id!==routineId||!includeEnded&&trip.status!=='active')invalid();}
+ if(includeEnded&&trip?.status==='cancelled')return null;
  return trip||null;
 }
 export async function confirmDeparture(operation,signal){
@@ -56,12 +61,13 @@ export async function confirmDeparture(operation,signal){
  return {...saved,departure_event:event};
 }
 export async function confirmProgress(operation,signal){
- const field={approach_arrived:'approach_event',boarded:'boarding_event',alighted:'alighting_event'}[operation.type];
+ const field={approach_arrived:'approach_event',boarded:'boarding_event',alighted:'alighting_event',missed:'terminal_event',arrived:'terminal_event'}[operation.type];
  if(!field)invalid();readTrip(operation.trip);
  const path=`/api/v1/trips/${operation.trip.trip_id}`;
  const response=await apiRequest(path,{signal});
  const saved=readTrip(response.data?.trip);
- if(saved.trip_id!==operation.trip.trip_id||saved.status!=='active'||!saved.departure_event)invalid();
+ if(saved.trip_id!==operation.trip.trip_id||!saved.departure_event)invalid();
+ if(saved.status!=='active')return saved;
  if(saved.progress){
   const current=saved.progress,expected=operation.trip.progress;
   if(!expected||current.anchor_event_id!==expected.anchor_event_id||current.actions[operation.type]!==expected.actions[operation.type])return saved;

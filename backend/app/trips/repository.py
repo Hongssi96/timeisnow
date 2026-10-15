@@ -63,6 +63,9 @@ def add_event(c,tid,eid,body,digest,received):
 def cancel(c,tid):
     c.execute("UPDATE manual_trips SET status='cancelled',version=version+1 WHERE id=%s",(tid,))
 
+def finish(c,tid,status):
+    c.execute('UPDATE manual_trips SET status=%s,version=version+1 WHERE id=%s',(status,tid))
+
 def listed(c,owner,rid,status,cursor,limit):
     return c.execute('''SELECT t.*,g.routine_id,g.snapshot FROM manual_trips t JOIN guidance_snapshots g ON g.id=t.guidance_id
       WHERE t.user_id=%s AND t.expires_at>clock_timestamp() AND (%s::uuid IS NULL OR g.routine_id=%s)

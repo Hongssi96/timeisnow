@@ -10,7 +10,7 @@ class Create(BaseModel):
 class Event(BaseModel):
     model_config=ConfigDict(extra='forbid')
     client_event_id:UUID
-    type:Literal['departed','approach_arrived','boarded','alighted']
+    type:Literal['departed','approach_arrived','boarded','alighted','missed','arrived']
     occurred_at:AwareDatetime
     leg_id:UUID
     source:Literal['manual']
