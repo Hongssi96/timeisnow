@@ -43,6 +43,8 @@ def source(owner,trip_id,version):
         row=repo.owned(c,owner,trip_id)
         if row is None:trips.missing()
         events=repo.events(c,trip_id)
+    if any(e['type'] in ('approach_arrived','boarded') for e in events):
+        raise AuthError(409,'INVALID_EVENT_ORDER','접근 완료나 탑승을 기록했어요. 첫 탑승 전 접근 안내를 종료해주세요.')
     if row['version']!=version or row['status']!='active' or len(events)!=1 or events[0]['type']!='departed' or events[0]['source']!='manual' or events[0]['excluded']:
         raise AuthError(409,'VERSION_CONFLICT','유효한 출발 확인과 진행 중인 이동이 필요해요.')
     snap=row['snapshot']

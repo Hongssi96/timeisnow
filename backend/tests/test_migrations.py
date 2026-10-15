@@ -35,6 +35,11 @@ class MigrationTest(unittest.TestCase):
                             connection.execute(text("""INSERT INTO guidance_snapshots(id,user_id,snapshot,expires_at)
                                 VALUES(:id,:uid,'{}',now()+interval '90 days')"""), {'id':item,'uid':uid})
                             table = 'guidance_snapshots'
+                            trip_id, event_id = str(uuid4()), str(uuid4())
+                            connection.execute(text("""INSERT INTO manual_trips(id,user_id,guidance_id,measurement_mode,expires_at)
+                                VALUES(:id,:uid,:gid,'assisted',now()+interval '90 days')"""), {'id':trip_id,'uid':uid,'gid':item})
+                            connection.execute(text("""INSERT INTO manual_trip_events(id,trip_id,client_event_id,body_hash,type,leg_id,source,occurred_at)
+                                VALUES(:id,:tid,:id,:hash,'departed',:id,'manual',now())"""), {'id':event_id,'tid':trip_id,'hash':'0'*64})
                         else:
                             connection.execute(text("INSERT INTO meetings(id,user_id,title) VALUES(:id,:uid,'parent fixture')"),
                                                {'id':item,'uid':uid})
@@ -42,8 +47,24 @@ class MigrationTest(unittest.TestCase):
                         connection.commit()
                         command.upgrade(config, 'head')
                         self.assertEqual(connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one(),
-                                         '0014_integrated_features')
+                                         '0015_first_boarding_events')
                         self.assertEqual(str(connection.execute(text(f'SELECT id FROM {table}')).scalar_one()), item)
+                        if parent == '0013_manual_trips':
+                            self.assertEqual(str(connection.execute(text('SELECT id FROM manual_trip_events')).scalar_one()),event_id)
+                            for kind in ('approach_arrived','boarded'):
+                                eid=str(uuid4())
+                                connection.execute(text("""INSERT INTO manual_trip_events(id,trip_id,client_event_id,body_hash,type,leg_id,source,occurred_at)
+                                    VALUES(:id,:tid,:id,:hash,:kind,:id,'manual',now())"""), {'id':eid,'tid':trip_id,'hash':'0'*64,'kind':kind})
+                            connection.commit()
+                            from sqlalchemy.exc import IntegrityError
+                            with self.assertRaises(IntegrityError):command.downgrade(config,'0014_integrated_features')
+                            connection.rollback()
+                            self.assertEqual(connection.execute(text('SELECT count(*) FROM manual_trip_events')).scalar_one(),3)
+                            connection.execute(text("DELETE FROM manual_trip_events WHERE type<>'departed'"))
+                            connection.commit()
+                            command.downgrade(config,'0014_integrated_features')
+                            command.upgrade(config,'head')
+                            self.assertEqual(str(connection.execute(text('SELECT id FROM manual_trip_events')).scalar_one()),event_id)
                         self.assertTrue({'meetings','manual_trips','guidance_snapshots'} <=
                                         set(inspect(connection).get_table_names(schema=schema)))
                         connection.commit()
@@ -103,7 +124,7 @@ class MigrationTest(unittest.TestCase):
                     command.upgrade(config, 'head')
                     self.assertEqual(connection.execute(text(
                         "SELECT version_num FROM alembic_version")).scalars().all(),
-                        ["0014_integrated_features"])
+                        ["0015_first_boarding_events"])
                     self.assertEqual(sorted(inspect(connection).get_table_names(schema=schema)),
                                      ['ai_executions', 'alembic_version', 'auth_credentials', 'auth_rate_limit_buckets',
                                       'auth_sessions', 'guidance_snapshots', 'jobs', 'journey_plans', 'journey_search_keys', 'journey_searches',

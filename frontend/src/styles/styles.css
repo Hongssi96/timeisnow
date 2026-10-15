@@ -34,6 +34,8 @@
 .location-confirmation .info-box, .location-confirmation p[role] { font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
 @media(max-width:680px) { .place-map { height: 260px; } .pin-controls { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 /* F03-04: shared palette and buttons for temporary origin selection. */
+.trip-progress-actions { flex-wrap: wrap; }
+.button-row.trip-progress-actions > button { flex: 1 1 160px; }
 /* F04-03: route comparison uses the existing surfaces, buttons and green. */
 .journey-comparison .text-button{min-height:44px}.journey-comparison .empty-state p{color:var(--ink);font-size:14px;line-height:1.8;overflow-wrap:anywhere}.journey-comparison .empty-state .button-row{flex-wrap:wrap}.journey-comparison .empty-state .secondary{color:var(--green)}
 .candidate-detail .route-detail p{color:var(--ink);font-size:14px}.route-candidate.expanded{grid-column:1/-1}

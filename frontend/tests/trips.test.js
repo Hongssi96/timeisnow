@@ -1,6 +1,6 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {apiRequest} from '../src/lib/api';
-import {activeTrip,confirmDeparture,cancelTrip,readTrip} from '../src/lib/trips';
+import {activeTrip,confirmDeparture,confirmProgress,cancelTrip,readTrip} from '../src/lib/trips';
 vi.mock('../src/lib/api',async()=>({...await vi.importActual('../src/lib/api'),apiRequest:vi.fn()}));
 const at='2026-10-14T04:00:00Z';
 function trip(){return {trip_id:'t1',guidance_id:'g1',routine_id:'r1',measurement_mode:'assisted',status:'active',version:1,created_at:at,expires_at:'2027-01-12T04:00:00Z',departure_event:null};}
@@ -32,4 +32,28 @@ it('existing departed record is recovered without sending a second event',async(
 it('cancel uses server trip version and checks the saved cancelled state',async()=>{
  apiRequest.mockResolvedValueOnce(reply({csrf_token:'csrf'})).mockResolvedValueOnce(reply({...trip(),status:'cancelled',version:2}));
  await cancelTrip(trip());expect(apiRequest.mock.calls[1][1].body).toEqual({outcome:'cancelled',expected_version:1});
+});
+it('progress resolves saved approach and first vehicle legs and preserves departure',async()=>{
+ const departed={...trip(),departure_event:event()};
+ for(const [type,leg_id,field] of [['approach_arrived','l1','approach_event'],['boarded','bus1','boarding_event']]){
+  const progress={...event(),type,leg_id};
+  apiRequest.mockResolvedValueOnce(reply({trip:departed,guidance:{candidate:{ordered_legs:[{leg_id:'l1',type:'WALKING'},{leg_id:'bus1',type:'BUS'}]}}})).mockResolvedValueOnce(reply({csrf_token:'csrf'})).mockResolvedValueOnce(reply(progress));
+  const result=await confirmProgress({trip:departed,type,eventId:'ce1',occurredAt:at});
+  expect(result[field]).toEqual(progress);expect(result.departure_event).toEqual(event());
+  expect(apiRequest.mock.calls.at(-1)[1].body).toMatchObject({type,leg_id,source:'manual'});
+ }
+});
+it('progress retry recovers a saved event without a second POST',async()=>{
+ const boarding={...event(),type:'boarded',leg_id:'bus1'};
+ apiRequest.mockResolvedValue(reply({trip:{...trip(),departure_event:event(),boarding_event:boarding}}));
+ expect((await confirmProgress({trip:trip(),type:'boarded'})).boarding_event).toEqual(boarding);expect(apiRequest).toHaveBeenCalledTimes(1);
+});
+it('rejects incorrect event types in trip summary fields',()=>{
+ expect(()=>readTrip({...trip(),departure_event:{...event(),type:'boarded'}})).toThrow();
+ expect(()=>readTrip({...trip(),boarding_event:event()})).toThrow();
+});
+it('recovers boarding from another tab while retrying an approach report',async()=>{
+ const saved={...trip(),departure_event:event(),boarding_event:{...event(),type:'boarded',leg_id:'bus1'}};
+ apiRequest.mockResolvedValue(reply({trip:saved}));
+ expect(await confirmProgress({trip:trip(),type:'approach_arrived'})).toEqual(saved);expect(apiRequest).toHaveBeenCalledTimes(1);
 });

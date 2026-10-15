@@ -302,3 +302,7 @@ ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조�
 ## 이동·약속 migration 통합 — 2026-10-14
 
 단일 head는0014_integrated_features다. 부모0013_manual_trips와0013_meeting_core는 기존 ID/0012 부모를 보존하며 no-op merge revision으로 연결한다. 어느0013 설치에서도 누락된 다른 도메인 DDL을 적용한 뒤 같은head로 업그레이드한다. 이동의 guidance_snapshots/manual_trips/manual_trip_events/manual_trip_creation_keys와 약속의 meetings/meeting_members/meeting_revisions/meeting_invites/meeting_idempotency_keys/jobs를 함께 유지한다. 통합으로 입력/보관/권한/API 계약 변경 없음. 개발DB0013_manual_trips→0014 적용·회원21/장소35/루틴12/기존이동0/스냅샷0 개수 유지, 약속6테이블 생성 확인. 상세 development_log.md 통합 검증 기록.
+
+## F08-02b 첫 탑승 이벤트 확장 (2026-10-15)
+
+0015_first_boarding_events가0014_integrated_features를 잇는다. manual_trip_events.type CHECK에 approach_arrived/boarded를 추가하고 기존 행·고유 제약·90일 보관을 보존한다. downgrade는 새 유형 행이 남으면 실패하여 관측을 자동 삭제하지 않는다. 서비스의 본인/세션 잠금 아래 첫 이벤트 순서를 검사한다.

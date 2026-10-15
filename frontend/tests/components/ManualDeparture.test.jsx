@@ -2,8 +2,8 @@ import React from 'react';
 import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import ManualDeparture from '../../src/components/ManualDeparture';
-import {activeTrip,confirmDeparture,cancelTrip} from '../../src/lib/trips';
-vi.mock('../../src/lib/trips',()=>({activeTrip:vi.fn(),confirmDeparture:vi.fn(),cancelTrip:vi.fn()}));
+import {activeTrip,confirmDeparture,confirmProgress,cancelTrip} from '../../src/lib/trips';
+vi.mock('../../src/lib/trips',()=>({activeTrip:vi.fn(),confirmDeparture:vi.fn(),confirmProgress:vi.fn(),cancelTrip:vi.fn()}));
 const trip={trip_id:'t',guidance_id:'g',routine_id:'r',version:1,status:'active',departure_event:null};
 beforeEach(()=>{activeTrip.mockResolvedValue(null);confirmDeparture.mockResolvedValue({...trip,departure_event:{event_id:'e'}});cancelTrip.mockResolvedValue({...trip,status:'cancelled'});});
 afterEach(()=>{cleanup();vi.resetAllMocks();});
@@ -39,4 +39,21 @@ it('server reported state refreshes manual recovery without creating another eve
  const view=await mount();activeTrip.mockResolvedValue({...trip,departure_event:{event_id:'e'}});
  view.rerender(<ManualDeparture routineId="r" departure={{departure_state:'reported_departed',guidance_id:null}} available={false}/>);await act(async()=>{});
  expect(screen.getByText('출발 확인을 저장했어요.')).toBeTruthy();expect(confirmDeparture).not.toHaveBeenCalled();expect(activeTrip).toHaveBeenCalledTimes(2);
+});
+it('records approach then boarding and restores persisted progress',async()=>{
+ const departed={...trip,departure_event:{event_id:'e'}};
+ activeTrip.mockResolvedValue(departed);confirmProgress.mockResolvedValueOnce({...departed,approach_event:{event_id:'a'}}).mockResolvedValueOnce({...departed,approach_event:{event_id:'a'},boarding_event:{event_id:'b'}});
+ await mount();await act(async()=>fireEvent.click(screen.getByText('정류장에 도착했어요')));
+ expect(screen.getByText('정류장 도착 확인을 저장했어요.')).toBeTruthy();expect(screen.queryByText('첫 탑승 전 남은 경로 확인')).toBeNull();
+ await act(async()=>fireEvent.click(screen.getByText('탑승했어요')));
+ expect(screen.getByText(/탑승 확인을 저장했어요/)).toBeTruthy();expect(screen.queryByText('탑승했어요')).toBeNull();
+ expect(confirmProgress.mock.calls.map(([op])=>op.type)).toEqual(['approach_arrived','boarded']);
+});
+it('uncertain boarding hides guidance and retries the same operation',async()=>{
+ activeTrip.mockResolvedValue({...trip,departure_event:{event_id:'e'}});confirmProgress.mockRejectedValueOnce({code:'TIMEOUT'});
+ await mount();await act(async()=>fireEvent.click(screen.getByText('탑승했어요')));
+ const first=confirmProgress.mock.calls[0][0];expect(screen.getByText('정류장에 도착했어요').disabled).toBe(true);
+ expect(screen.queryByText('첫 탑승 전 남은 경로 확인')).toBeNull();
+ confirmProgress.mockResolvedValue({...trip,departure_event:{event_id:'e'},boarding_event:{event_id:'b'}});
+ await act(async()=>fireEvent.click(screen.getByText('탑승했어요')));expect(confirmProgress.mock.calls[1][0]).toBe(first);
 });
