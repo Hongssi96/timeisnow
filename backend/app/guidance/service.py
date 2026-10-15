@@ -80,7 +80,7 @@ def calculate(evidence,base,walking,profile,at,basis='recommended',*,choice=None
     return data
 
 
-def first_departure(user_id,search_id,candidate_id,basis='recommended',include_connections=False,*,access_origin_ref=None,selector=None,reported_departure=False,transfer_access=False):
+def first_departure(user_id,search_id,candidate_id,basis='recommended',include_connections=False,*,access_origin_ref=None,destination_ref=None,selector=None,reported_departure=False,transfer_access=False):
     deadline=time.monotonic()+20
     if basis not in ('recommended','now'):raise AuthError(422,'VALIDATION_ERROR','출발 기준을 확인해주세요.')
     user_id=arrivals.parsed_id(str(user_id));search_id=arrivals.parsed_id(str(search_id));candidate_id=arrivals.parsed_id(str(candidate_id))
@@ -109,9 +109,18 @@ def first_departure(user_id,search_id,candidate_id,basis='recommended',include_c
         if walk_evidence is not None:
             base=walk_evidence['seconds']
             walking=int((Decimal(base)*Decimal(str(profile['factor']))).to_integral_value(rounding=ROUND_CEILING))
+    supplements=[];supplement_reasons=[]
+    if include_connections and access_origin_ref is not None and destination_ref is not None and walking is not None and evidence.valid_for_guidance:
+        from app.guidance import route_walks
+        supplements,supplement_reasons=route_walks.get(user_id,search_id,candidate_id,route,fingerprint,destination_ref,profile['factor'],deadline)
+        _,_,_,latest_fingerprint=arrivals.owned(user_id,search_id,candidate_id)
+        if latest_fingerprint!=fingerprint or settings(user_id)!=profile:
+            raise AuthError(409,'VERSION_CONFLICT','경로 또는 개인 설정이 변경됐어요. 다시 확인해주세요.')
     at=arrivals.now()
     choice=selector(evidence,walking,profile,at,fingerprint) if selector is not None else None
     data=calculate(evidence,base,walking,calculation_profile,at,basis,choice=choice)
+    data.supplemental_walks=supplements;data.reasons.extend(supplement_reasons)
+    if supplements:data.valid_until=min(data.valid_until,*(w.valid_until for w in supplements))
     if walk_evidence is not None:
         data.provider_approach_source='boarding_walk'
         data.approach_fetched_at=walk_evidence['fetched_at'];data.approach_valid_until=walk_evidence['expires_at']
@@ -119,16 +128,29 @@ def first_departure(user_id,search_id,candidate_id,basis='recommended',include_c
         data.reasons.append('BOARDING_WALK_ESTIMATE')
     elif walk_reason:data.reasons.append(walk_reason)
     if include_connections:
-        from app.guidance.connections import evaluate,following_arrivals
-        data=evaluate(route,data,calculation_profile,arrivals.now(),lambda leg:following_arrivals(user_id,search_id,candidate_id,leg,fingerprint,deadline))
+        from app.guidance.connections import evaluate,following_arrivals,unconfirmed
+        def fetch_following(leg):
+            try:return following_arrivals(user_id,search_id,candidate_id,leg,fingerprint,deadline)
+            except AuthError as error:
+                if destination_ref is None or error.code not in ('PROVIDER_TIMEOUT','PROVIDER_UNAVAILABLE','PROVIDER_RESPONSE_INVALID'):raise
+                fallback=unconfirmed(search_id,candidate_id,leg,data.valid_until,'TRANSFER_ARRIVAL_UNAVAILABLE')
+                from app.arrivals import cache
+                root=cache.lookup(user_id,search_id,candidate_id,fingerprint,arrivals.now())
+                child=cache.following_entry(root,leg['leg_id']) if root else None
+                if child is not None and child.lock.acquire(blocking=False):
+                    try:
+                        child.evidence=fallback.model_copy(deep=True);child.attempted_at=arrivals.now()
+                    finally:child.lock.release()
+                return fallback
+        data=evaluate(route,data,calculation_profile,arrivals.now(),fetch_following)
         latest,_,_,latest_fingerprint=arrivals.owned(user_id,search_id,candidate_id)
         if latest_fingerprint!=fingerprint or settings(user_id)!=profile:
             raise AuthError(409,'VERSION_CONFLICT','경로 또는 개인 설정이 변경됐어요. 다시 확인해주세요.')
         data.valid_until=min(data.valid_until,latest['expires_at'])
         if time.monotonic()>deadline:
-            data.connection_status='unknown';data.transfers=[];data.estimated_final_alighting_at=None;data.reasons.append('CONNECTION_TIME_LIMIT')
+            data.connection_status='unknown';data.transfers=[];data.supplemental_walks=[];data.estimated_final_alighting_at=None;data.reasons.append('CONNECTION_TIME_LIMIT')
         if arrivals.now()>data.valid_until or (data.vehicle_arrival_at is not None and arrivals.now()>=data.vehicle_arrival_at):
-            data.connection_status='stale';data.transfers=[];data.estimated_final_alighting_at=None
+            data.connection_status='stale';data.transfers=[];data.supplemental_walks=[];data.estimated_final_alighting_at=None
             data.valid_for_guidance=False;data.status='stale'
     return data
 

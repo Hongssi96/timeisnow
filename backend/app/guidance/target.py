@@ -30,8 +30,9 @@ def evaluate(route,departure,target_time,profile,at):
         for index,(connection,check) in enumerate(zip(connections,departure.transfers)):
             if check.feasibility!='estimated_feasible' or str(check.connection_id)!=connection['connection_id'] or str(check.from_leg_id)!=transit[index]['leg_id'] or str(check.to_leg_id)!=transit[index+1]['leg_id']:
                 return unknown('CONNECTIONS_UNCONFIRMED')
-            seconds=connection['walking_seconds']
-            if seconds is None or seconds<=0:return unknown('TRANSFER_TIME_UNCONFIRMED')
+            from app.guidance.route_walks import transfer_seconds
+            seconds=transfer_seconds(connection,departure)
+            if seconds is None or seconds<0 or (seconds==0 and connection['walking_seconds'] is not None):return unknown('TRANSFER_TIME_UNCONFIRMED')
             walk=int((Decimal(seconds)*Decimal(str(profile['factor']))).to_integral_value(rounding=ROUND_CEILING))
             alight=board+timedelta(seconds=transit[index]['seconds']);minimum=alight+timedelta(seconds=walk+profile['transfer_buffer'])
             if check.transfer_walk_seconds!=walk or check.transfer_buffer_seconds!=profile['transfer_buffer'] or check.estimated_alighting_at!=alight or check.minimum_boarding_at!=minimum or check.next_boarding_at is None or check.next_boarding_at<minimum:
@@ -39,14 +40,16 @@ def evaluate(route,departure,target_time,profile,at):
             board=check.next_boarding_at
         alight=board+timedelta(seconds=transit[-1]['seconds'])
         if alight!=departure.estimated_final_alighting_at:return unknown('FINAL_ALIGHTING_UNCONFIRMED')
-        tail=legs[transit[-1]['sequence']+1:]
-        if not tail or 'EGRESS_WALK_MISSING' in route['missing_segments'] or any(leg['type']!='WALKING' or leg['walking_role']!='egress' or leg['seconds']<=0 for leg in tail):return unknown('EGRESS_TIME_UNCONFIRMED')
-        egress=int((Decimal(sum(leg['seconds'] for leg in tail))*Decimal(str(profile['factor']))).to_integral_value(rounding=ROUND_CEILING))
+        from app.guidance.route_walks import egress_seconds
+        base_egress=egress_seconds(route,departure)
+        if base_egress is None:return unknown('EGRESS_TIME_UNCONFIRMED')
+        egress=int((Decimal(base_egress)*Decimal(str(profile['factor']))).to_integral_value(rounding=ROUND_CEILING))
         arrival=alight+timedelta(seconds=egress)
         if arrival<at:return unknown('DESTINATION_TIME_UNCONFIRMED')
         result.status='estimated_meets' if arrival<=target else 'estimated_late'
         result.estimated_destination_arrival_at=arrival;result.margin_seconds=math.floor((target-arrival).total_seconds())
         result.egress_seconds=egress;result.timing_basis='provider_timeline';result.reasons=['PROVIDER_TIMELINE_ESTIMATE','PROVIDER_PERSONALIZED_EGRESS']
+        if any(w.role=='egress' for w in departure.supplemental_walks):result.reasons.append('SUPPLEMENTAL_EGRESS_WALK')
         if route.get('timing_breakdown',{}).get('status')=='unallocated':result.reasons.append('PROVIDER_UNALLOCATED_TIME_NOT_USED')
         return result
     except (ArithmeticError,ValueError,TypeError,OverflowError):return unknown('DESTINATION_TIME_UNCONFIRMED')
