@@ -72,3 +72,18 @@ it('changed progress anchor recovers current stage without sending a stale actio
  apiRequest.mockResolvedValue(reply({trip:saved}));
  expect(await confirmProgress({trip:current,type:'alighted'})).toEqual(saved);expect(apiRequest).toHaveBeenCalledTimes(1);
 });
+function ended(status='completed'){
+ return {...trip(),status,version:2,departure_event:event(),terminal_event:{...event(),type:status==='completed'?'arrived':'missed'},progress:progress(status,{},'end')};
+}
+it('recovers a persisted terminal event after a lost POST response without writing again',async()=>{
+ apiRequest.mockResolvedValue(reply({trip:ended()}));
+ expect((await confirmProgress({trip:{...trip(),departure_event:event()},type:'arrived'})).status).toBe('completed');
+ expect(apiRequest).toHaveBeenCalledTimes(1);
+});
+it('routine recovery can include completed and missed trips but rejects invalid terminal claims',async()=>{
+ apiRequest.mockResolvedValue(reply({items:[ended('missed')]}));
+ expect((await activeTrip('r1',undefined,true)).status).toBe('missed');
+ expect(apiRequest.mock.calls[0][0]).toBe('/api/v1/trips?routine_id=r1&limit=1');
+ expect(()=>readTrip({...ended(),terminal_event:null})).toThrow();
+ expect(()=>readTrip({...ended(),terminal_event:{...event(),type:'missed'}})).toThrow();
+});

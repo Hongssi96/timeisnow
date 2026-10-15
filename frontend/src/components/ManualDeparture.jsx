@@ -10,12 +10,12 @@ export default function ManualDeparture({routineId,departure,available,onReporte
  useEffect(()=>{
   alive.current=true;const request=new AbortController();controller.current=request;busy.current=true;operation.current=null;
   setState({phase:'loading',trip:null});
-  activeTrip(routineId,request.signal).then(trip=>{if(alive.current&&!request.signal.aborted){setState({phase:'ready',trip});if(trip?.departure_event)onReported?.();}}).catch(error=>{if(alive.current&&!request.signal.aborted)setState({phase:'error',trip:null,error:failure(error)});}).finally(()=>{if(controller.current===request)busy.current=false;});
+  activeTrip(routineId,request.signal,true).then(trip=>{if(alive.current&&!request.signal.aborted){if(trip?.guidance_id===cancelledGuidance.current&&trip.status!=='active')trip=null;setState({phase:'ready',trip});if(trip?.status==='active'&&trip.departure_event)onReported?.();}}).catch(error=>{if(alive.current&&!request.signal.aborted)setState({phase:'error',trip:null,error:failure(error)});}).finally(()=>{if(controller.current===request)busy.current=false;});
   let recovery=null;
   const recover=async()=>{
    if(!alive.current||busy.current||operation.current||document.visibilityState==='hidden')return;
    busy.current=true;recovery=new AbortController();const signal=recovery.signal;
-   try{const trip=await activeTrip(routineId,signal);if(alive.current&&!signal.aborted){setState({phase:'ready',trip});if(trip?.departure_event)onReported?.();}}
+   try{let trip=await activeTrip(routineId,signal,true);if(alive.current&&!signal.aborted){if(trip?.guidance_id===cancelledGuidance.current&&trip.status!=='active')trip=null;setState({phase:'ready',trip});if(trip?.status==='active'&&trip.departure_event)onReported?.();}}
    catch(error){if(alive.current&&!signal.aborted)setState({phase:'error',trip:null,error:failure(error)});}
    finally{busy.current=false;}
   };
@@ -31,7 +31,7 @@ export default function ManualDeparture({routineId,departure,available,onReporte
    else{
     operation.current ||= {type,trip:previous,guidanceId:departure?.guidance_id,routineId,eventId:crypto.randomUUID(),occurredAt:new Date().toISOString()};
     const trip=await (type==='departed'?confirmDeparture:confirmProgress)(operation.current,request.signal);
-    if(alive.current&&!request.signal.aborted){operation.current=null;setState({phase:'ready',trip});if(type==='departed')onReported?.();}
+    if(alive.current&&!request.signal.aborted){operation.current=null;if(trip.status==='cancelled'){cancelledGuidance.current=trip.guidance_id;setState({phase:'ready',trip:null});onCancelled?.();}else{setState({phase:'ready',trip});if(type==='departed')onReported?.();}}
    }
   }catch(error){if(alive.current&&!request.signal.aborted){if(['RESOURCE_NOT_FOUND','VERSION_CONFLICT'].includes(error.code)&&!operation.current?.trip)operation.current=null;setState(old=>({...old,phase:'ready',error:type==='departed'||cancel?failure(error):'이동 기록을 확인하지 못했어요. 같은 기록을 다시 시도해주세요.',trip:operation.current?.trip||previous}));}}
   finally{if(controller.current===request)busy.current=false;}
@@ -47,18 +47,21 @@ export default function ManualDeparture({routineId,departure,available,onReporte
    {state.trip?.boarding_event&&!progress&&<p role="status">탑승 확인을 저장했어요. 차량 안 안내는 준비 중이에요.</p>}
    {progress?.stage==='onboard'&&<div className="info-box" role="status"><strong>{progress.vehicle_name} 탑승 중</strong><p>하차 지점: {progress.alighting_stop}</p><p>현재 차량의 남은 운행시간 근거가 없어 여유와 예상 도착 시각을 표시할 수 없어요. 실제로 내린 뒤 하차를 확인해주세요.</p></div>}
    {['transfer','transfer_waiting'].includes(progress?.stage)&&<div className="info-box" role="status"><strong>다음 차량: {progress.vehicle_name}</strong><p>승차 지점: {progress.boarding_stop}</p><p>하차 후 현재 위치를 확인하면 다음 차량까지 남은 경로를 조회할 수 있어요.</p></div>}
-   {progress?.stage==='transit_finished'&&<p role="status">마지막 차량 하차를 저장했어요. 목적지 도착을 뜻하지 않아요. 남은 도보와 도착 확인은 아직 준비 중이에요.</p>}
+   {progress?.stage==='transit_finished'&&<p role="status">마지막 차량 하차를 저장했어요. 목적지까지 이동한 뒤 도착을 직접 확인해주세요.</p>}
+   {state.trip?.status==='completed'&&<p className="info-box" role="status">목적지 도착 확인을 저장하고 이동을 완료했어요. 사용자가 직접 남긴 기록이에요.</p>}
+   {state.trip?.status==='missed'&&<p className="info-box" role="status">놓침 기록을 저장하고 이번 이동을 종료했어요. 다음 차량은 최신 출발 안내에서 새 이동으로 시작해주세요.</p>}
    {!state.trip&&cancelledGuidance.current===departure?.guidance_id&&<p role="status">이동을 취소했어요. 최신 출발을 다시 확인하면 새 이동을 기록할 수 있어요.</p>}
    <div className="button-row trip-progress-actions">
     {!state.trip?.departure_event&&(state.trip||available&&departure?.guidance_id&&departure.guidance_id!==cancelledGuidance.current)&&<button className="primary" disabled={state.phase==='saving'} onClick={()=>save()}>{state.phase==='saving'?'출발 확인 저장 중…':'지금 출발했어요'}</button>}
-    {state.trip?.departure_event&&progress&&Object.keys(progress.actions).filter(type=>type!=='departed').map(type=><button key={type} className={type==='boarded'?'primary':'secondary'} disabled={state.phase==='saving'||!!operation.current&&operation.current.type!==type} onClick={()=>save(false,type)}>{{approach_arrived:'승차 지점에 도착했어요',boarded:'이 차량에 탑승했어요',alighted:'이 차량에서 내렸어요'}[type]}</button>)}
+    {state.trip?.status==='active'&&state.trip.departure_event&&progress&&Object.keys(progress.actions).filter(type=>type!=='departed').map(type=><button key={type} className={['boarded','arrived'].includes(type)?'primary':'secondary'} disabled={state.phase==='saving'||!!operation.current&&operation.current.type!==type} onClick={()=>save(false,type)}>{{approach_arrived:'승차 지점에 도착했어요',boarded:'이 차량에 탑승했어요',alighted:'이 차량에서 내렸어요',missed:'놓침을 기록하고 이동 종료',arrived:'목적지에 도착했어요'}[type]}</button>)}
     {state.trip?.departure_event&&!progress&&!state.trip.boarding_event&&<>
      {!state.trip.approach_event&&<button className="secondary" disabled={state.phase==='saving'||!!operation.current&&operation.current.type!=='approach_arrived'} onClick={()=>save(false,'approach_arrived')}>정류장에 도착했어요</button>}
      <button className="primary" disabled={state.phase==='saving'||!!operation.current&&operation.current.type!=='boarded'} onClick={()=>save(false,'boarded')}>탑승했어요</button>
     </>}
-    {state.trip&&<button className="secondary" disabled={state.phase==='saving'} onClick={()=>save(true)}>이 이동 취소</button>}
+    {state.trip?.status==='active'&&<button className="secondary" disabled={state.phase==='saving'} onClick={()=>save(true)}>이 이동 취소</button>}
+    {['completed','missed'].includes(state.trip?.status)&&<button className="secondary" onClick={()=>{cancelledGuidance.current=state.trip.guidance_id;operation.current=null;setState({phase:'ready',trip:null});onCancelled?.();}}>새 이동 준비</button>}
    </div>
-   {state.trip?.departure_event&&state.phase!=='saving'&&!state.error&&(
+   {state.trip?.status==='active'&&state.trip.departure_event&&state.phase!=='saving'&&!state.error&&(
     progress?['approaching','transfer','transfer_waiting'].includes(progress.stage):!state.trip.approach_event&&!state.trip.boarding_event
    )&&<RemainingGuidance key={`${state.trip.trip_id}:${progress?.anchor_event_id||'first'}`} trip={state.trip}/>}
   </>}

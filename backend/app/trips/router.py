@@ -6,7 +6,7 @@ router=APIRouter(prefix='/api/v1/trips')
 @router.post('',status_code=201)
 def create(request:Request,body:dto.Create):return service.create(request,body)
 @router.get('')
-def listed(request:Request,limit:int=Query(default=20,ge=1,le=100),cursor:str|None=None,routine_id:str|None=None,status:Literal['active','cancelled']|None=None):
+def listed(request:Request,limit:int=Query(default=20,ge=1,le=100),cursor:str|None=None,routine_id:str|None=None,status:Literal['active','cancelled','missed','completed']|None=None):
     return service.listed(request,limit,cursor,routine_id,status)
 @router.get('/{trip_id}')
 def detail(request:Request,trip_id:str):return service.detail(request,trip_id)

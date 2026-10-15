@@ -246,3 +246,5 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 - F08-02b(2026-10-15): 수동 이동 기록은 기존 primary/secondary와 button-row를 재사용한다. trip-progress-actions 안의 버튼만 160px 기준으로 줄바꿈해 모바일에서 글자가 낱자로 나뉘지 않게 한다. 저장 중/실패 시 이전 접근 여유는 숨기며 성공은 서버 응답 후 표시한다.
 
 - 구간 안내(2026-10-15): 기존 info-box·trip-progress-actions·primary/secondary를 재사용해 현재 차량/하차 지점·환승 위치 확인·수동 다음 행동을 표시한다. 차량 안 미확인 ETA는 표시하지 않는다. 새 공통 색상/간격/CSS 없음.
+
+- 종료 결과(2026-10-15): 기존 info-box/primary/secondary/trip-progress-actions를 재사용한다. 놓침 버튼은 이동 종료까지 명시하고 목적지 도착은 최종 하차 뒤 별도 확인한다. 종료/실패 시 숫자 숨김·새 이동 준비·재방문 복구, 새 CSS/색상 없음.
