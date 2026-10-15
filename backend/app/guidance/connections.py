@@ -25,10 +25,13 @@ def following_arrivals(user_id,search_id,candidate_id,leg,snapshot,deadline):
         if entry.evidence is not None and entry.attempted_at is not None and at-entry.attempted_at<timedelta(seconds=60) and at<=entry.evidence.expires_at:
             evidence=entry.evidence.model_copy(deep=True);evidence.expires_at=min(evidence.expires_at,expiry)
             return arrivals.project(evidence,at)
+        if entry.mapping is None and entry.mapping_attempted_at is not None and at-entry.mapping_attempted_at<timedelta(seconds=60):
+            return unconfirmed(search_id,candidate_id,leg,expiry,'LEG_MAPPING_UNCONFIRMED')
         if deadline-time.monotonic()<=3:return unconfirmed(search_id,candidate_id,leg,expiry,'CONNECTION_TIME_LIMIT')
         arrivals.reserve_refresh(user_id)
         diagnostics={}
-        value=entry.mapping or arrivals.public_mapping.resolve(entry.context,expiry,deadline=deadline,diagnostics=diagnostics)
+        endpoint={}
+        value=entry.mapping or arrivals.public_mapping.resolve(entry.context,expiry,deadline=deadline,diagnostics=diagnostics,boarding_endpoint=endpoint)
         updated,_,_,after=arrivals.owned(user_id,search_id,candidate_id)
         if after!=snapshot:raise AuthError(409,'VERSION_CONFLICT','경로가 변경됐어요.')
         expiry=min(expiry,updated['expires_at'])
@@ -46,6 +49,7 @@ def following_arrivals(user_id,search_id,candidate_id,leg,snapshot,deadline):
             arrivals.checked_mapping(mapping,leg,arrivals.now())
             evidence=arrivals.normalize(mapping,values,received,arrivals.now(),search_id,candidate_id,min(expiry,updated['expires_at']))
             entry.mapping=mapping
+            if endpoint:entry.boarding_endpoint=endpoint
         entry.evidence=evidence.model_copy(deep=True);entry.attempted_at=evidence.received_at or arrivals.now()
         return evidence
     finally:entry.lock.release()
@@ -64,14 +68,18 @@ def evaluate(route,departure,profile,at,fetch):
         previous=legs[connection['from_leg_id']];following=legs[connection['to_leg_id']]
         if board is None:
             check.reasons=['PREVIOUS_BOARDING_UNCONFIRMED'];checks.append(check);continue
-        if previous['seconds']<=0 or connection['walking_seconds'] is None or connection['walking_seconds']<=0:
+        from app.guidance.route_walks import transfer_seconds
+        seconds=transfer_seconds(connection,departure)
+        if previous['seconds']<=0 or seconds is None or seconds<0 or (seconds==0 and connection['walking_seconds'] is not None):
             check.reasons=['TRANSFER_TIME_UNCONFIRMED'];board=None;overall='unknown';checks.append(check);continue
         try:
-            walk=int((Decimal(connection['walking_seconds'])*Decimal(str(profile['factor']))).to_integral_value(rounding=ROUND_CEILING))
+            walk=int((Decimal(seconds)*Decimal(str(profile['factor']))).to_integral_value(rounding=ROUND_CEILING))
             alight=board+timedelta(seconds=previous['seconds']);minimum=alight+timedelta(seconds=walk+profile['transfer_buffer'])
         except (ArithmeticError,ValueError,OverflowError):
             check.reasons=['TRANSFER_TIME_UNCONFIRMED'];board=None;overall='unknown';checks.append(check);continue
         check.estimated_alighting_at=alight;check.minimum_boarding_at=minimum;check.transfer_walk_seconds=walk
+        if connection['walking_seconds'] is None:check.reasons.append('SUPPLEMENTAL_TRANSFER_WALK')
+        if seconds==0:check.reasons.append('SAME_STOP_TRANSFER')
         if previous['type']!='BUS' or following['type']!='BUS':
             check.reasons=['TRANSFER_PROVIDER_UNSUPPORTED'];board=None;overall='unknown';checks.append(check);continue
         evidence=fetch(following)
@@ -85,7 +93,7 @@ def evaluate(route,departure,profile,at,fetch):
             check.feasibility='unavailable';check.reasons=['NO_SUPPLIED_VEHICLE_AFTER_MINIMUM'];board=None;overall='unavailable';checks.append(check);continue
         chosen=min(options,key=lambda item:(item.predicted_arrival_at,str(item.candidate_id)))
         board=chosen.predicted_arrival_at;check.next_boarding_at=board;check.feasibility='estimated_feasible'
-        check.reasons=['PROVIDER_TRANSFER_ESTIMATE'];checks.append(check)
+        check.reasons.append('PROVIDER_TRANSFER_ESTIMATE');checks.append(check)
     departure.transfers=checks;departure.connection_status=overall
     if board is not None and transit[-1]['seconds']>0:
         try:departure.estimated_final_alighting_at=board+timedelta(seconds=transit[-1]['seconds'])

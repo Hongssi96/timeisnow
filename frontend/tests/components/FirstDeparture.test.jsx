@@ -14,6 +14,12 @@ function response() {
 async function mount(){render(<FirstArrivals includeDeparture searchId="search" candidateId="candidate"/>);await act(async()=>{});}
 beforeEach(()=>{elapsed=0;vi.useFakeTimers();vi.spyOn(performance,'now').mockImplementation(()=>elapsed);getFirstDeparture.mockReset();getFirstDeparture.mockResolvedValue(response());Object.defineProperty(document,'hidden',{configurable:true,value:false});});
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.useRealTimers();});
+it('shows same-stop transfer and separately fetched final walk when later vehicles are too early',async()=>{
+ const r=response();r.data.connection_status='unavailable';r.data.transfers=[{connection_id:'link',feasibility:'unavailable',reasons:['NO_SUPPLIED_VEHICLE_AFTER_MINIMUM']}];
+ r.data.supplemental_walks=[{role:'transfer',source:'same_stop',connection_id:'link',walking_seconds:0},{role:'egress',source:'walking_route',connection_id:null,walking_seconds:157}];
+ getFirstDeparture.mockResolvedValue(r);await mount();
+ expect(screen.getByText(/같은 정류소에서 환승/)).toBeTruthy();expect(screen.getByText(/마지막 도보 약 2분 37초/)).toBeTruthy();expect(screen.getByText(/현재 제공된 차량은 도착하기 전에 지나가요/)).toBeTruthy();expect(screen.getByText('3분')).toBeTruthy();
+});
 it('answers with a big minute countdown and no clock or coefficient',async()=>{
   await mount();expect(screen.getByText('언제이니?')).toBeTruthy();expect(screen.getByText('3분')).toBeTruthy();expect(screen.queryByText(/예상 출발/)).toBeNull();expect(screen.queryByText(/개인 계수/)).toBeNull();expect(screen.queryByText(/접근 약/)).toBeNull();expect(screen.getByText('수신 기준 예상')).toBeTruthy();expect(getFirstDeparture).toHaveBeenCalledTimes(1);
 });

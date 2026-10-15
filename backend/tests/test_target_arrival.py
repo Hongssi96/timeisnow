@@ -46,6 +46,9 @@ class TargetUnitTests(unittest.TestCase):
  def test_unset_and_passed_goal_do_not_roll_to_tomorrow(self):
   at,r,d,p=self.fixture();none=target.evaluate(r,d,None,p,at);self.assertEqual(none.status,'not_configured');self.assertIsNone(none.target_arrival_at)
   passed=target.evaluate(r,d,time(16,59),p,at);self.assertEqual(passed.status,'target_passed');self.assertEqual(passed.target_arrival_at.date(),at.date());self.assertIsNone(passed.estimated_destination_arrival_at)
+ def test_egress_still_marked_missing_cannot_use_a_partial_tail(self):
+  at,r,d,p=self.fixture();r['missing_segments'].append('EGRESS_WALK_MISSING')
+  self.assertEqual(target.evaluate(r,d,time(18),p,at).reasons,['EGRESS_TIME_UNCONFIRMED'])
  def test_korean_midnight_uses_local_date_not_utc_date(self):
   at,r,d,p=self.fixture(at=datetime(2026,10,14,16,tzinfo=timezone.utc));one=target.evaluate(r,d,time(1,30),p,at)
   self.assertEqual(one.status,'estimated_meets');self.assertEqual(one.target_arrival_at.astimezone(target.KST).date().isoformat(),'2026-10-15')

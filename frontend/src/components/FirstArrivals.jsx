@@ -96,10 +96,18 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
       {includeDeparture&&departure?.connection_status&&<>
         {expired||now>Date.parse(departure.valid_until)?<p>환승 정보가 만료됐어요. 이전 연결 시각은 사용하지 않아요.</p>:<>
           <p><strong>{connectionText[departure.connection_status]}</strong></p>
+          {!!departure.supplemental_walks?.length&&<div className="candidate-note" aria-label="보완한 도보 안내">
+            {departure.supplemental_walks.map(w=><p key={w.connection_id||'egress'}>
+              {w.source==='same_stop'?'같은 정류소에서 환승 · 환승 여유는 따로 반영해요.':`${w.role==='transfer'?'환승':'마지막'} 도보 약 ${bufferText(w.walking_seconds)} · 별도 조회한 도보 추정`}
+            </p>)}
+          </div>}
+          {departure.reasons?.some(r=>typeof r==='string'&&r.startsWith('TRANSFER_WALK_'))&&<p>환승 도보를 아직 확인하지 못했어요. 최신 출발을 다시 확인해주세요.</p>}
+          {departure.reasons?.some(r=>typeof r==='string'&&r.startsWith('EGRESS_WALK_'))&&<p>마지막 도보를 아직 확인하지 못했어요. 목적지 도착은 확인 전이에요.</p>}
           {!!departure.transfers?.length&&<ul>{departure.transfers.map((c,index)=><li key={c.connection_id}>
             환승 {index+1} · {connectionText[c.feasibility]}
             {c.minimum_boarding_at&&<p>최소 승차 시각 {connectionTime(c.minimum_boarding_at)}</p>}
             {c.next_boarding_at&&<p>다음 차량 예상 {connectionTime(c.next_boarding_at)}</p>}
+            {c.reasons?.includes('NO_SUPPLIED_VEHICLE_AFTER_MINIMUM')&&<p>현재 제공된 차량은 도착하기 전에 지나가요. 이후 차량 정보는 다시 확인해야 해요.</p>}
           </li>)}</ul>}
           {!!departure.transfers?.length&&<p>환승 도보와 차량 시각은 추정값이에요. 실제 환승 성공을 보장하지 않아요.</p>}
         </>}

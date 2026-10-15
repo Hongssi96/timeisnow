@@ -1,6 +1,11 @@
 import { ApiError,apiRequest,isServerTime } from './api';
 import { safeJourneyId } from './journeys';
 import { validateArrivalEvidence } from './arrivals';
+function adjustedWalk(seconds,factor){
+  const [whole,fraction='']=String(factor).split('.');
+  const denominator=10n**BigInt(fraction.length);
+  return Number((BigInt(seconds)*BigInt(whole+fraction)+denominator-1n)/denominator);
+}
 export async function getFirstDeparture(searchId,candidateId,signal) {
   if (!safeJourneyId(searchId)||!safeJourneyId(candidateId)) throw new ApiError('INVALID_RESPONSE');
   const result=await apiRequest(`/api/v1/journey-searches/${searchId}/candidates/${candidateId}/first-departure?include_connections=true`,{signal,timeoutMs:25000});
@@ -33,15 +38,38 @@ export function readFirstDeparture(result,searchId,candidateId) {
     ||![d.recommended_departure_at,d.selected_departure_at,d.vehicle_arrival_at].every(isServerTime)
     ||Date.parse(d.recommended_departure_at)!==Date.parse(d.vehicle_arrival_at)-(d.approach_seconds+d.buffer_seconds)*1000
     ||!d.arrival_evidence.candidates.some(c=>c.candidate_id===d.arrival_candidate_id&&c.predicted_arrival_at===d.vehicle_arrival_at))) throw new ApiError('INVALID_RESPONSE');
+  if(d.supplemental_walks!==undefined&&(!Array.isArray(d.supplemental_walks)||d.supplemental_walks.length>3))throw new ApiError('INVALID_RESPONSE');
   if(d.connection_status!==undefined && (!['not_checked','estimated_feasible','unavailable','unknown','stale'].includes(d.connection_status)
     ||!Array.isArray(d.transfers)||d.transfers.length>2
     ||d.transfers.some(c=>!safeJourneyId(c.connection_id)||!safeJourneyId(c.from_leg_id)||!safeJourneyId(c.to_leg_id)
       ||!['estimated_feasible','unavailable','unknown'].includes(c.feasibility)
       ||!['none','source_generation','receipt_estimate'].includes(c.time_source)
       ||!Number.isInteger(c.transfer_buffer_seconds)||c.transfer_buffer_seconds<0||c.transfer_buffer_seconds>1800
-      ||(c.transfer_walk_seconds!==null&&(!Number.isSafeInteger(c.transfer_walk_seconds)||c.transfer_walk_seconds<=0))
+      ||(c.transfer_walk_seconds!==null&&(!Number.isSafeInteger(c.transfer_walk_seconds)||c.transfer_walk_seconds<0
+        ||(c.transfer_walk_seconds===0&&!d.supplemental_walks?.some(w=>w?.role==='transfer'&&w.source==='same_stop'&&w.connection_id===c.connection_id))))
       ||[c.estimated_alighting_at,c.minimum_boarding_at,c.next_boarding_at].some(t=>t!==null&&!isServerTime(t))
       ||(c.feasibility==='estimated_feasible'&&(!isServerTime(c.next_boarding_at)||!isServerTime(c.minimum_boarding_at)||Date.parse(c.next_boarding_at)<Date.parse(c.minimum_boarding_at)))))) throw new ApiError('INVALID_RESPONSE');
+  if(d.supplemental_walks!==undefined){
+    const seen=new Set();
+    for(const w of d.supplemental_walks){
+      if(!w||!['transfer','egress'].includes(w.role)||!['walking_route','same_stop'].includes(w.source)||!safeJourneyId(w.from_leg_id)
+        ||!Number.isSafeInteger(w.provider_seconds)||w.provider_seconds<0||w.provider_seconds>86400
+        ||!Number.isFinite(w.applied_duration_factor)||w.applied_duration_factor<.5||w.applied_duration_factor>2
+        ||(d.valid_for_guidance&&w.applied_duration_factor!==d.applied_duration_factor)
+        ||!Number.isSafeInteger(w.walking_seconds)||w.walking_seconds<0||w.walking_seconds>172800
+        ||(w.source==='same_stop'&&(w.role!=='transfer'||w.provider_seconds!==0||w.walking_seconds!==0))
+        ||(w.source==='walking_route'&&(w.provider_seconds===0||w.walking_seconds===0))
+        ||w.walking_seconds!==adjustedWalk(w.provider_seconds,w.applied_duration_factor)
+        ||!isServerTime(w.fetched_at)||!isServerTime(w.valid_until)
+        ||Date.parse(w.fetched_at)>Date.parse(d.calculated_at)||Date.parse(w.valid_until)<=Date.parse(w.fetched_at)
+        ||Date.parse(w.valid_until)<Date.parse(d.valid_until)
+        ||(w.role==='egress'&&(w.connection_id!==null||w.to_leg_id!==null))
+        ||(w.role==='transfer'&&(!safeJourneyId(w.connection_id)||!safeJourneyId(w.to_leg_id)
+          ||!d.transfers?.some(c=>c.connection_id===w.connection_id&&c.from_leg_id===w.from_leg_id&&c.to_leg_id===w.to_leg_id))))throw new ApiError('INVALID_RESPONSE');
+      const key=w.role==='egress'?'egress':w.connection_id;
+      if(seen.has(key))throw new ApiError('INVALID_RESPONSE');seen.add(key);
+    }
+  }
   const target=d.target_evaluation;
   if(target!==undefined&&target!==null){
     if(target.model_version!=='target.arrival.v1'||target.scope!=='selected_routine_candidate'||!['not_configured','estimated_meets','estimated_late','target_passed','unknown','stale'].includes(target.status)||!isServerTime(target.evaluated_at)

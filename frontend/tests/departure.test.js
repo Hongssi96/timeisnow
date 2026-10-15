@@ -3,6 +3,28 @@ import { getFirstDeparture } from '../src/lib/departure';
 function data(){const arrival={model_version:'arrival.evidence.v2',search_id:'s',candidate_id:'c',first_leg_id:'leg',status:'estimated',source_status:'unknown',timing_basis:'receipt_estimate',received_at:'2026-10-13T08:00:00Z',generated_at:null,expires_at:'2026-10-13T08:02:00Z',valid_for_guidance:true,candidates:[{candidate_id:'bus',provider_prediction_seconds:780,predicted_arrival_at:'2026-10-13T08:13:00Z'}]};return {model_version:'first.departure.v1',search_id:'s',candidate_id:'c',first_leg_id:'leg',status:'ready',valid_for_guidance:true,departure_basis:'recommended',calculated_at:'2026-10-13T08:00:00Z',valid_until:arrival.expires_at,profile_version:1,buffer_seconds:300,slack_status:'meets_buffer',slack_seconds:300,approach_basis:'provider_personalized',approach_seconds:300,provider_approach_seconds:300,applied_duration_factor:1,timing_basis:'receipt_estimate',recommended_departure_at:'2026-10-13T08:03:00Z',selected_departure_at:'2026-10-13T08:03:00Z',vehicle_arrival_at:'2026-10-13T08:13:00Z',arrival_candidate_id:'bus',arrival_evidence:arrival};}
 function mock(d){vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({data:d,meta:{request_id:'synthetic',server_time:'2026-10-13T08:00:00Z'}}),{status:200})));}
 afterEach(()=>vi.unstubAllGlobals());
+function supplemental(role='egress'){
+ return {role,source:'walking_route',connection_id:role==='transfer'?'link':null,from_leg_id:'one',to_leg_id:role==='transfer'?'two':null,
+  provider_seconds:100,walking_seconds:100,applied_duration_factor:1,fetched_at:'2026-10-13T07:59:59Z',valid_until:'2026-10-13T08:05:00Z'};
+}
+it('accepts bounded walking evidence and verified same-stop transfer without changing first departure',async()=>{
+ const d=data();d.connection_status='unknown';d.transfers=[{connection_id:'link',from_leg_id:'one',to_leg_id:'two',feasibility:'unknown',time_source:'none',transfer_buffer_seconds:120,transfer_walk_seconds:0,estimated_alighting_at:null,minimum_boarding_at:null,next_boarding_at:null}];
+ d.supplemental_walks=[{...supplemental('transfer'),source:'same_stop',provider_seconds:0,walking_seconds:0},supplemental()];
+ mock(d);expect((await getFirstDeparture('s','c')).data.supplemental_walks).toHaveLength(2);
+});
+it.each(['zero','duplicate','future','expired','factor','source','same_stop_egress','rounding','reference','shape'])('rejects invalid supplementary evidence: %s',async kind=>{
+ const d=data();let w=supplemental();
+ if(kind==='zero')w={...w,provider_seconds:0,walking_seconds:0};
+ if(kind==='future')w.fetched_at='2026-10-13T08:00:01Z';
+ if(kind==='expired')w.valid_until='2026-10-13T08:01:00Z';
+ if(kind==='factor')w.applied_duration_factor=2;
+ if(kind==='source')w.source='invented';
+ if(kind==='same_stop_egress')w={...w,source:'same_stop',provider_seconds:0,walking_seconds:0};
+ if(kind==='rounding')w.walking_seconds=101;
+ if(kind==='reference')w=supplemental('transfer');
+ d.supplemental_walks=kind==='shape'?{}:kind==='duplicate'?[w,{...w}]:[w];mock(d);
+ await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});
+});
 it('uses one owned departure GET for both arrival and calculation',async()=>{mock(data());const result=await getFirstDeparture('s','c');expect(fetch).toHaveBeenCalledTimes(1);expect(fetch.mock.calls[0][0]).toBe('/api/v1/journey-searches/s/candidates/c/first-departure?include_connections=true');expect(result.data.approach_seconds).toBe(300);});
 it.each(['wrong_formula','wrong_identity','expiry_extension','factor','unlabelled'])('rejects %s',async kind=>{const d=data();if(kind==='wrong_formula')d.approach_seconds=100;if(kind==='wrong_identity')d.arrival_candidate_id='other';if(kind==='expiry_extension')d.valid_until='2026-10-13T08:03:00Z';if(kind==='factor')d.applied_duration_factor=3;if(kind==='unlabelled')d.approach_basis=null;mock(d);await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});});
 
