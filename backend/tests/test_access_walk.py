@@ -16,6 +16,17 @@ def packet(seconds=300):
  return {'status':'OK','route':{'properties':{'totalTime':seconds,'totalDistance':200},'legs':[{'properties':{'time':seconds,'distance':200},'steps':[{'properties':{'time':seconds,'distance':200},'path':{'points':[list(START),list(END)]}}]}]}}
 
 class WalkProviderTests(unittest.TestCase):
+ def test_independently_rounded_steps_keep_provider_total_and_reject_excess(self):
+  d=packet(436);r=d['route'];r['properties']['totalDistance']=463
+  leg=r['legs'][0];leg['properties']={'time':436,'distance':463}
+  times=[30,23,40,78,36,15,41,112,56];distances=[33,29,42,92,40,20,12,125,66]
+  leg['steps']=[{'properties':{'time':t,'distance':m},'path':{'points':[list(START),list(START)]}}
+                for t,m in zip(times,distances)]
+  leg['steps'][-1]['path']['points'][-1]=list(END)
+  self.assertEqual(walk_provider.parse(d,START,END),436)
+  for field in ('time','distance'):
+   broken=copy.deepcopy(d);broken['route']['legs'][0]['steps'][0]['properties'][field]-=9
+   with self.assertRaises(AuthError):walk_provider.parse(broken,START,END)
  def test_seconds_geometry_and_leg_sums_are_validated(self):
   self.assertEqual(walk_provider.parse(packet(),START,END),300)
   for mutate in (lambda d:d['route']['properties'].update(totalTime=True),lambda d:d['route']['legs'][0]['properties'].update(time=301),lambda d:d['route']['legs'][0]['steps'][0]['path'].update(points=[[127.,float('nan')],list(END)])):

@@ -31,6 +31,31 @@ def query_fixture(kind,params,deadline):
 class MappingUnitTests(unittest.TestCase):
     def setUp(self):cache.clear();self.addCleanup(cache.clear)
 
+    def test_no_detail_still_requires_complete_unique_official_direction(self):
+        def fake(kind,params,deadline):
+            return [] if kind=='info' else query_fixture(kind,params,deadline)
+        endpoint={}
+        with patch.object(mapping,'query',side_effect=fake):
+            value=mapping.resolve(context(),datetime.now(timezone.utc)+timedelta(seconds=200),boarding_endpoint=endpoint)
+        self.assertIsNotNone(value)
+        self.assertEqual(value.route_dest_id,'30')
+        self.assertEqual(value.mapping_version,'gbis.station-scope.v3.30m.ordered')
+        self.assertEqual(endpoint['mapping_identity'],cache.mapping_identity(value))
+
+    def test_conflicting_or_multiple_detail_does_not_use_scope_fallback(self):
+        for mode in ('conflict','multiple','error'):
+            def fake(kind,params,deadline):
+                rows=query_fixture(kind,params,deadline)
+                if kind=='info':
+                    if mode=='error':raise AuthError(503,'PROVIDER_UNAVAILABLE','확인 실패')
+                    if mode=='conflict':rows[0]['routeId']='999'
+                    else:rows=rows*2
+                return rows
+            with patch.object(mapping,'query',side_effect=fake):
+                if mode=='error':
+                    with self.assertRaises(AuthError):mapping.resolve(context(),datetime.now(timezone.utc)+timedelta(seconds=200))
+                else:self.assertIsNone(mapping.resolve(context(),datetime.now(timezone.utc)+timedelta(seconds=200)))
+
     def test_diagnostic_counts_and_reason_never_include_public_identity(self):
         trace={}
         def fake(kind,params,deadline):
@@ -85,6 +110,9 @@ class MappingUnitTests(unittest.TestCase):
             response.read.return_value=valid
             self.assertEqual(mapping.query('stations',{'keyword':'공개'},mapping.time.monotonic()+5),[])
             request=opener.open.call_args.args[0];self.assertTrue(request.startswith('https://apis.data.go.kr/6410000/busstationservice/v2/'))
+            self.assertEqual(mapping.query('info',{'routeId':'99'},mapping.time.monotonic()+5),[])
+            response.read.return_value=b'{"response":{"msgHeader":{"resultCode":0},"msgBody":{}}}'
+            with self.assertRaises(AuthError):mapping.query('info',{'routeId':'99'},mapping.time.monotonic()+5)
             for raw in [b'x'*1048577,b'{"response":{},"response":{}}',b'{"response":NaN}']:
                 response.read.return_value=raw
                 with self.assertRaises(AuthError) as e:mapping.query('stations',{},mapping.time.monotonic()+5)
