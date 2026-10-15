@@ -291,3 +291,8 @@ history_service.estimate_and_store/persist는 F05-03 결과를 재검산하고 �
 ## 17. F05-07 화면 상태 설명 — 2026-10-13
 
 선택 루틴과 검색 후보는 현재 개인 도보 AI를 호출하지 않았음을 안내한다. 실패 코드의 고정 문구는 원문/내부사고/키를 출력하지 않고 알려진 구조화 상태만 설명한다. 공급자 오류를 AI 실행 증거로 사용하지 않는다. 프롬프트 문구/버전·실제 모델 연결 변경 없음. 현재 생성 API 연결은 후속이며 테스트 실패는 합성 응답이다. walking_api.md·Notion v0.57.
+
+
+## 2026-10-15 F07-02a-4 검증 접근 도보 AI 연결
+
+기존 walking_estimate.v1/walk-policy.v1 프롬프트를 그대로 사용한다. 루틴의 검증 BUS 접근 경로는 access/saved_origin/boarding_stop·origin_to_boarding·provider_mapped_access 일반 참조와 공급자초·개인계수/버전만 전달한다. 실제 사용자/루틴/검색/장소/정류소ID·이름·주소·좌표·경로 도형/해시는 제외한다. DB 캐시/계수 재계산은 모델 호출 없이 처리한다. 공개 명시 POST와 최소 입력의 실검증은 F07-02a-4에서 완료했고 일반 후보 AI 생성·실내/환승 AI는 후속이다. api_contract.md 5.7.13/Notion v0.88.

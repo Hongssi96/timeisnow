@@ -6,6 +6,14 @@ function adjustedWalk(seconds,factor){
   const denominator=10n**BigInt(fraction.length);
   return Number((BigInt(seconds)*BigInt(whole+fraction)+denominator-1n)/denominator);
 }
+export function validPersonalWalk(p,at){
+  return p&&safeJourneyId(p.estimate_id)&&safeJourneyId(p.revision_id)
+    &&Number.isSafeInteger(p.base_seconds)&&p.base_seconds>0&&p.base_seconds<=86400
+    &&Number.isFinite(p.applied_duration_factor)&&p.applied_duration_factor>=.5&&p.applied_duration_factor<=2
+    &&Number.isSafeInteger(p.estimated_seconds)&&p.estimated_seconds===adjustedWalk(p.base_seconds,p.applied_duration_factor)
+    &&Number.isSafeInteger(p.profile_version)&&p.profile_version>0&&['ai_estimate','profile_recalculation'].includes(p.source)
+    &&typeof p.reused==='boolean'&&isServerTime(p.expires_at)&&Date.parse(p.expires_at)>Date.parse(at);
+}
 export async function getFirstDeparture(searchId,candidateId,signal) {
   if (!safeJourneyId(searchId)||!safeJourneyId(candidateId)) throw new ApiError('INVALID_RESPONSE');
   const result=await apiRequest(`/api/v1/journey-searches/${searchId}/candidates/${candidateId}/first-departure?include_connections=true`,{signal,timeoutMs:25000});
@@ -30,7 +38,11 @@ export function readFirstDeparture(result,searchId,candidateId) {
   if(d.provider_approach_source==='boarding_walk' && (!isServerTime(d.approach_fetched_at)||!isServerTime(d.approach_valid_until)
     ||Date.parse(d.approach_fetched_at)>Date.parse(d.calculated_at)||Date.parse(d.approach_valid_until)<Date.parse(d.valid_until)
     ||Date.parse(d.approach_valid_until)<=Date.parse(d.approach_fetched_at))) throw new ApiError('INVALID_RESPONSE');
-  if(d.valid_for_guidance && (d.status!=='ready'||!d.arrival_evidence.valid_for_guidance||d.approach_basis!=='provider_personalized'
+  if(d.personal_walk!==undefined&&d.personal_walk!==null&&(!validPersonalWalk(d.personal_walk,d.calculated_at)||Date.parse(d.personal_walk.expires_at)<Date.parse(d.valid_until)))throw new ApiError('INVALID_RESPONSE');
+  if(d.approach_basis==='ai_validated'&&(!d.personal_walk||d.personal_walk.estimated_seconds!==d.approach_seconds
+    ||d.personal_walk.base_seconds!==d.provider_approach_seconds||d.personal_walk.profile_version!==d.profile_version
+    ||d.personal_walk.applied_duration_factor!==d.applied_duration_factor))throw new ApiError('INVALID_RESPONSE');
+  if(d.valid_for_guidance && (d.status!=='ready'||!d.arrival_evidence.valid_for_guidance||!['provider_personalized','ai_validated'].includes(d.approach_basis)
     ||!Number.isSafeInteger(d.approach_seconds)||d.approach_seconds<=0
     ||!Number.isSafeInteger(d.provider_approach_seconds)||d.provider_approach_seconds<=0
     ||!Number.isFinite(d.applied_duration_factor)||d.applied_duration_factor<.5||d.applied_duration_factor>2

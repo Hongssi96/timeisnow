@@ -3,6 +3,7 @@ from fastapi import APIRouter,Request,BackgroundTasks,Query
 from app.guidance import service
 from app.guidance.dto import DepartureEnvelope
 from app.guidance import routine
+from app.guidance import personal_walk
 router=APIRouter(prefix='/api/v1')
 @router.get('/journey-searches/{search_id}/candidates/{candidate_id}/first-departure',response_model=DepartureEnvelope)
 def first_departure(request:Request,search_id:str,candidate_id:str,departure_basis:Literal['recommended','now']='recommended',include_connections:bool=False):
@@ -15,3 +16,7 @@ def routine_search(request:Request,routine_id:str,body:routine.RefreshInput,back
 @router.get('/routines/{routine_id}/departure-searches/{search_id}/first-departure')
 def routine_departure(request:Request,routine_id:str,search_id:str,expected_version:int=Query(ge=1)):
     return routine.result(request,routine_id,search_id,expected_version)
+
+@router.post('/routines/{routine_id}/departure-searches/{search_id}/walking-estimates')
+def routine_walking_estimate(request:Request,routine_id:str,search_id:str,body:personal_walk.EstimateInput):
+    return personal_walk.result(request,routine_id,search_id,body)

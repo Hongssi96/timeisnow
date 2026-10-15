@@ -13,7 +13,8 @@ const failures = {
   PROVIDER_UNAVAILABLE: '시간 정보에 연결하지 못했어요. 잠시 후 다시 확인해주세요.',
 };
 
-export default function WalkingGuidance({ route, source = 'candidate', phase = 'needs_data', errorCode, announce = true }) {
+export default function WalkingGuidance({ route, source = 'candidate', phase = 'needs_data', errorCode, announce = true, estimate=null }) {
+  if(estimate)return <div className="info-box walking-guidance" role="status"><h3><Footprints size={19} aria-hidden="true"/>AI 도보 산정을 적용했어요</h3><p>검증한 접근 도보 경로와 현재 개인 설정을 반영했어요.</p><p>{estimate.reused?'저장된 산정값을 다시 사용했어요.':estimate.source==='profile_recalculation'?'AI를 다시 호출하지 않고 변경된 개인 설정으로 계산했어요.':'AI 결과를 서버에서 검산해 저장했어요.'}</p><p className="candidate-note">실내·차량 문까지의 이동이나 실제 보행 시간을 확인한 값은 아니에요.</p></div>;
   const codes = Array.isArray(route?.missing_segments) ? route.missing_segments : [];
   const indoor = ['SUBWAY', 'BUS_AND_SUBWAY'].includes(route?.type) || codes.includes('ENTRANCE_PLATFORM_UNCONFIRMED');
   const zero = Array.isArray(route?.ordered_legs) && route.ordered_legs.some(leg => leg.type === 'WALKING' && leg.seconds === 0);

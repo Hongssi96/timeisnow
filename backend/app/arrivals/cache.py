@@ -21,6 +21,9 @@ class Entry:
     vehicle_keys: dict = field(default_factory=dict)
     supplemental_walks: dict = field(default_factory=dict)
     mapping_attempted_at: object = None
+    personal_walk_lock: object = field(default_factory=Lock)
+    personal_walk_request: object = None
+    personal_walk: object = None
 
 _searches = OrderedDict()
 _guard = Lock()

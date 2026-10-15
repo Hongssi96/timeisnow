@@ -16,6 +16,13 @@ def packet(seconds=300):
  return {'status':'OK','route':{'properties':{'totalTime':seconds,'totalDistance':200},'legs':[{'properties':{'time':seconds,'distance':200},'steps':[{'properties':{'time':seconds,'distance':200},'path':{'points':[list(START),list(END)]}}]}]}}
 
 class WalkProviderTests(unittest.TestCase):
+ def test_details_exposes_only_validated_seconds_distance_and_opaque_geometry_hash(self):
+  result=walk_provider.parse(packet(),START,END,details=True)
+  self.assertEqual(set(result),{'seconds','distance_meters','path_fingerprint'})
+  self.assertEqual(result['seconds'],300);self.assertEqual(len(result['path_fingerprint']),64)
+  self.assertEqual(result,walk_provider.parse(packet(),START,END,details=True))
+  with self.assertRaises(AuthError):walk_provider.parse(packet(),END,START,details=True)
+
  def test_independently_rounded_steps_keep_provider_total_and_reject_excess(self):
   d=packet(436);r=d['route'];r['properties']['totalDistance']=463
   leg=r['legs'][0];leg['properties']={'time':436,'distance':463}

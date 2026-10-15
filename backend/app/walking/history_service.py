@@ -188,10 +188,11 @@ def purge_expired_history(user_id):
         repository.purge(connection,user_id)
 
 
-def _estimate_and_store(user_id,value,*,context,cache_sources=None):
+def _estimate_and_store(user_id,value,*,context,cache_sources=None,validate_context=None):
     """Owned internal end-to-end execution with checks before and after the model call."""
     from app.ai.walking_service import estimate
     request=parse_input(value)
+    if validate_context is not None:validate_context()
     checked_context,_,refs=parse_context(context,{'model_version':None})
     sources=cache.parse_sources(cache_sources,request)
     with database() as connection:
@@ -237,9 +238,11 @@ def _estimate_and_store(user_id,value,*,context,cache_sources=None):
         validate_execution_output(output,request,set(hits))
     except AuthError as error:
         if error.code in {'AI_OUTPUT_INVALID','PROVIDER_UNAVAILABLE','PROVIDER_TIMEOUT'}:
+            if validate_context is not None:validate_context()
             record_failure(user_id,request,context=checked_context,metadata={'model_version':None,
                 'latency_ms':round((time.monotonic()-started)*1000) if called else None},failure_code=error.code,cache_sources=cache_sources)
         raise
+    if validate_context is not None:validate_context()
     stored=persist(user_id,request,output,context=checked_context,metadata={'model_version':'gpt-5.6-luna' if called else None,
         'latency_ms':round((time.monotonic()-started)*1000) if called else None},cache_sources=cache_sources,
         _reused=[hit[1] for hit in hits.values() if not hit[1].get('recalculated')],
@@ -247,7 +250,7 @@ def _estimate_and_store(user_id,value,*,context,cache_sources=None):
     return {'result':output.model_dump(mode='json'),**stored}
 
 
-def estimate_and_store(user_id,value,*,context,cache_sources=None):
+def estimate_and_store(user_id,value,*,context,cache_sources=None,validate_context=None):
     request=parse_input(value)
     user_id=parsed_id(str(user_id))
     checked,_,refs=parse_context(context,{'model_version':None})
@@ -263,6 +266,6 @@ def estimate_and_store(user_id,value,*,context,cache_sources=None):
                 if not repository.try_execution_lock(locking_connection,key):
                     raise AuthError(409,'EXECUTION_IN_PROGRESS','같은 도보 산정이 처리 중이에요.')
                 held.append(key)
-            return _estimate_and_store(user_id,request,context=checked,cache_sources=cache_sources)
+            return _estimate_and_store(user_id,request,context=checked,cache_sources=cache_sources,validate_context=validate_context)
         finally:
             for key in reversed(held):repository.release_execution_lock(locking_connection,key)

@@ -116,9 +116,21 @@ def first_departure(user_id,search_id,candidate_id,basis='recommended',include_c
         _,_,_,latest_fingerprint=arrivals.owned(user_id,search_id,candidate_id)
         if latest_fingerprint!=fingerprint or settings(user_id)!=profile:
             raise AuthError(409,'VERSION_CONFLICT','경로 또는 개인 설정이 변경됐어요. 다시 확인해주세요.')
+    personal=None
+    if access_origin_ref is not None:
+        from app.arrivals import cache
+        from app.guidance.personal_walk import read
+        entry=cache.lookup(user_id,search_id,candidate_id,fingerprint,arrivals.now())
+        personal=read(user_id,entry,first,access_origin_ref,profile)
+        if personal is not None:
+            base=int(personal.base_seconds);walking=personal.estimated_seconds
+            attached=entry.personal_walk
+            walk_evidence={'fetched_at':attached['fetched_at'],'expires_at':personal.expires_at}
     at=arrivals.now()
     choice=selector(evidence,walking,profile,at,fingerprint) if selector is not None else None
     data=calculate(evidence,base,walking,calculation_profile,at,basis,choice=choice)
+    if personal is not None:
+        data.personal_walk=personal;data.approach_basis='ai_validated';data.reasons.append('AI_VALIDATED_ACCESS')
     data.supplemental_walks=supplements;data.reasons.extend(supplement_reasons)
     if supplements:data.valid_until=min(data.valid_until,*(w.valid_until for w in supplements))
     if walk_evidence is not None:
