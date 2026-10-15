@@ -14,15 +14,15 @@ function response() {
 async function mount(){render(<FirstArrivals includeDeparture searchId="search" candidateId="candidate"/>);await act(async()=>{});}
 beforeEach(()=>{elapsed=0;vi.useFakeTimers();vi.spyOn(performance,'now').mockImplementation(()=>elapsed);getFirstDeparture.mockReset();getFirstDeparture.mockResolvedValue(response());Object.defineProperty(document,'hidden',{configurable:true,value:false});});
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.useRealTimers();});
-it('shows an approximate departure clock and disclosed access basis',async()=>{
-  await mount();expect(screen.getByText('예상 출발 17:03')).toBeTruthy();expect(screen.getByText(/접근 약 5분/)).toBeTruthy();expect(screen.getByText(/개인 계수 1.1/)).toBeTruthy();expect(screen.getByText('수신 기준 예상')).toBeTruthy();expect(getFirstDeparture).toHaveBeenCalledTimes(1);
+it('answers with a big minute countdown and no clock or coefficient',async()=>{
+  await mount();expect(screen.getByText('언제이니?')).toBeTruthy();expect(screen.getByText('3분')).toBeTruthy();expect(screen.queryByText(/예상 출발/)).toBeNull();expect(screen.queryByText(/개인 계수/)).toBeNull();expect(screen.queryByText(/접근 약/)).toBeNull();expect(screen.getByText('수신 기준 예상')).toBeTruthy();expect(getFirstDeparture).toHaveBeenCalledTimes(1);
 });
 it('failed refresh cannot keep showing expired departure numbers',async()=>{
   await mount();getFirstDeparture.mockRejectedValue({code:'PROVIDER_TIMEOUT'});elapsed=121000;await act(async()=>{vi.advanceTimersByTime(121000);});
-  expect(screen.queryByText('예상 출발 17:03')).toBeNull();expect(screen.getByText(/출발 정보가 만료/)).toBeTruthy();
+  expect(screen.queryByText('3분')).toBeNull();expect(screen.getByText(/출발 정보가 만료/)).toBeTruthy();
 });
 it('never fabricates numbers for missing approach evidence',async()=>{
-  const r=response();r.data.status='insufficient_data';r.data.valid_for_guidance=false;getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.queryByText(/예상 출발 17/)).toBeNull();expect(screen.getByText(/접근 시간 또는 도착 근거/)).toBeTruthy();
+  const r=response();r.data.status='insufficient_data';r.data.valid_for_guidance=false;getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.queryByText('3분')).toBeNull();expect(screen.getByText(/접근 시간 또는 도착 근거/)).toBeTruthy();
 });
 it('warns when an already passed recommendation cannot assure the configured buffer',async()=>{
   const r=response();r.data.recommended_departure_at=new Date(start-10000).toISOString();r.data.selected_departure_at=new Date(start).toISOString();r.data.slack_status='below_buffer';r.data.vehicle_arrival_at=new Date(start+480000).toISOString();r.data.arrival_evidence.candidates[0].predicted_arrival_at=r.data.vehicle_arrival_at;getFirstDeparture.mockResolvedValue(r);
@@ -30,18 +30,14 @@ it('warns when an already passed recommendation cannot assure the configured buf
 });
 it('removes earlier recommendation when reaching the vehicle becomes impossible',async()=>{
   const r=response();r.data.vehicle_arrival_at=new Date(start+310000).toISOString();r.data.arrival_evidence.candidates[0].predicted_arrival_at=r.data.vehicle_arrival_at;getFirstDeparture.mockResolvedValue(r);
-  await mount();elapsed=15000;await act(async()=>{vi.advanceTimersByTime(15000);});expect(screen.queryByText(/예상 출발 17/)).toBeNull();expect(screen.getByText(/접근 시간이 부족/)).toBeTruthy();
+  await mount();elapsed=15000;await act(async()=>{vi.advanceTimersByTime(15000);});expect(screen.queryByText('3분')).toBeNull();expect(screen.getByText(/접근 시간이 부족/)).toBeTruthy();
 });
 it('search or profile conflict removes departure and blocks retries',async()=>{
-  await mount();getFirstDeparture.mockRejectedValue({code:'VERSION_CONFLICT'});await act(async()=>{vi.advanceTimersByTime(60000);});expect(screen.queryByText(/예상 출발 17/)).toBeNull();expect(screen.getByRole('alert')).toBeTruthy();
+  await mount();getFirstDeparture.mockRejectedValue({code:'VERSION_CONFLICT'});await act(async()=>{vi.advanceTimersByTime(60000);});expect(screen.queryByText('3분')).toBeNull();expect(screen.getByRole('alert')).toBeTruthy();
 });
 
-it('shows the date when departure belongs to a different Seoul day',async()=>{
-  const r=response();r.data.selected_departure_at='2026-10-14T08:03:00Z';getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText('예상 출발 10월 14일 17:03')).toBeTruthy();
-});
-
-it('does not round the configured seconds up to a full minute',async()=>{
-  const r=response();r.data.buffer_seconds=30;getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText(/설정 여유 30초/)).toBeTruthy();
+it('counts down in minutes even when departure belongs to a different Seoul day',async()=>{
+  const r=response();r.data.selected_departure_at='2026-10-14T08:03:00Z';r.data.vehicle_arrival_at='2026-10-14T08:13:00Z';r.data.arrival_evidence.candidates[0].predicted_arrival_at=r.data.vehicle_arrival_at;getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText('1443분')).toBeTruthy();expect(screen.queryByText(/예상 출발/)).toBeNull();
 });
 
 it('shows estimated transfer times and keeps unknown later links without numbers',async()=>{
@@ -56,26 +52,26 @@ it('expired evidence removes earlier transfer timestamps',async()=>{
 it('routine loader failure removes unexpired numbers and requires an explicit fresh query',async()=>{
  const initial=response(),loader=vi.fn().mockRejectedValue({code:'PROVIDER_TIMEOUT'});
  render(<FirstArrivals includeDeparture searchId="search" candidateId="candidate" loader={loader} initialResponse={initial}/>);await act(async()=>{});
- expect(screen.getByText('예상 출발 17:03')).toBeTruthy();expect(loader).not.toHaveBeenCalled();
- elapsed=60000;await act(async()=>{vi.advanceTimersByTime(60000);});expect(screen.queryByText('예상 출발 17:03')).toBeNull();
+ expect(screen.getByText('3분')).toBeTruthy();expect(loader).not.toHaveBeenCalled();
+ elapsed=60000;await act(async()=>{vi.advanceTimersByTime(60000);});expect(screen.queryByText('3분')).toBeNull();
  elapsed=120000;await act(async()=>{vi.advanceTimersByTime(60000);});expect(loader).toHaveBeenCalledTimes(1);
 });
 
 it('displays departure countdown together with first stop slack',async()=>{
- await mount();expect(screen.getByText('3분 뒤 예상 출발')).toBeTruthy();expect(screen.getByText('그때 출발하면 정류장 도착 후 예상 5분 여유가 있어요.')).toBeTruthy();
- const refreshed=response();refreshed.meta.server_time=new Date(start+61000).toISOString();getFirstDeparture.mockResolvedValue(refreshed);elapsed=61000;await act(async()=>{vi.advanceTimersByTime(61000);});expect(screen.getByText('2분 뒤 예상 출발')).toBeTruthy();
+ await mount();expect(screen.getByText('3분')).toBeTruthy();expect(screen.getByText('그때 출발하면 정류장 도착 후 예상 5분 여유가 있어요.')).toBeTruthy();
+ const refreshed=response();refreshed.meta.server_time=new Date(start+61000).toISOString();getFirstDeparture.mockResolvedValue(refreshed);elapsed=61000;await act(async()=>{vi.advanceTimersByTime(61000);});expect(screen.getByText('2분')).toBeTruthy();
 });
 it('past selected time recomputes current slack instead of preserving five minutes',async()=>{
  const r=response();r.data.selected_departure_at=new Date(start-10000).toISOString();r.data.recommended_departure_at=r.data.selected_departure_at;r.data.vehicle_arrival_at=new Date(start+480000).toISOString();r.data.arrival_evidence.candidates[0].predicted_arrival_at=r.data.vehicle_arrival_at;getFirstDeparture.mockResolvedValue(r);
- await mount();expect(screen.getByText('지금 출발 기준으로 다시 확인해주세요.')).toBeTruthy();expect(screen.getByText('지금 출발하면 정류장 도착 후 예상 3분 여유가 있어요.')).toBeTruthy();
+ await mount();expect(screen.getByText('지금')).toBeTruthy();expect(screen.getByText('지금 출발 기준으로 다시 확인해주세요.')).toBeTruthy();expect(screen.getByText('지금 출발하면 정류장 도착 후 예상 3분 여유가 있어요.')).toBeTruthy();
  elapsed=15000;await act(async()=>{vi.advanceTimersByTime(15000);});expect(screen.getByText('지금 출발하면 정류장 도착 후 예상 2분 45초 여유가 있어요.')).toBeTruthy();
 });
 it('less than one minute is described without rounding a zero departure',async()=>{
- const r=response();r.data.selected_departure_at=new Date(start+30000).toISOString();getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText('1분 이내 예상 출발')).toBeTruthy();
+ const r=response();r.data.selected_departure_at=new Date(start+30000).toISOString();getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText('1분')).toBeTruthy();expect(screen.getByText('이내')).toBeTruthy();
 });
 it('separates missing access time from a mapping failure without invented times',async()=>{
  const r=response();r.data.status='insufficient_data';r.data.valid_for_guidance=false;r.data.reasons=['ACCESS_TIME_UNCONFIRMED'];r.data.arrival_evidence={...r.data.arrival_evidence,status:'mapping_required',valid_for_guidance:false,candidates:[],reasons:['PUBLIC_MAPPING_UNCONFIRMED','NO_ROUTE_AT_BOARDING_STOP']};getFirstDeparture.mockResolvedValue(r);
- await mount();expect(screen.getByText(/도보 시간이 제공되지 않아/)).toBeTruthy();expect(screen.getByText(/해당 노선을 경기 교통 정보에서/)).toBeTruthy();expect(screen.queryByText(/분 뒤 예상 출발/)).toBeNull();
+  await mount();expect(screen.getByText(/도보 시간이 제공되지 않아/)).toBeTruthy();expect(screen.getByText(/해당 노선을 경기 교통 정보에서/)).toBeTruthy();expect(screen.queryByText('3분')).toBeNull();
 });
 
 it('unknown diagnostic content is never rendered as provider text',async()=>{
@@ -83,10 +79,10 @@ it('unknown diagnostic content is never rendered as provider text',async()=>{
 });
 
 it('labels a separately queried boarding walk without calling it AI evidence',async()=>{
- const r=response();r.data.provider_approach_source='boarding_walk';getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText(/확인된 버스 정류소까지 별도로 조회한/)).toBeTruthy();expect(screen.queryByText(/AI 산정으로/)).toBeNull();
+  const r=response();r.data.provider_approach_source='boarding_walk';getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText(/별도로 조회한 추정/)).toBeTruthy();expect(screen.queryByText(/AI 산정으로/)).toBeNull();
 });
 it('walk timeout remains a clear blocker without invented departure numbers',async()=>{
- const r=response();r.data.status='insufficient_data';r.data.valid_for_guidance=false;r.data.reasons=['ACCESS_TIME_UNCONFIRMED','ACCESS_WALK_TIMEOUT'];getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText(/도보 조회가 늦어/)).toBeTruthy();expect(screen.queryByText(/분 뒤 예상 출발/)).toBeNull();
+ const r=response();r.data.status='insufficient_data';r.data.valid_for_guidance=false;r.data.reasons=['ACCESS_TIME_UNCONFIRMED','ACCESS_WALK_TIMEOUT'];getFirstDeparture.mockResolvedValue(r);await mount();expect(screen.getByText(/도보 조회가 늦어/)).toBeTruthy();expect(screen.queryByText('3분')).toBeNull();
 });
 
 function withGoal(status='estimated_meets'){const r=response();r.data.target_evaluation={status,target_arrival_at:new Date(start+1500000).toISOString(),estimated_destination_arrival_at:new Date(start+1320000).toISOString(),margin_seconds:180,reasons:[]};return r;}
@@ -101,13 +97,13 @@ it('poll refresh displays the next supplied vehicle and the updated clock',async
  r.data.vehicle_arrival_at=new Date(start+1080000).toISOString();r.data.recommended_departure_at=r.data.selected_departure_at=new Date(start+480000).toISOString();
  r.data.arrival_candidate_id='later';r.data.arrival_evidence.candidates=[{candidate_id:'early',predicted_arrival_at:new Date(start+90000).toISOString()},{candidate_id:'later',predicted_arrival_at:r.data.vehicle_arrival_at}];
  getFirstDeparture.mockResolvedValue(r);elapsed=60000;await act(async()=>{vi.advanceTimersByTime(60000);});
- expect(getFirstDeparture).toHaveBeenCalledTimes(2);expect(screen.queryByText('예상 출발 17:03')).toBeNull();expect(screen.getByText('예상 출발 17:08')).toBeTruthy();
+ expect(getFirstDeparture).toHaveBeenCalledTimes(2);expect(screen.queryByText('3분')).toBeNull();expect(screen.getByText('7분')).toBeTruthy();
  expect(screen.getByText(/접근 시간이 부족한 앞 차량/)).toBeTruthy();
 });
 
 it('shows half-time unconfirmed departure switch separately from unreachable access',async()=>{
  const r=response();r.data.reasons=['DEPARTURE_UNCONFIRMED_NEXT_VEHICLE'];getFirstDeparture.mockResolvedValue(r);await mount();
- expect(screen.getByText(/접근 시간의 절반이 지나/)).toBeTruthy();expect(screen.getByText('예상 출발 17:03')).toBeTruthy();
+  expect(screen.getByText(/접근 시간의 절반이 지나/)).toBeTruthy();expect(screen.getByText('3분')).toBeTruthy();
 });
 it('no supplied next vehicle hides clocks and explains unconfirmed departure',async()=>{
  const r=response();r.data.valid_for_guidance=false;r.data.status='insufficient_data';r.data.reasons=['DEPARTURE_UNCONFIRMED_NO_NEXT'];getFirstDeparture.mockResolvedValue(r);await mount();

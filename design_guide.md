@@ -248,3 +248,5 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 - 구간 안내(2026-10-15): 기존 info-box·trip-progress-actions·primary/secondary를 재사용해 현재 차량/하차 지점·환승 위치 확인·수동 다음 행동을 표시한다. 차량 안 미확인 ETA는 표시하지 않는다. 새 공통 색상/간격/CSS 없음.
 
 - 종료 결과(2026-10-15): 기존 info-box/primary/secondary/trip-progress-actions를 재사용한다. 놓침 버튼은 이동 종료까지 명시하고 목적지 도착은 최종 하차 뒤 별도 확인한다. 종료/실패 시 숫자 숨김·새 이동 준비·재방문 복구, 새 CSS/색상 없음.
+
+- 언제이니? 카운트다운(2026-10-15): FirstArrivals 헤딩을 '언제이니?'(Clock3 유지)로 표시하고 남은 분을 .when-answer 큰 숫자로 답한다. 기존 팔레트를 유지하며 새 값은 when-answer strong 88px(≥1500px 98px·≤680px 75px)·when-unit 24px(모바일 20px)·letter-spacing -5px뿐이다. 목표 도착 평가는 기존 info-box/walking-guidance 체계를 Flag 아이콘과 함께 별도 섹션으로 분리한다.
