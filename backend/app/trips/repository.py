@@ -23,7 +23,7 @@ def active(c,owner):
 def selection_observation(c,owner,routine_id):
     return c.execute('''SELECT t.id,t.version,g.snapshot,e.id AS event_id,e.version AS event_version,
       e.source,e.type,e.excluded FROM manual_trips t JOIN guidance_snapshots g ON g.id=t.guidance_id
-      LEFT JOIN manual_trip_events e ON e.trip_id=t.id
+      LEFT JOIN manual_trip_events e ON e.trip_id=t.id AND e.type='departed'
       WHERE t.user_id=%s AND g.routine_id=%s AND t.status='active'
       AND t.expires_at>clock_timestamp() AND g.expires_at>clock_timestamp()''',(owner,routine_id)).fetchone()
 

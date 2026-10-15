@@ -94,7 +94,7 @@ class ManualTripTests(unittest.IsolatedAsyncioTestCase):
   listed=await self.call('/trips');self.assertEqual(listed[2]['data']['items'],[]);self.assertEqual(listed[1][b'cache-control'],b'no-store')
  async def test_event_time_leg_and_source_validation(self):
   await self.start();body=await self.event_body();path='/trips/'+self.trip['trip_id']+'/events'
-  for change in ({'occurred_at':123},{'occurred_at':'2026-01-01T00:00:00'},{'occurred_at':(datetime.now(timezone.utc)+timedelta(days=1)).isoformat()},{'occurred_at':'2000-01-01T00:00:00Z'},{'leg_id':str(uuid4())},{'source':'gps'},{'type':'boarded'},{'unknown':True}):
+  for change in ({'occurred_at':123},{'occurred_at':'2026-01-01T00:00:00'},{'occurred_at':(datetime.now(timezone.utc)+timedelta(days=1)).isoformat()},{'occurred_at':'2000-01-01T00:00:00Z'},{'leg_id':str(uuid4())},{'source':'gps'},{'type':'alighted'},{'unknown':True}):
    self.assertEqual((await self.call(path,{**body,**change}))[0],422)
   self.assertEqual((await self.call(path,body))[0],201)
  async def test_event_retry_normalizes_timezone_and_retains_first_receipt(self):
@@ -120,5 +120,59 @@ class ManualTripTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((await self.call('/trips'))[2]['data']['items'],[])
   self.assertEqual((await self.call('/trips',self.body))[0],201)
   with database() as c:self.assertEqual(c.execute('SELECT count(*) AS n FROM manual_trip_events').fetchone()['n'],0)
+
+ async def progress_body(self,kind):
+  body=await self.event_body();body['type']=kind
+  detail=(await self.call('/trips/'+self.trip['trip_id']))[2]['data']
+  legs=detail['guidance']['candidate']['ordered_legs'];index=next(i for i,l in enumerate(legs) if l['type'] in ('BUS','SUBWAY'))
+  body['leg_id']=legs[index-1 if kind=='approach_arrived' and index>0 else index]['leg_id']
+  return body
+ async def report_departure(self):
+  await self.start();body=await self.event_body()
+  self.assertEqual((await self.call('/trips/'+self.trip['trip_id']+'/events',body))[0],201)
+  return '/trips/'+self.trip['trip_id']+'/events'
+ async def test_approach_boarding_recovery_and_immutable_departure(self):
+  path=await self.report_departure();before=(await self.call('/trips/'+self.trip['trip_id']))[2]['data']
+  for kind in ('approach_arrived','boarded'):
+   body=await self.progress_body(kind);one=await self.call(path,body);two=await self.call(path,body)
+   self.assertEqual((one[0],two[0]),(201,200));self.assertEqual(one[2]['data'],two[2]['data'])
+   self.assertEqual((await self.call(path,{**body,'leg_id':str(uuid4())}))[0],409)
+  saved=(await self.call('/trips/'+self.trip['trip_id']))[2]['data']
+  self.assertEqual([e['type'] for e in saved['events']],['departed','approach_arrived','boarded'])
+  self.assertEqual(saved['guidance'],before['guidance']);self.assertEqual(saved['trip']['departure_event'],before['trip']['departure_event'])
+  self.assertEqual(saved['trip']['approach_event']['type'],'approach_arrived');self.assertEqual(saved['trip']['boarding_event']['type'],'boarded')
+  listed=(await self.call('/trips'))[2]['data']['items'][0];self.assertEqual(listed,saved['trip'])
+ async def test_board_without_approach_does_not_invent_walking_observation(self):
+  path=await self.report_departure();body=await self.progress_body('boarded')
+  self.assertEqual((await self.call(path,body))[0],201)
+  saved=(await self.call('/trips/'+self.trip['trip_id']))[2]['data'];self.assertIsNone(saved['trip']['approach_event'])
+  late=await self.progress_body('approach_arrived');self.assertEqual((await self.call(path,late))[2]['error']['code'],'INVALID_EVENT_ORDER')
+  self.assertEqual((await self.call(path,{**body,'client_event_id':str(uuid4())}))[0],409)
+ async def test_progress_requires_departure_and_correct_first_leg_and_time(self):
+  await self.start();path='/trips/'+self.trip['trip_id']+'/events'
+  body=await self.progress_body('approach_arrived');self.assertEqual((await self.call(path,body))[0],409)
+  self.assertEqual((await self.call(path,await self.event_body()))[0],201)
+  body=await self.progress_body('boarded')
+  self.assertEqual((await self.call(path,{**body,'leg_id':str(uuid4())}))[0],422)
+  earlier=datetime.fromisoformat(self.d['calculated_at'])-timedelta(seconds=1)
+  self.assertEqual((await self.call(path,{**body,'occurred_at':earlier.isoformat()}))[0],422)
+  self.assertEqual((await self.call(path,{**body,'occurred_at':(datetime.now(timezone.utc)+timedelta(minutes=1)).isoformat()}))[0],422)
+  approach=await self.progress_body('approach_arrived');self.assertEqual((await self.call(path,approach))[0],201)
+  self.assertEqual((await self.call(path,{**body,'occurred_at':approach['occurred_at']}))[0],201)
+ async def test_concurrent_boarding_serialized_and_cancel_keeps_replay(self):
+  path=await self.report_departure();body=await self.progress_body('boarded')
+  results=await asyncio.gather(self.call(path,body),self.call(path,{**body,'client_event_id':str(uuid4())}))
+  self.assertEqual(sorted(r[0] for r in results),[201,409])
+  saved=next(r[2]['data'] for r in results if r[0]==201)
+  self.assertEqual((await self.patch_trip(self.trip['trip_id'],1))[0],200)
+  replay={**body,'client_event_id':saved['client_event_id']}
+  self.assertEqual((await self.call(path,replay))[0],200)
+  self.assertEqual((await self.call(path,await self.progress_body('approach_arrived')))[0],409)
+ async def test_progress_stops_remaining_approach_and_departure_suppression_survives(self):
+  path=await self.report_departure();body=await self.progress_body('approach_arrived')
+  self.assertEqual((await self.call(path,body))[0],201)
+  payload={'expected_version':1,'stage':'before_first_boarding','position_confirmed':True,'origin':{'type':'map_pin','latitude':37.5,'longitude':127.0}}
+  self.assertEqual((await self.call('/trips/'+self.trip['trip_id']+'/remaining-searches',payload))[2]['error']['code'],'INVALID_EVENT_ORDER')
+  response=await self.call(self.lastpath);self.assertEqual(response[2]['data']['departure']['departure_state'],'reported_departed')
 
 del TargetApiTests

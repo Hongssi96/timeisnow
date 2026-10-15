@@ -3,7 +3,7 @@ import {safeJourneyId} from './journeys';
 
 const invalid=()=>{throw new ApiError('INVALID_RESPONSE');};
 export function readEvent(event,tripId){
- if(!event||!['event_id','client_event_id','leg_id'].every(key=>safeJourneyId(event[key]))||event.trip_id!==tripId||event.type!=='departed'||event.source!=='manual'
+ if(!event||!['event_id','client_event_id','leg_id'].every(key=>safeJourneyId(event[key]))||event.trip_id!==tripId||!['departed','approach_arrived','boarded'].includes(event.type)||event.source!=='manual'
   ||!isServerTime(event.occurred_at)||!isServerTime(event.received_at)||Date.parse(event.occurred_at)>Date.parse(event.received_at)
   ||!Number.isSafeInteger(event.input_delay_seconds)||event.input_delay_seconds<0||event.excluded!==false||event.version!==1)invalid();
  return event;
@@ -12,7 +12,9 @@ export function readTrip(value){
  if(!value||!safeJourneyId(value.trip_id)||!safeJourneyId(value.guidance_id)||(value.routine_id!==null&&!safeJourneyId(value.routine_id))
   ||!['active','cancelled'].includes(value.status)||!['assisted','baseline'].includes(value.measurement_mode)||!Number.isSafeInteger(value.version)||value.version<1
   ||!isServerTime(value.created_at)||!isServerTime(value.expires_at)||Date.parse(value.expires_at)<=Date.parse(value.created_at))invalid();
- if(value.departure_event!==null)readEvent(value.departure_event,value.trip_id);
+ for(const [key,type] of [['departure_event','departed'],['approach_event','approach_arrived'],['boarding_event','boarded']]){
+  if(value[key]!=null){readEvent(value[key],value.trip_id);if(value[key].type!==type)invalid();}
+ }
  return value;
 }
 async function csrf(signal){const response=await apiRequest('/api/v1/auth/csrf',{signal});if(typeof response.data?.csrf_token!=='string')invalid();return response.data.csrf_token;}
@@ -42,8 +44,27 @@ export async function confirmDeparture(operation,signal){
  const body={client_event_id:operation.eventId,type:'departed',occurred_at:operation.occurredAt,leg_id:leg,source:'manual'};
  const response=await apiRequest(`/api/v1/trips/${trip.trip_id}/events`,{method:'POST',signal,headers:{'X-CSRF-Token':token},body});
  const event=readEvent(response.data,trip.trip_id);
- if(event.client_event_id!==operation.eventId||event.leg_id!==leg||Date.parse(event.occurred_at)!==Date.parse(operation.occurredAt))invalid();
+ if(event.type!=='departed'||event.client_event_id!==operation.eventId||event.leg_id!==leg||Date.parse(event.occurred_at)!==Date.parse(operation.occurredAt))invalid();
  return {...saved,departure_event:event};
+}
+export async function confirmProgress(operation,signal){
+ const field={approach_arrived:'approach_event',boarded:'boarding_event'}[operation.type];
+ if(!field)invalid();readTrip(operation.trip);
+ const path=`/api/v1/trips/${operation.trip.trip_id}`;
+ const response=await apiRequest(path,{signal});
+ const saved=readTrip(response.data?.trip);
+ if(saved.trip_id!==operation.trip.trip_id||saved.status!=='active'||!saved.departure_event)invalid();
+ if(saved[field]||saved.boarding_event)return saved;
+ const legs=response.data?.guidance?.candidate?.ordered_legs;
+ const index=Array.isArray(legs)?legs.findIndex(leg=>['BUS','SUBWAY'].includes(leg.type)):-1;
+ if(index<0||saved.boarding_event)invalid();
+ const leg=legs[operation.type==='approach_arrived'&&index>0?index-1:index].leg_id;
+ if(!safeJourneyId(leg))invalid();
+ const token=await csrf(signal);
+ const result=await apiRequest(`${path}/events`,{method:'POST',signal,headers:{'X-CSRF-Token':token},body:{client_event_id:operation.eventId,type:operation.type,occurred_at:operation.occurredAt,leg_id:leg,source:'manual'}});
+ const event=readEvent(result.data,saved.trip_id);
+ if(event.type!==operation.type||event.client_event_id!==operation.eventId||event.leg_id!==leg||Date.parse(event.occurred_at)!==Date.parse(operation.occurredAt))invalid();
+ return {...saved,[field]:event};
 }
 export async function cancelTrip(trip,signal){
  readTrip(trip);const token=await csrf(signal);

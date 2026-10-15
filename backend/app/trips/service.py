@@ -14,7 +14,7 @@ from app.trips import repository as repo
 
 def missing():raise AuthError(404,'RESOURCE_NOT_FOUND','이동 기록이나 안내를 찾을 수 없어요.')
 def conflict():raise AuthError(409,'VERSION_CONFLICT','안내나 개인 설정이 변경됐어요. 다시 확인해주세요.')
-def order():raise AuthError(409,'INVALID_EVENT_ORDER','이 이동의 출발 확인을 새로 저장할 수 없어요.')
+def order():raise AuthError(409,'INVALID_EVENT_ORDER','이 이동의 기록 순서를 확인해주세요.')
 def authenticate(request,kind=None):
     with database() as c:
         owner=security.authenticated(c,request,kind is not None)
@@ -37,7 +37,8 @@ def trip_data(c,row):
         'routine_id':str(row['routine_id']) if row['routine_id'] else None,
         'measurement_mode':row['measurement_mode'],'status':row['status'],'version':row['version'],
         'created_at':iso(row['created_at']),'expires_at':iso(row['expires_at']),
-        'departure_event':event_data(values[0]) if values else None}
+        **{field:next((event_data(e) for e in values if e['type']==kind),None)
+           for field,kind in [('departure_event','departed'),('approach_event','approach_arrived'),('boarding_event','boarded')]}}
 
 def create(request,body):
     owner=authenticate(request,'create')
@@ -103,11 +104,22 @@ def add_event(request,trip_id,body):
         if previous:
             if previous['body_hash']!=digest:raise AuthError(409,'IDEMPOTENCY_CONFLICT','같은 출발 확인의 내용이 달라요.')
             return answer(request,event_data(previous),200)
-        if row['status']!='active' or repo.events(c,row['id']):order()
+        events=repo.events(c,row['id'])
+        if row['status']!='active' or any(e['type']==body.type for e in events):order()
+        if body.type=='departed' and events:order()
+        if body.type!='departed' and (not any(e['type']=='departed' for e in events) or any(e['type']=='boarded' for e in events)):order()
         now=datetime.now(timezone.utc);snapshot=row['snapshot']
         calculated=datetime.fromisoformat(snapshot['departure']['calculated_at'].replace('Z','+00:00'))
-        if str(body.leg_id)!=snapshot['candidate']['ordered_legs'][0]['leg_id'] or not calculated<=body.occurred_at<=now:
-            raise AuthError(422,'VALIDATION_ERROR','출발 구간과 발생 시각을 확인해주세요.')
+        legs=snapshot['candidate']['ordered_legs']
+        expected=legs[0]['leg_id']
+        if body.type!='departed':
+            index=next((i for i,leg in enumerate(legs) if leg['type'] in ('BUS','SUBWAY')),None)
+            if index is None:order()
+            expected=legs[index]['leg_id']
+            if body.type=='approach_arrived' and index>0:expected=legs[index-1]['leg_id']
+        lower=max([calculated]+[e['occurred_at'] for e in events])
+        if str(body.leg_id)!=expected or not lower<=body.occurred_at<=now:
+            raise AuthError(422,'VALIDATION_ERROR','이동 구간과 발생 시각을 확인해주세요.')
         event=repo.add_event(c,row['id'],uuid4(),body,digest,now)
         return answer(request,event_data(event),201)
 

@@ -3,7 +3,7 @@
 Notion v0.80 · 2026-10-14 · https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa
 
 ### 5.8.1 루틴 안내 연결 이동 세션과 수동 출발(F08-01/F08-02a)
-- 이번 범위는 지원 루틴의 유효 첫 출발 안내에 연결된 assisted/baseline 세션, 본인 조회/취소와 첫 departed 수동 신고다. 접근 완료/탑승/하차·환승 결과·정정/학습/내보내기/삭제작업은 미구현 상태를 유지한다. F07-06b 절반 경과 정책은 이 저장 기반 후속 연결이며 이번 단계에서 자동 전환하지 않는다.
+- 이번 범위는 지원 루틴의 유효 첫 출발 안내에 연결된 assisted/baseline 세션, 본인 조회/취소와 첫 departed 수동 신고다. 첫 접근 완료/탑승은5.8.2에서 확장했으며 하차·환승 결과·정정/학습/내보내기/삭제작업은 미구현 상태를 유지한다. F07-06b 절반 경과 정책은 이 저장 기반 후속 연결이며 이번 단계에서 자동 전환하지 않는다.
 - 루틴 출발 GET의 nested first.departure.v1에 nullable guidance_id(UUID)를 추가한다. 유효 안내에만 서버가 당시 departure/좌표 없는 정규화 경로·루틴/장소/프로필 버전과 묶인 토큰을 최근128개 프로세스 메모리에 발급한다. 기한은 원래 안내/검색 중 최소, 연장 없음. 일반 후보 GET/근거부족은null. GET에서 DB 안내/이동 생성이나 실제 출발 신고는 없다. 재시작/다른 프로세스/퇴출은 토큰404·새 안내 필요.
 - POST /api/v1/trips는 기존 guidance_id(UUID), measurement_mode:assisted\|baseline만 받는다. 쿠키 본인·Origin/CSRF/no-store, 유효 토큰과 현재 루틴/경로/장소/프로필 버전을 DB 공유 잠금으로 재검사하여 당시 안내 스냅샷과 이동을 원자 저장한다. 생성 시 현재부터 W만큼 접근할 수 있는 차량인지도 재검사하고 이미 접근 불가능하면404·새 안내 필요. 좌표/원문/사용자 지정 ETA·출발 여부를 입력받지 않는다. 201 data는 trip_id,guidance_id,routine_id(nullable),measurement_mode,status(active\|cancelled),version,created_at,expires_at,departure_event(nullable)이며 당시 안내는GET상세에서 제공한다. 아직 출발하지 않은 세션이며 departed와 구분한다.
 - 선택 Idempotency-Key(1\~128자 ASCII 영문/숫자/밑줄/하이픈)는 본인+POST /trips+키/본문 해시와 결과 참조를24시간 보관한다. 같은 키/정규화본문200 저장결과, 다른본문409 IDEMPOTENCY_CONFLICT, 삭제/기한경과 기록은404·재생성없음. 키 없이도 동일 본인 guidance_id+mode 재전송은 같은 세션200(안내 토큰 만료/재시작 뒤에도 저장 결과 복구 가능), 다른mode409 IDEMPOTENCY_CONFLICT. 유효한 진행 중 이동은 본인당1개, 다른 guidance로 생성하면409 ACTIVE_TRIP_EXISTS. 본인 생성 요청10회/분·이벤트30회/분·멱등재전송 추가생성 없음. 지원외 guidance/타인/만료404, 루틴/장소/프로필 변경409 VERSION_CONFLICT.
@@ -35,3 +35,10 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 출발 확인 카드의 '첫 탑승 전 남은 경로 확인'에서 기존 OriginSelector/currentPointOnly와 카드·버튼·CSS를 재사용한다. 저장 장소 선택/저장을 숨기고 현재 위치/지도 확인과 탑승 전 확인을 받는다. 유효 동안60초/탭복귀 조회, 실패/위치기한/재선택/안내중지 시 숫자 제거·늦은 응답 무시. 현재 위치는 자동 추적하지 않는다. 새 응답이 이전 위치 확인 기한을 연장하지 못하도록 클라이언트도 최소 기한을 유지한다. 초 단위 여유/설정값을 올림 분으로 과장하지 않는다. '탑승했거나 안내 멈추기'는 이 안내 종료이며 실제 boarded 기록 생성은 아니다.
 
 명세 Notion v0.82 5.7.9 및 moving_guidance_api.md. 전체 F07-07은 미완료: 차량 안/환승 중에는 현재 구간을 확인할 F08 접근 완료/탑승/하차 기록과 남은 구간 근거가 필요하다. 실제 GPS 품질/현재 위치 인증/실경로 정확도는 미검증. 특정 노선 상세 결과없음 대응은 사용자 지시로 후속 보류.
+
+### 5.8.2 첫 접근 완료·탑승 수동 기록(F08-02b)
+- 기존 POST /trips/\{trip_id\}/events에 type:approach_arrived|boarded를 추가한다. departed는 첫 ordered_leg, approach_arrived는 첫 차량 전 접근 WALK 구간(없으면 첫 차량), boarded는 첫 BUS/SUBWAY 구간의 leg_id다. 첫 차량 이후 환승/하차·정정은 후속이다.
+- 본인 active 세션에서 departed 이후 접근 완료(선택)→탑승 순서로 각 type당 하나만 저장한다. 접근 완료 누락 상태의 탑승 신고도 허용하지만 접근 완료를 자동 생성하거나 출발→탑승을 보행시간으로 학습하지 않는다. 탑승 후 접근 완료/중복 type 새 ID/취소 세션의 새 이벤트는409 INVALID_EVENT_ORDER, 잘못된 구간·이전 이벤트보다 이른 발생시각·미래는422 VALIDATION_ERROR다. 같은 시각은 허용한다.
+- 기존 쿠키·Origin/CSRF·이벤트30회/분·세션 잠금·동일 client_event_id/정규화본문200 재현·다른본문409·90일 보관과 occurred_at/received_at 분리는 유지한다. 기존 departed 요청/응답 호환, 이벤트 응답 type enum 확장. 이동 요약에 nullable approach_event/boarding_event를 추가하고 departure_event는 항상 departed를 가리킨다.
+- 접근/탑승 신고 저장 뒤 첫 탑승 전 남은 경로 POST/GET은409 INVALID_EVENT_ORDER로 차단한다. 기존 안내 스냅샷·루틴/프로필·학습값은 변경하지 않는다. UI는 출발 확인 뒤 정류장 도착/탑승 버튼, 저장 중 중복 차단·동일 ID/시각 재시도·복구를 제공하며 진행 신고 중/실패 시 이전 여유 숫자를 제거한다. 탑승은 사용자 신고이며 특정 차량 인증이 아니다.
+- 구현·검증 완료 <mention-date start="2026-10-15"/>: 전체 백엔드459개250.223초·추가 남은경로 차단1개2.344초 통과. 프론트 전체269개12.51초·최종 SDK10개1.65초·빌드1913모듈458ms 통과. 합성 실제 컴포넌트 PC1280×900/모바일390×844 버튼·상태/가로넘침 확인. 개발 DB0015 기존회원21/장소35/루틴12/이동0/약속0 보존·서버health/frontend200·OpenAPI enum 확인. 외부키/AI0회, 실제 이동 정확도·차량 안/환승 안내·하차/정정/자동학습은 미검증/후속.

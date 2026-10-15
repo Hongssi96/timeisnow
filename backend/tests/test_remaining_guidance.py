@@ -15,6 +15,15 @@ from app.places import provider as places_provider
 from app.common.database import database
 
 class RemainingTests(unittest.IsolatedAsyncioTestCase):
+ progress_body=ManualTripTests.progress_body
+ async def test_boarding_invalidates_existing_remaining_search_and_new_search(self):
+  await self.departed();accepted,_=await self.admit()
+  body=await self.progress_body('boarded')
+  self.assertEqual((await self.call('/trips/'+self.trip['trip_id']+'/events',body))[0],201)
+  result=await self.call(self.result_path(accepted))
+  self.assertEqual(result[2]['error']['code'],'INVALID_EVENT_ORDER')
+  again,fetch=await self.admit()
+  self.assertEqual(again[2]['error']['code'],'INVALID_EVENT_ORDER');fetch.assert_not_called()
  setUp=ManualTripTests.setUp;tearDown=ManualTripTests.tearDown;call=ManualTripTests.call
  prepare=ManualTripTests.prepare;credentials=ManualTripTests.credentials;signup_login=ManualTripTests.signup_login
  saved=ManualTripTests.saved;create=ManualTripTests.create;search=ManualTripTests.search;completed=ManualTripTests.completed
