@@ -11,6 +11,7 @@ from app.places.service import parsed_id
 from app.guidance import issued,routine
 from app.arrivals import cache
 from app.trips import repository as repo
+from app.trips.progress import state as progress_state
 
 def missing():raise AuthError(404,'RESOURCE_NOT_FOUND','이동 기록이나 안내를 찾을 수 없어요.')
 def conflict():raise AuthError(409,'VERSION_CONFLICT','안내나 개인 설정이 변경됐어요. 다시 확인해주세요.')
@@ -33,12 +34,16 @@ def event_data(row):
 
 def trip_data(c,row):
     values=repo.events(c,row['id'])
+    legs=row['snapshot']['candidate']['ordered_legs']
+    first=next(i for i,leg in enumerate(legs) if leg['type'] in ('BUS','SUBWAY'))
+    access=legs[first-1]['leg_id'] if first else legs[first]['leg_id']
     return {'trip_id':str(row['id']),'guidance_id':str(row['guidance_id']),
         'routine_id':str(row['routine_id']) if row['routine_id'] else None,
         'measurement_mode':row['measurement_mode'],'status':row['status'],'version':row['version'],
         'created_at':iso(row['created_at']),'expires_at':iso(row['expires_at']),
-        **{field:next((event_data(e) for e in values if e['type']==kind),None)
-           for field,kind in [('departure_event','departed'),('approach_event','approach_arrived'),('boarding_event','boarded')]}}
+        'progress':progress_state(row['snapshot']['candidate'],values),
+        **{field:next((event_data(e) for e in values if e['type']==kind and str(e['leg_id'])==lid),None)
+           for field,kind,lid in [('departure_event','departed',legs[0]['leg_id']),('approach_event','approach_arrived',access),('boarding_event','boarded',legs[first]['leg_id'])]}}
 
 def create(request,body):
     owner=authenticate(request,'create')
@@ -105,18 +110,12 @@ def add_event(request,trip_id,body):
             if previous['body_hash']!=digest:raise AuthError(409,'IDEMPOTENCY_CONFLICT','같은 출발 확인의 내용이 달라요.')
             return answer(request,event_data(previous),200)
         events=repo.events(c,row['id'])
-        if row['status']!='active' or any(e['type']==body.type for e in events):order()
-        if body.type=='departed' and events:order()
-        if body.type!='departed' and (not any(e['type']=='departed' for e in events) or any(e['type']=='boarded' for e in events)):order()
+        if row['status']!='active':order()
+        progress=progress_state(row['snapshot']['candidate'],events)
+        if body.type not in progress['actions']:order()
         now=datetime.now(timezone.utc);snapshot=row['snapshot']
         calculated=datetime.fromisoformat(snapshot['departure']['calculated_at'].replace('Z','+00:00'))
-        legs=snapshot['candidate']['ordered_legs']
-        expected=legs[0]['leg_id']
-        if body.type!='departed':
-            index=next((i for i,leg in enumerate(legs) if leg['type'] in ('BUS','SUBWAY')),None)
-            if index is None:order()
-            expected=legs[index]['leg_id']
-            if body.type=='approach_arrived' and index>0:expected=legs[index-1]['leg_id']
+        expected=progress['actions'][body.type]
         lower=max([calculated]+[e['occurred_at'] for e in events])
         if str(body.leg_id)!=expected or not lower<=body.occurred_at<=now:
             raise AuthError(422,'VALIDATION_ERROR','이동 구간과 발생 시각을 확인해주세요.')

@@ -57,3 +57,18 @@ it('recovers boarding from another tab while retrying an approach report',async(
  apiRequest.mockResolvedValue(reply({trip:saved}));
  expect(await confirmProgress({trip:trip(),type:'approach_arrived'})).toEqual(saved);expect(apiRequest).toHaveBeenCalledTimes(1);
 });
+const progress=(stage,actions,anchor='a1')=>({stage,actions,anchor_event_id:anchor,current_leg_id:'bus2',next_leg_id:stage==='onboard'?null:'bus2',boarding_stop:'환승 승차',alighting_stop:'다음 하차',vehicle_name:'20번'});
+it('second boarding uses progress action rather than replaying the first boarding summary',async()=>{
+ const current={...trip(),departure_event:event(),boarding_event:{...event(),type:'boarded'},progress:progress('transfer',{boarded:'bus2'})};
+ const boarded={...event(),type:'boarded',leg_id:'bus2'};
+ const saved={...current,progress:progress('onboard',{alighted:'bus2'},'e2')};
+ apiRequest.mockResolvedValueOnce(reply({trip:current})).mockResolvedValueOnce(reply({csrf_token:'csrf'})).mockResolvedValueOnce(reply(boarded)).mockResolvedValueOnce(reply({trip:saved}));
+ expect(await confirmProgress({trip:current,type:'boarded',eventId:'ce1',occurredAt:at})).toEqual(saved);
+ expect(apiRequest.mock.calls[2][1].body.leg_id).toBe('bus2');
+});
+it('changed progress anchor recovers current stage without sending a stale action',async()=>{
+ const current={...trip(),departure_event:event(),progress:progress('onboard',{alighted:'bus2'})};
+ const saved={...current,progress:progress('transfer',{boarded:'bus3'},'new')};
+ apiRequest.mockResolvedValue(reply({trip:saved}));
+ expect(await confirmProgress({trip:current,type:'alighted'})).toEqual(saved);expect(apiRequest).toHaveBeenCalledTimes(1);
+});

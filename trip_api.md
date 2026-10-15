@@ -37,8 +37,12 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 명세 Notion v0.82 5.7.9 및 moving_guidance_api.md. 전체 F07-07은 미완료: 차량 안/환승 중에는 현재 구간을 확인할 F08 접근 완료/탑승/하차 기록과 남은 구간 근거가 필요하다. 실제 GPS 품질/현재 위치 인증/실경로 정확도는 미검증. 특정 노선 상세 결과없음 대응은 사용자 지시로 후속 보류.
 
 ### 5.8.2 첫 접근 완료·탑승 수동 기록(F08-02b)
-- 기존 POST /trips/\{trip_id\}/events에 type:approach_arrived|boarded를 추가한다. departed는 첫 ordered_leg, approach_arrived는 첫 차량 전 접근 WALK 구간(없으면 첫 차량), boarded는 첫 BUS/SUBWAY 구간의 leg_id다. 첫 차량 이후 환승/하차·정정은 후속이다.
+- 기존 POST /trips/\{trip_id\}/events에 type:approach_arrived|boarded를 추가한다. departed는 첫 ordered_leg, approach_arrived는 첫 차량 전 접근 WALK 구간(없으면 첫 차량), boarded는 첫 BUS/SUBWAY 구간의 leg_id다. 첫 차량 이후 환승/하차는5.7.10으로 확장했으며 놓침/정정은 후속이다.
 - 본인 active 세션에서 departed 이후 접근 완료(선택)→탑승 순서로 각 type당 하나만 저장한다. 접근 완료 누락 상태의 탑승 신고도 허용하지만 접근 완료를 자동 생성하거나 출발→탑승을 보행시간으로 학습하지 않는다. 탑승 후 접근 완료/중복 type 새 ID/취소 세션의 새 이벤트는409 INVALID_EVENT_ORDER, 잘못된 구간·이전 이벤트보다 이른 발생시각·미래는422 VALIDATION_ERROR다. 같은 시각은 허용한다.
 - 기존 쿠키·Origin/CSRF·이벤트30회/분·세션 잠금·동일 client_event_id/정규화본문200 재현·다른본문409·90일 보관과 occurred_at/received_at 분리는 유지한다. 기존 departed 요청/응답 호환, 이벤트 응답 type enum 확장. 이동 요약에 nullable approach_event/boarding_event를 추가하고 departure_event는 항상 departed를 가리킨다.
 - 접근/탑승 신고 저장 뒤 첫 탑승 전 남은 경로 POST/GET은409 INVALID_EVENT_ORDER로 차단한다. 기존 안내 스냅샷·루틴/프로필·학습값은 변경하지 않는다. UI는 출발 확인 뒤 정류장 도착/탑승 버튼, 저장 중 중복 차단·동일 ID/시각 재시도·복구를 제공하며 진행 신고 중/실패 시 이전 여유 숫자를 제거한다. 탑승은 사용자 신고이며 특정 차량 인증이 아니다.
 - 구현·검증 완료 <mention-date start="2026-10-15"/>: 전체 백엔드459개250.223초·추가 남은경로 차단1개2.344초 통과. 프론트 전체269개12.51초·최종 SDK10개1.65초·빌드1913모듈458ms 통과. 합성 실제 컴포넌트 PC1280×900/모바일390×844 버튼·상태/가로넘침 확인. 개발 DB0015 기존회원21/장소35/루틴12/이동0/약속0 보존·서버health/frontend200·OpenAPI enum 확인. 외부키/AI0회, 실제 이동 정확도·차량 안/환승 안내·하차/정정/자동학습은 미검증/후속.
+
+## 진행 구간 확장 (2026-10-15)
+
+하차·다음 차량별 반복 접근/탑승과 progress 요약은 Notion v0.84 5.7.10 및 moving_guidance_api.md를 따른다. 기존 첫 이벤트 요약/90일 보관/수동 입력 의미는 유지한다. F08-03 놓침·정정·최종 완료는 후속이다.

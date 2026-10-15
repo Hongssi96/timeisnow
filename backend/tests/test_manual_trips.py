@@ -94,7 +94,7 @@ class ManualTripTests(unittest.IsolatedAsyncioTestCase):
   listed=await self.call('/trips');self.assertEqual(listed[2]['data']['items'],[]);self.assertEqual(listed[1][b'cache-control'],b'no-store')
  async def test_event_time_leg_and_source_validation(self):
   await self.start();body=await self.event_body();path='/trips/'+self.trip['trip_id']+'/events'
-  for change in ({'occurred_at':123},{'occurred_at':'2026-01-01T00:00:00'},{'occurred_at':(datetime.now(timezone.utc)+timedelta(days=1)).isoformat()},{'occurred_at':'2000-01-01T00:00:00Z'},{'leg_id':str(uuid4())},{'source':'gps'},{'type':'alighted'},{'unknown':True}):
+  for change in ({'occurred_at':123},{'occurred_at':'2026-01-01T00:00:00'},{'occurred_at':(datetime.now(timezone.utc)+timedelta(days=1)).isoformat()},{'occurred_at':'2000-01-01T00:00:00Z'},{'leg_id':str(uuid4())},{'source':'gps'},{'type':'unknown'},{'unknown':True}):
    self.assertEqual((await self.call(path,{**body,**change}))[0],422)
   self.assertEqual((await self.call(path,body))[0],201)
  async def test_event_retry_normalizes_timezone_and_retains_first_receipt(self):

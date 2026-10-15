@@ -8,6 +8,8 @@ const messages={no_routes:'현재 위치에서 남은 경로가 제공되지 않
  ambiguous_route:'같은 노선의 후보가 여러 개여서 남은 경로를 확정할 수 없어요.',insufficient_data:'남은 도보 또는 도착 근거가 부족해 여유를 계산할 수 없어요.',
  not_enough_time:'제공된 차량까지 남은 접근 시간이 부족해요.',stale:'남은 경로 정보가 만료됐어요.',unsupported:'이 구간의 이동 중 안내는 아직 지원하지 않아요.'};
 export default function RemainingGuidance({trip}){
+ const transfer=['transfer','transfer_waiting'].includes(trip.progress?.stage);
+ const title=transfer?'환승 중 남은 경로':'첫 탑승 전 남은 경로';
  const [open,setOpen]=useState(false),[position,setPosition]=useState(null),[confirmed,setConfirmed]=useState(false);
  const [state,setState]=useState({phase:'idle',response:null}),[clock,setClock]=useState(performance.now());
  const controller=useRef(null),alive=useRef(false),busy=useRef(false),generation=useRef(0);
@@ -42,14 +44,14 @@ export default function RemainingGuidance({trip}){
  const now=r?r.serverMs+Math.max(0,clock-r.receivedMono):0;
  const slack=d?.valid_for_guidance?Math.min(d.slack_seconds,Math.floor((Date.parse(d.vehicle_arrival_at)-now)/1000-d.remaining_approach_seconds)):null;
  const valid=d?.valid_for_guidance&&clock<r.deadline&&slack>=0;
- return <div aria-label="첫 탑승 전 남은 경로 안내">
-  {!open?<button className="secondary" onClick={()=>setOpen(true)}>첫 탑승 전 남은 경로 확인</button>:<>
-   <h3>첫 탑승 전 남은 경로</h3>
-   <p className="small muted">확인한 현재 위치에서 승차 지점까지의 추정이에요. 차량 안이나 환승 중에는 사용하지 마세요. 이동하거나 탑승하면 안내를 멈추고 위치를 다시 확인해주세요.</p>
+ return <div aria-label={`${title} 안내`}>
+  {!open?<button className="secondary" onClick={()=>setOpen(true)}>{title} 확인</button>:<>
+   <h3>{title}</h3>
+   <p className="small muted">{transfer?'확인한 현재 위치에서 다음 승차 지점까지의 추정이에요. 이미 지난 차량과 도보는 다시 포함하지 않아요.':'확인한 현재 위치에서 첫 승차 지점까지의 추정이에요.'} 차량 안에서는 사용하지 마세요. 이동하거나 탑승하면 안내를 멈추고 위치를 다시 확인해주세요.</p>
    {!position&&<OriginSelector currentPointOnly onSelect={value=>{clear();setPosition(value);}} onAuthError={clear}/>}
    {position&&state.phase==='idle'&&<>
     <p>현재 위치를 선택했어요.</p>
-    <label className="small"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> 아직 첫 차량에 타기 전이고, 확인한 위치에 있어요.</label>
+    <label className="small"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>{transfer?' 이전 차량에서 내렸고 다음 차량에 타기 전이며, 확인한 위치에 있어요.':' 아직 첫 차량에 타기 전이고, 확인한 위치에 있어요.'}</label>
     <div className="button-row"><button className="primary" disabled={!confirmed} onClick={()=>run(true)}>남은 경로 조회</button><button className="secondary" onClick={clear}>위치 다시 확인</button></div>
    </>}
    {state.phase==='loading'&&<p role="status">현재 위치에서 남은 경로를 확인하고 있어요.</p>}

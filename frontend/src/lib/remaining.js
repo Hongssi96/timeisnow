@@ -3,8 +3,10 @@ import {safeJourneyId,pollJourney} from './journeys';
 import {readTrip} from './trips';
 
 const invalid=()=>{throw new ApiError('INVALID_RESPONSE');};
+const stage=trip=>['transfer','transfer_waiting'].includes(trip.progress?.stage)?'transfer':'before_first_boarding';
 export function readRemaining(response,trip,searchId){
  const d=response.data,server=response.meta?.server_time;
+ if(trip.progress&&(d?.stage!==stage(trip)||d.anchor_event_id!==trip.progress.anchor_event_id||d.next_leg_id!==trip.progress.next_leg_id))invalid();
  if(response.status!==200||d?.model_version!=='trip.remaining.v1'||d.trip_id!==trip.trip_id||d.trip_version!==trip.version||d.search_id!==searchId
   ||!['searching','ready','no_routes','route_changed','ambiguous_route','insufficient_data','not_enough_time','stale','unsupported'].includes(d.status)
   ||![server,d.calculated_at,d.valid_until].every(isServerTime)||Date.parse(d.calculated_at)>Date.parse(server)+1000
@@ -48,7 +50,7 @@ export async function refreshRemaining(trip,position,signal){
  const csrf=await apiRequest('/api/v1/auth/csrf',{signal});if(typeof csrf.data?.csrf_token!=='string')invalid();
  const r=await apiRequest(`/api/v1/trips/${trip.trip_id}/remaining-searches`,{method:'POST',signal,
   headers:{'X-CSRF-Token':csrf.data.csrf_token,'Idempotency-Key':crypto.randomUUID()},
-  body:{expected_version:trip.version,stage:'before_first_boarding',position_confirmed:true,origin:position.origin}});
+  body:{expected_version:trip.version,stage:stage(trip),position_confirmed:true,origin:position.origin}});
  const d=r.data;
  if(r.status!==202||d?.trip_id!==trip.trip_id||d.trip_version!==trip.version||!safeJourneyId(d.search_id)||!safeJourneyId(d.job_id)||d.status!=='queued'
   ||!isServerTime(d.position_valid_until)||!isServerTime(r.meta?.server_time))invalid();

@@ -18,3 +18,11 @@ it('GET stays bound to trip version and never sends client walking seconds',asyn
  const r=response();vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({data:r.data,meta:r.meta}),{status:200})));
  expect((await getRemaining(trip,'s')).data.slack_seconds).toBe(480);expect(fetch.mock.calls[0][0]).toBe('/api/v1/trips/t/remaining-searches/s/guidance?expected_version=1');
 });
+it('transfer numbers must match the current progress anchor and next vehicle',()=>{
+ const current={...trip,progress:{stage:'transfer',anchor_event_id:'a',next_leg_id:'bus2'}};
+ const r=response();Object.assign(r.data,{stage:'transfer',anchor_event_id:'a',next_leg_id:'bus2',buffer_seconds:120});
+ expect(readRemaining(r,current,'s').data.stage).toBe('transfer');
+ for(const change of [{stage:'before_first_boarding'},{anchor_event_id:'old'},{next_leg_id:'bus1'}]){
+  expect(()=>readRemaining({...r,data:{...r.data,...change}},current,'s')).toThrow();
+ }
+});

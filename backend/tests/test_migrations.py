@@ -47,7 +47,7 @@ class MigrationTest(unittest.TestCase):
                         connection.commit()
                         command.upgrade(config, 'head')
                         self.assertEqual(connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one(),
-                                         '0015_first_boarding_events')
+                                         '0016_transfer_events')
                         self.assertEqual(str(connection.execute(text(f'SELECT id FROM {table}')).scalar_one()), item)
                         if parent == '0013_manual_trips':
                             self.assertEqual(str(connection.execute(text('SELECT id FROM manual_trip_events')).scalar_one()),event_id)
@@ -57,6 +57,21 @@ class MigrationTest(unittest.TestCase):
                                     VALUES(:id,:tid,:id,:hash,:kind,:id,'manual',now())"""), {'id':eid,'tid':trip_id,'hash':'0'*64,'kind':kind})
                             connection.commit()
                             from sqlalchemy.exc import IntegrityError
+                            extras=[]
+                            for kind in ('boarded','alighted'):
+                                eid=str(uuid4());extras.append(eid)
+                                connection.execute(text("""INSERT INTO manual_trip_events(id,trip_id,client_event_id,body_hash,type,leg_id,source,occurred_at)
+                                    VALUES(:id,:tid,:id,:hash,:kind,:id,'manual',now())"""), {'id':eid,'tid':trip_id,'hash':'0'*64,'kind':kind})
+                            connection.commit()
+                            with self.assertRaises(IntegrityError):command.downgrade(config,'0015_first_boarding_events')
+                            connection.rollback()
+                            self.assertEqual(connection.execute(text('SELECT count(*) FROM manual_trip_events')).scalar_one(),5)
+                            connection.execute(text('DELETE FROM manual_trip_events WHERE id=:id'),{'id':extras[1]})
+                            connection.commit()
+                            with self.assertRaises(IntegrityError):command.downgrade(config,'0015_first_boarding_events')
+                            connection.rollback()
+                            connection.execute(text('DELETE FROM manual_trip_events WHERE id=:id'),{'id':extras[0]})
+                            connection.commit()
                             with self.assertRaises(IntegrityError):command.downgrade(config,'0014_integrated_features')
                             connection.rollback()
                             self.assertEqual(connection.execute(text('SELECT count(*) FROM manual_trip_events')).scalar_one(),3)
@@ -124,7 +139,7 @@ class MigrationTest(unittest.TestCase):
                     command.upgrade(config, 'head')
                     self.assertEqual(connection.execute(text(
                         "SELECT version_num FROM alembic_version")).scalars().all(),
-                        ["0015_first_boarding_events"])
+                        ["0016_transfer_events"])
                     self.assertEqual(sorted(inspect(connection).get_table_names(schema=schema)),
                                      ['ai_executions', 'alembic_version', 'auth_credentials', 'auth_rate_limit_buckets',
                                       'auth_sessions', 'guidance_snapshots', 'jobs', 'journey_plans', 'journey_search_keys', 'journey_searches',
