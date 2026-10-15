@@ -57,3 +57,17 @@ it('uncertain boarding hides guidance and retries the same operation',async()=>{
  confirmProgress.mockResolvedValue({...trip,departure_event:{event_id:'e'},boarding_event:{event_id:'b'}});
  await act(async()=>fireEvent.click(screen.getByText('탑승했어요')));expect(confirmProgress.mock.calls[1][0]).toBe(first);
 });
+const stageTrip=(stage,actions,anchor='a')=>({...trip,departure_event:{event_id:'e'},boarding_event:{event_id:'b'},progress:{stage,actions,anchor_event_id:anchor,vehicle_name:'20번',boarding_stop:'환승 정류장',alighting_stop:'다음 하차'}});
+it('onboard state has no invented ETA and alighting opens confirmed transfer guidance',async()=>{
+ activeTrip.mockResolvedValue(stageTrip('onboard',{alighted:'bus1'}));
+ confirmProgress.mockResolvedValue(stageTrip('transfer',{approach_arrived:'w2',boarded:'bus2'},'alight'));
+ await mount();expect(screen.getByText(/남은 운행시간 근거가 없어/)).toBeTruthy();
+ expect(screen.queryByText('환승 중 남은 경로 확인')).toBeNull();
+ await act(async()=>fireEvent.click(screen.getByText('이 차량에서 내렸어요')));
+ expect(confirmProgress.mock.calls[0][0].type).toBe('alighted');
+ expect(screen.getByText('환승 중 남은 경로 확인')).toBeTruthy();expect(screen.getByText('이 차량에 탑승했어요')).toBeTruthy();
+});
+it('saved final alighting does not claim destination arrival',async()=>{
+ activeTrip.mockResolvedValue(stageTrip('transit_finished',{}));await mount();
+ expect(screen.getByText(/목적지 도착을 뜻하지 않아요/)).toBeTruthy();expect(screen.queryByText('이 차량에 탑승했어요')).toBeNull();
+});

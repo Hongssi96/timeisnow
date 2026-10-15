@@ -10,7 +10,7 @@ class Create(BaseModel):
 class Event(BaseModel):
     model_config=ConfigDict(extra='forbid')
     client_event_id:UUID
-    type:Literal['departed','approach_arrived','boarded']
+    type:Literal['departed','approach_arrived','boarded','alighted']
     occurred_at:AwareDatetime
     leg_id:UUID
     source:Literal['manual']
@@ -33,7 +33,7 @@ from typing import Annotated
 class RemainingSearch(BaseModel):
     model_config=ConfigDict(extra='forbid')
     expected_version:StrictInt=Field(ge=1)
-    stage:Literal['before_first_boarding']
+    stage:Literal['before_first_boarding','transfer']
     position_confirmed:Literal[True]
     origin:Annotated[CurrentLocation|MapOrigin,Field(discriminator='type')]
 

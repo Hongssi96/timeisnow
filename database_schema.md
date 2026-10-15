@@ -306,3 +306,7 @@ ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조�
 ## F08-02b 첫 탑승 이벤트 확장 (2026-10-15)
 
 0015_first_boarding_events가0014_integrated_features를 잇는다. manual_trip_events.type CHECK에 approach_arrived/boarded를 추가하고 기존 행·고유 제약·90일 보관을 보존한다. downgrade는 새 유형 행이 남으면 실패하여 관측을 자동 삭제하지 않는다. 서비스의 본인/세션 잠금 아래 첫 이벤트 순서를 검사한다.
+
+## 구간별 반복 이벤트 (2026-10-15)
+
+0016_transfer_events는0015를 잇고 manual_trip_events.type에 alighted를 추가한다. 고유 제약은(trip_id,type,leg_id)이며 세션 잠금/서비스에서 departed 하나·차량 순서를 검증한다. 기존 행 보존, 하차/반복type이 있는 downgrade는 실패하고 자동 삭제하지 않는다.

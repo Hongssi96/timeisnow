@@ -80,18 +80,19 @@ def calculate(evidence,base,walking,profile,at,basis='recommended',*,choice=None
     return data
 
 
-def first_departure(user_id,search_id,candidate_id,basis='recommended',include_connections=False,*,access_origin_ref=None,selector=None,reported_departure=False):
+def first_departure(user_id,search_id,candidate_id,basis='recommended',include_connections=False,*,access_origin_ref=None,selector=None,reported_departure=False,transfer_access=False):
     deadline=time.monotonic()+20
     if basis not in ('recommended','now'):raise AuthError(422,'VALIDATION_ERROR','출발 기준을 확인해주세요.')
     user_id=arrivals.parsed_id(str(user_id));search_id=arrivals.parsed_id(str(search_id));candidate_id=arrivals.parsed_id(str(candidate_id))
     before,route,first,fingerprint=arrivals.owned(user_id,search_id,candidate_id)
     profile=settings(user_id);base,walking=approach(route,profile['factor'])
+    calculation_profile={**profile,'buffer':profile['transfer_buffer']} if transfer_access else profile
     if reported_departure:
         from app.arrivals.dto import Evidence
         at=arrivals.now()
         evidence=Evidence(search_id=search_id,candidate_id=candidate_id,first_leg_id=first['leg_id'],status='insufficient_data',
             expires_at=min(before['expires_at'],at+timedelta(seconds=120)),reasons=['DEPARTURE_ALREADY_REPORTED'])
-        return calculate(evidence,None,None,profile,at,basis,choice={'reported':True})
+        return calculate(evidence,None,None,calculation_profile,at,basis,choice={'reported':True})
     evidence=arrivals.first_arrivals(user_id,search_id,candidate_id)
     current,_,_,current_fingerprint=arrivals.owned(user_id,search_id,candidate_id)
     if current_fingerprint!=fingerprint or settings(user_id)!=profile:
@@ -110,7 +111,7 @@ def first_departure(user_id,search_id,candidate_id,basis='recommended',include_c
             walking=int((Decimal(base)*Decimal(str(profile['factor']))).to_integral_value(rounding=ROUND_CEILING))
     at=arrivals.now()
     choice=selector(evidence,walking,profile,at,fingerprint) if selector is not None else None
-    data=calculate(evidence,base,walking,profile,at,basis,choice=choice)
+    data=calculate(evidence,base,walking,calculation_profile,at,basis,choice=choice)
     if walk_evidence is not None:
         data.provider_approach_source='boarding_walk'
         data.approach_fetched_at=walk_evidence['fetched_at'];data.approach_valid_until=walk_evidence['expires_at']
@@ -119,7 +120,7 @@ def first_departure(user_id,search_id,candidate_id,basis='recommended',include_c
     elif walk_reason:data.reasons.append(walk_reason)
     if include_connections:
         from app.guidance.connections import evaluate,following_arrivals
-        data=evaluate(route,data,profile,arrivals.now(),lambda leg:following_arrivals(user_id,search_id,candidate_id,leg,fingerprint,deadline))
+        data=evaluate(route,data,calculation_profile,arrivals.now(),lambda leg:following_arrivals(user_id,search_id,candidate_id,leg,fingerprint,deadline))
         latest,_,_,latest_fingerprint=arrivals.owned(user_id,search_id,candidate_id)
         if latest_fingerprint!=fingerprint or settings(user_id)!=profile:
             raise AuthError(409,'VERSION_CONFLICT','경로 또는 개인 설정이 변경됐어요. 다시 확인해주세요.')

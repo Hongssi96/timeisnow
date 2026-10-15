@@ -244,3 +244,5 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 명세 Notion v0.82 5.7.9 및 moving_guidance_api.md. 전체 F07-07은 미완료: 차량 안/환승 중에는 현재 구간을 확인할 F08 접근 완료/탑승/하차 기록과 남은 구간 근거가 필요하다. 실제 GPS 품질/현재 위치 인증/실경로 정확도는 미검증. 특정 노선 상세 결과없음 대응은 사용자 지시로 후속 보류.
 
 - F08-02b(2026-10-15): 수동 이동 기록은 기존 primary/secondary와 button-row를 재사용한다. trip-progress-actions 안의 버튼만 160px 기준으로 줄바꿈해 모바일에서 글자가 낱자로 나뉘지 않게 한다. 저장 중/실패 시 이전 접근 여유는 숨기며 성공은 서버 응답 후 표시한다.
+
+- 구간 안내(2026-10-15): 기존 info-box·trip-progress-actions·primary/secondary를 재사용해 현재 차량/하차 지점·환승 위치 확인·수동 다음 행동을 표시한다. 차량 안 미확인 ETA는 표시하지 않는다. 새 공통 색상/간격/CSS 없음.
