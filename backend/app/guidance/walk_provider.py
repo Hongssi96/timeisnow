@@ -13,6 +13,11 @@ def number(value,maximum):
     if type(value) is not int or not 0<=value<=maximum:invalid()
     return value
 
+def totals_agree(total,parts,count):
+    # Provider integer summaries are independently aggregated. Keep its total;
+    # permit only the sub-unit accumulation bound, never an arbitrary percentage.
+    return abs(total-parts)<=count-1
+
 def parse(data,start,end):
     if not isinstance(data,dict):invalid()
     status=data.get('status')
@@ -39,8 +44,8 @@ def parse(data,start,end):
                     if not isinstance(point,list) or len(point)!=2 or any(type(v) not in (int,float) or not math.isfinite(v) for v in point) or distance_meters(point,point) is None:invalid()
                 if points and distance_meters(points[-1],path[0])>30:invalid()
                 points.extend(path)
-            if (st,sd)!=(lt,ld):invalid()
-        if (leg_time,leg_distance)!=(seconds,meters):invalid()
+            if not totals_agree(lt,st,len(steps)) or not totals_agree(ld,sd,len(steps)):invalid()
+        if not totals_agree(seconds,leg_time,len(legs)) or not totals_agree(meters,leg_distance,len(legs)):invalid()
         if distance_meters(start,points[0])>30 or distance_meters(end,points[-1])>30:invalid()
         return seconds
     except (KeyError,TypeError,ValueError,AttributeError,OverflowError):invalid()

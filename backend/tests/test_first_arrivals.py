@@ -39,7 +39,8 @@ class ParserTests(unittest.TestCase):
     def test_operational_and_missing_predictions_never_become_zero(self):
         for value in (0,-1,None,'WAIT','3.1',True,86401):
             self.assertEqual(provider.parse(packet(predictTimeSec1=value,predictTimeSec2=value),mapping()),None)
-        for flag in ('WAIT','PASS','unknown'):self.assertIsNone(provider.parse(packet(flag=flag),mapping()))
+        for flag in ('WAIT','unknown'):self.assertIsNone(provider.parse(packet(flag=flag),mapping()))
+        self.assertEqual(provider.parse(packet(flag='PASS'),mapping()),provider.parse(packet(flag='RUN'),mapping()))
         self.assertEqual(provider.parse(packet(flag='STOP'),mapping()),[])
         with self.assertRaises(AuthError):provider.parse(packet(vehId2=123),mapping())
 

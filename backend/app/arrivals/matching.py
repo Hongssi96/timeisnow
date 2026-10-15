@@ -86,7 +86,7 @@ def direction_candidate(match, supplied_rows, route_info, scoped_direction=None)
 
     try:
         rid = positive(match['route_id'])
-        if positive(route_info['routeId']) != rid:
+        if route_info is not None and positive(route_info['routeId']) != rid:
             raise ValueError('ROUTE_ID_MISMATCH')
         rows = sorted(supplied_rows, key=lambda row: int(positive(row['stationSeq'])))
         seqs = [int(positive(row['stationSeq'])) for row in rows]
@@ -101,7 +101,9 @@ def direction_candidate(match, supplied_rows, route_info, scoped_direction=None)
         marked = [int(positive(row['stationSeq'])) for row in rows if row.get('turnYn') == 'Y']
         if marked != [turn] or any(row.get('turnYn') not in ('Y', 'N') for row in rows):
             raise ValueError('TURN_MARKERS_UNCONFIRMED')
-        start, end = positive(route_info['startStationId']), positive(route_info['endStationId'])
+        if route_info is None and scoped_direction is None:
+            raise ValueError('DIRECTION_FIELDS_UNCONFIRMED')
+        start,end=(positive(route_info['startStationId']),positive(route_info['endStationId'])) if route_info is not None else (positive(rows[0]['stationId']),positive(rows[turn-1]['stationId']))
         if scoped_direction is None:
             if start == end or positive(rows[0]['stationId']) != start or positive(rows[-1]['stationId']) != start:
                 raise ValueError('SIMPLE_RETURN_ENDPOINT_UNCONFIRMED')
@@ -110,7 +112,7 @@ def direction_candidate(match, supplied_rows, route_info, scoped_direction=None)
         else:
             if start == end:
                 raise ValueError('CIRCULAR_DIRECTION_UNCONFIRMED')
-            if positive(route_info['turnStID']) != positive(rows[turn - 1]['stationId']):
+            if route_info is not None and positive(route_info['turnStID']) != positive(rows[turn - 1]['stationId']):
                 raise ValueError('TURN_DESTINATION_UNCONFIRMED')
             for key in ('route_id', 'board_station_id', 'board_order'):
                 if positive(scoped_direction[key]) != positive(match[key]):
@@ -131,7 +133,7 @@ def direction_candidate(match, supplied_rows, route_info, scoped_direction=None)
             destination = positive(rows[turn - 1 if alight <= turn else -1]['stationId'])
             if positive(scoped_direction['route_dest_id']) != destination:
                 raise ValueError('STATION_ROUTE_DESTINATION_CONFLICT')
-            basis = 'station_route_scope'
+            basis = 'station_route_scope' if route_info is not None else 'station_route_scope_without_route_info'
         return {'status': 'direction_candidate', 'route_dest_id': destination, 'direction_basis': basis,
                 'return_endpoint_matches_start': positive(rows[-1]['stationId']) == start}
     except (KeyError, ValueError, TypeError, IndexError, AttributeError) as error:
