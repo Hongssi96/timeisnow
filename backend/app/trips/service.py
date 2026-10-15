@@ -78,6 +78,8 @@ def create(request,body):
         if datetime.fromisoformat(d['vehicle_arrival_at'].replace('Z','+00:00'))-datetime.now(timezone.utc)<timedelta(seconds=d['approach_seconds']):missing()
         d['guidance_id']=str(body.guidance_id)
         snapshot={'departure':d,'candidate':route,'routine_version':binding.version,'place_refs':list(binding.place_refs)}
+        from app.guidance.onboard import collect
+        snapshot['transit_bindings']=collect(owner,d['search_id'],route)
         trip=repo.insert(c,owner,body.guidance_id,uuid4(),binding.routine_id,snapshot,body.measurement_mode)
         if key is not None:repo.save_key(c,owner,key,digest,trip['id'])
         return answer(request,trip_data(c,trip),201)
@@ -87,7 +89,8 @@ def detail(request,trip_id):
     with database() as c:
         row=repo.owned(c,owner,parsed_id(trip_id))
         if row is None:missing()
-        return answer(request,{'trip':trip_data(c,row),'guidance':row['snapshot'],
+        public={k:row['snapshot'][k] for k in ('departure','candidate','routine_version','place_refs')}
+        return answer(request,{'trip':trip_data(c,row),'guidance':public,
             'events':[event_data(e) for e in repo.events(c,row['id'])],'outcome':None if row['status']=='active' else row['status']})
 
 def listed(request,limit,cursor,routine_id,status):

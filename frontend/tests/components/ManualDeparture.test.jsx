@@ -61,7 +61,7 @@ const stageTrip=(stage,actions,anchor='a')=>({...trip,departure_event:{event_id:
 it('onboard state has no invented ETA and alighting opens confirmed transfer guidance',async()=>{
  activeTrip.mockResolvedValue(stageTrip('onboard',{alighted:'bus1'}));
  confirmProgress.mockResolvedValue(stageTrip('transfer',{approach_arrived:'w2',boarded:'bus2'},'alight'));
- await mount();expect(screen.getByText(/남은 운행시간 근거가 없어/)).toBeTruthy();
+ await mount();expect(screen.getByText(/탑승한 차량번호를 확인하면/)).toBeTruthy();
  expect(screen.queryByText('환승 중 남은 경로 확인')).toBeNull();
  await act(async()=>fireEvent.click(screen.getByText('이 차량에서 내렸어요')));
  expect(confirmProgress.mock.calls[0][0].type).toBe('alighted');

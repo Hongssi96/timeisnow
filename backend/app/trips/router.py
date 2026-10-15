@@ -1,7 +1,18 @@
 from typing import Literal
 from fastapi import APIRouter,Request,Query,BackgroundTasks
 from app.trips import dto,service
+from app.guidance.onboard import Confirmation
 router=APIRouter(prefix='/api/v1/trips')
+
+@router.post('/{trip_id}/onboard-confirmations')
+def onboard_confirmation(request:Request,trip_id:str,body:Confirmation):
+    from app.guidance import onboard
+    return onboard.result(request,trip_id,body.expected_version,body)
+
+@router.get('/{trip_id}/onboard-guidance')
+def onboard_guidance(request:Request,trip_id:str,expected_version:int=Query(ge=1)):
+    from app.guidance import onboard
+    return onboard.result(request,trip_id,expected_version)
 
 @router.post('',status_code=201)
 def create(request:Request,body:dto.Create):return service.create(request,body)

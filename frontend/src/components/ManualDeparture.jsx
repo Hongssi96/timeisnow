@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {activeTrip,confirmDeparture,confirmProgress,cancelTrip} from '../lib/trips';
 import RemainingGuidance from './RemainingGuidance';
+import OnboardGuidance from './OnboardGuidance';
 
 const failure=error=>['AUTH_REQUIRED','SESSION_EXPIRED'].includes(error?.code)?'로그인 후 이동 기록을 다시 확인해주세요.':error?.code==='ACTIVE_TRIP_EXISTS'?'다른 이동이 진행 중이에요. 기존 이동을 먼저 확인하거나 취소해주세요.':['VERSION_CONFLICT','RESOURCE_NOT_FOUND'].includes(error?.code)?'안내가 바뀌었거나 만료됐어요. 최신 출발을 다시 확인해주세요.':'출발 확인을 저장하지 못했어요. 다시 시도해주세요.';
 export default function ManualDeparture({routineId,departure,available,onReported=null,onCancelled=null}){
@@ -45,7 +46,7 @@ export default function ManualDeparture({routineId,departure,available,onReporte
    {state.trip?.departure_event?<p role="status">출발 확인을 저장했어요.</p>:state.trip?<p>진행 중인 이동에 출발 확인을 남길 수 있어요.</p>:null}
    {state.trip?.approach_event&&<p role="status">정류장 도착 확인을 저장했어요.</p>}
    {state.trip?.boarding_event&&!progress&&<p role="status">탑승 확인을 저장했어요. 차량 안 안내는 준비 중이에요.</p>}
-   {progress?.stage==='onboard'&&<div className="info-box" role="status"><strong>{progress.vehicle_name} 탑승 중</strong><p>하차 지점: {progress.alighting_stop}</p><p>현재 차량의 남은 운행시간 근거가 없어 여유와 예상 도착 시각을 표시할 수 없어요. 실제로 내린 뒤 하차를 확인해주세요.</p></div>}
+   {progress?.stage==='onboard'&&state.phase==='ready'&&!state.error&&<OnboardGuidance key={`${state.trip.trip_id}:${progress.anchor_event_id}`} trip={state.trip}/>}
    {['transfer','transfer_waiting'].includes(progress?.stage)&&<div className="info-box" role="status"><strong>다음 차량: {progress.vehicle_name}</strong><p>승차 지점: {progress.boarding_stop}</p><p>하차 후 현재 위치를 확인하면 다음 차량까지 남은 경로를 조회할 수 있어요.</p></div>}
    {progress?.stage==='transit_finished'&&<p role="status">마지막 차량 하차를 저장했어요. 목적지까지 이동한 뒤 도착을 직접 확인해주세요.</p>}
    {state.trip?.status==='completed'&&<p className="info-box" role="status">목적지 도착 확인을 저장하고 이동을 완료했어요. 사용자가 직접 남긴 기록이에요.</p>}
