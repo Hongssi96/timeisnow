@@ -34,7 +34,7 @@ def parse(raw,mapping):
         if len(matched)!=1:invalid()
         row=matched[0]
         if row.get('flag')=='STOP':return []
-        if row.get('flag')!='RUN':return None
+        if row.get('flag') not in ('RUN','PASS'):return None
         values=[];vehicles=set()
         for slot in (1,2):
             raw_seconds=row.get('predictTimeSec'+str(slot));vehicle=numeric_id(row.get('vehId'+str(slot)))

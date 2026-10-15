@@ -128,6 +128,26 @@ class DirectionProbeTests(unittest.TestCase):
         match,rows,info,scope=self.scoped(destination='999')
         self.assertEqual(direction_candidate(match,rows,info,scope)['reason'],'STATION_ROUTE_DESTINATION_CONFLICT')
 
+    def test_missing_detail_requires_authoritative_scope_in_both_directions(self):
+        for board,alight,dest in [(1,2,'30'),(4,5,'10')]:
+            match,rows,_,scope=self.scoped(board,alight,dest)
+            result=direction_candidate(match,rows,None,scope)
+            self.assertEqual(result['route_dest_id'],dest)
+            self.assertEqual(result['direction_basis'],'station_route_scope_without_route_info')
+            self.assertEqual(direction_candidate(match,rows,None)['status'],'direction_unresolved')
+
+    def test_missing_detail_keeps_scope_turn_and_sequence_validation(self):
+        for modify in [lambda r,s:s.update(route_dest_id='999'),
+                       lambda r,s:s.update(board_order=2),
+                       lambda r,s:r[0].update(turnSeq=2),
+                       lambda r,s:r[0].update(turnYn='Y'),
+                       lambda r,s:r[0].update(stationSeq=2)]:
+            match,rows,_,scope=self.scoped();modify(rows,scope)
+            self.assertEqual(direction_candidate(match,rows,None,scope)['status'],'direction_unresolved')
+        for board,alight in [(2,4),(3,4)]:
+            match,rows,_,scope=self.scoped(board,alight)
+            self.assertEqual(direction_candidate(match,rows,None,scope)['status'],'turnaround_unresolved')
+
     def test_scoped_station_route_and_visit_identity_must_match(self):
         for key in ['route_id','board_station_id','board_order']:
             match,rows,info,scope=self.scoped(); scope[key]='999'

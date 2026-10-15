@@ -47,6 +47,7 @@ def query(kind,params,deadline):
         rows=(data.get('msgBody') or {}).get(field) or []
         if isinstance(rows,dict): rows=[rows]
         if not isinstance(rows,list) or len(rows)>2000 or any(not isinstance(r,dict) for r in rows): provider.invalid()
+        if kind=='info' and not rows:provider.invalid()
         return rows
     except TimeoutError: timeout()
     except urllib.error.URLError as error:
@@ -94,11 +95,11 @@ def resolve(context,expires_at,*,diagnostics=None,deadline=None,boarding_endpoin
     record(stage='route_info')
     rid=next(iter(route_ids))
     info=query('info',{'routeId':rid},deadline)
-    if len(info)!=1:
+    if len(info)>1:
         record(reason='ROUTE_INFO_UNCONFIRMED');return None
     verified=[]
     for match in result['matches']:
-        direction=direction_candidate(match,dict(routes)[rid],info[0],match)
+        direction=direction_candidate(match,dict(routes)[rid],info[0] if info else None,match)
         if direction['status']=='direction_candidate':
             verified.append((match,direction))
     if len(verified)!=1:
@@ -110,7 +111,7 @@ def resolve(context,expires_at,*,diagnostics=None,deadline=None,boarding_endpoin
     record(stage='complete',reason='MAPPING_CONFIRMED')
     value=Mapping(provider='gyeonggi-bus',first_leg_id=UUID(context['first_leg_id']),station_id=match['board_station_id'],
                    route_id=match['route_id'],sta_order=match['board_order'],route_dest_id=direction['route_dest_id'],
-                   mapping_version='gbis.station-scope.v2.30m.ordered',verified_at=at,valid_until=expires_at)
+                   mapping_version='gbis.station-scope.v3.30m.ordered',verified_at=at,valid_until=expires_at)
     if boarding_endpoint is not None:
         row=next(row for row in dict(routes)[rid] if str(row['stationId'])==value.station_id and int(row['stationSeq'])==value.sta_order)
         boarding_endpoint.update(point=(float(row['x']),float(row['y'])),mapping_identity=cache.mapping_identity(value))
