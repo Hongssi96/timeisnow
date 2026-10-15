@@ -314,3 +314,8 @@ ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조�
 ## 이동 종료 결과 (2026-10-15)
 
 0017_trip_outcomes는0016을 잇고 manual_trip_events.type에 missed/arrived, manual_trips.status에 missed/completed를 추가한다. 이벤트와 version+1/종료 상태는 같은 트랜잭션이다. 종료 후 active 고유 인덱스에서 제외하며 기존 관측 보존·종료 데이터가 있는 downgrade 거부.
+
+
+## 2026-10-15 F07-07b-2 차량 확인 기반 하차 안내
+
+새 DDL 없이 guidance_snapshots.snapshot.transit_bindings에 당시 검증된 공식 노선·승하차 정류소ID/순번·방향만 비공개로 보존한다. 기존 snapshot90일/삭제 정책을 따르며 새 좌표/차량번호/vehId는 저장하지 않는다. 공개 trip detail guidance는 기존4필드만 반환한다. 실제 확인 차량ID는 현재 boarded anchor의 메모리32개/30분만 유지한다. api_contract.md 5.7.14.
