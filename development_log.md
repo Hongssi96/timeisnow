@@ -1596,3 +1596,5 @@ Notion 최신 읽기 최초 시도는 도구 오류로 응답을 받지 못했�
 명세: 최신 Notion v0.82 확인 후 v0.83의5.8.2·기존 이벤트 설명/구현 상태/변경 이력을 갱신하고 재조회로 저장 확인. 기존 departed 요청/응답 유지, 이벤트 type enum 확장·nullable approach_event/boarding_event 추가. api_contract/trip_api·planning/personalization/logging/screen_plan/design_guide/database_schema·TODO/feature 상태 동기화. 명세 https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa. 규칙 변경 자체는 API 영향 없음.
 
 배운 개념: 실제 이동 신고의 순서와 서버 수신 시각은 분리해야 한다. 탑승만으로 도보와 대기를 나눌 수 없다. DB CHECK 확장은 기존 행을 보존할 수 있지만 구버전으로 되돌릴 때 새 관측을 조용히 삭제하면 안 된다. 남음/다음: F07-07b 차량 안·환승 중 남은 경로, 하차/환승 기록·정정/학습·실이동 검증. F08 전체 미완료. 최신main8661653 기반 codex/trip-boarding-events에 커밋·푸시하며 MR/병합은 사용자 수행.
+
+게시 상태: 로컬 커밋 b7e5579 완료. 기존 origin GitLab(timeisnow.git) 기능 브랜치 푸시는 자동 승인 검토에서 비공개 코드/문서의 해당 목적지 전송에 대한 사용자 승인 확인 부족으로2회 거부되어 미실행이다. 원격 fetch/push URL 동일·기존main SHA 일치·비밀/로그 미포함을 확인해 재검토했으나 차단이 유지됐다. 사용자에게 특정 저장소/브랜치 전송 승인을 요청했으며 승인 전까지 푸시 보류. 구현/명세/검증 완료와 원격 게시 미완료를 구분한다.
