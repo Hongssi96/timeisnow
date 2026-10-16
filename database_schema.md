@@ -322,3 +322,6 @@ ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조�
 
 ## 2026-10-16 F09 실제 DDL0018
 walking_learning_state(user_id PK/세대/초기화 시작시각), walking_learning_observations(본인·이동 UNIQUE·본문 해시·세대·물리 키·장소 버전·기준/관측/갱신 전 예측초·비율·유효/제외 사유·멱등 응답·90일 기한), walking_learning_updates(사용자/프로필 버전 UNIQUE·이전/새 계수·변경 종류·요청UUID/본문해시/응답·정책·선택 풀/최대20개 표본ID)를 추가한다. 관측은 이동/계정 삭제 cascade, 상태/변경 이력은 계정 삭제 cascade. 개인 주소·좌표·AI 원문은 추가 저장하지 않는다. 활성 계수는 기존 user_profiles.walking_duration_factor와version을 같은 트랜잭션에서 갱신한다. 관측의 일반 삭제 API/그에 따른 재학습은 후속이다. 격리 스키마 downgrade/upgrade에서 기존 회원·이동 이벤트/계수 보존 확인.
+
+## 2026-10-16 실제 DDL0019 기록 정정·재학습
+trip_event_corrections는 이벤트 FK cascade/이전·새 event 요약/고정 사유 코드·시각을 저장한다. trip_record_mutations는 계정 FK/사용자·요청UUID PK/대상UUID·삭제 안내UUID/종류·정규화 해시·응답·24시간 기한이며 삭제 뒤 원본 정정 응답은 제거한다. walking_learning_observations에 version/confirmation 추가(기존 valid만 normal/same_scope=true로 이관, 제외 조건은 추측 금지). walking_learning_updates에 rebuild 종류/restorable을 추가하여 오염된 과거 계수 복구를 막는다. 삭제는 snapshot→trip→event/audit/관측 cascade·생성 키/학습 표본 참조 정리·계수 재생성을 단일 트랜잭션으로 수행한다. 새 정정/영수증/rebuild 이력이 있으면 downgrade를 거부해 손실을 막는다.

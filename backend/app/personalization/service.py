@@ -27,7 +27,7 @@ def summary(c,owner,p):
       'sample_counts':counts,'policy_version':POLICY,
       'quality':{'sample_count':n,'baseline_mae_seconds':mae('base_seconds'),'personalized_mae_seconds':mae('predicted_seconds'),
         'baseline_underprediction_rate':under('base_seconds'),'personalized_underprediction_rate':under('predicted_seconds')},
-      'can_restore':repo.last_change(c,owner) is not None}
+      'can_restore':bool((repo.last_change(c,owner) or {}).get('restorable',False))}
 
 def get(request):
     owner=trips.authenticate(request)
@@ -42,7 +42,7 @@ def mutate(request,body,kind):
             return answer(request,previous['response'])
         if p['version']!=body.expected_version:trips.conflict()
         last=repo.last_change(c,owner)
-        if kind=='restore' and last is None:raise AuthError(409,'RESTORE_UNAVAILABLE','복구할 이전 계수가 없어요.')
+        if kind=='restore' and (last is None or not last['restorable']):raise AuthError(409,'RESTORE_UNAVAILABLE','복구할 이전 계수가 없어요.')
         factor=1.0 if kind=='reset' else last['previous_factor']
         version=repo.change(c,owner,factor,kind)
         if kind=='reset':repo.reset_generation(c,owner)
@@ -96,6 +96,7 @@ def observe(request,trip_id,body):
         repo.save_observation(c,(oid,owner,trip['id'],hash_value,p['generation'],evidence['cache_key'] if evidence else None,
           Jsonb(evidence['place_refs'] if evidence else []),evidence['base_seconds'] if evidence else None,observed,
           evidence['estimated_seconds'] if evidence else None,ratio,status,Jsonb(reasons),Jsonb(result),trip['expires_at']))
+        repo.save_confirmation(c,oid,body.model_dump(mode='json'))
         if not reasons:
             rows=repo.samples(c,owner,p['generation'],evidence['cache_key']);scope='same_segment'
             if len(rows)<5:rows=repo.samples(c,owner,p['generation']);scope='same_type'
