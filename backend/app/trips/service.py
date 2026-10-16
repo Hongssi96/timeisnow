@@ -21,7 +21,7 @@ def authenticate(request,kind=None):
         owner=security.authenticated(c,request,kind is not None)
         if kind:
             _,secret,_=security.settings()
-            security.increment(c,security.bucket(c,'trip-'+kind,str(owner),60,10 if kind=='create' else 30,secret))
+            security.increment(c,security.bucket(c,'trip-'+kind,str(owner),60,10 if kind in ('create','create-export') else 30,secret))
     return owner
 
 def event_data(row):

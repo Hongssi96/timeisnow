@@ -325,3 +325,6 @@ walking_learning_state(user_id PK/세대/초기화 시작시각), walking_learni
 
 ## 2026-10-16 실제 DDL0019 기록 정정·재학습
 trip_event_corrections는 이벤트 FK cascade/이전·새 event 요약/고정 사유 코드·시각을 저장한다. trip_record_mutations는 계정 FK/사용자·요청UUID PK/대상UUID·삭제 안내UUID/종류·정규화 해시·응답·24시간 기한이며 삭제 뒤 원본 정정 응답은 제거한다. walking_learning_observations에 version/confirmation 추가(기존 valid만 normal/same_scope=true로 이관, 제외 조건은 추측 금지). walking_learning_updates에 rebuild 종류/restorable을 추가하여 오염된 과거 계수 복구를 막는다. 삭제는 snapshot→trip→event/audit/관측 cascade·생성 키/학습 표본 참조 정리·계수 재생성을 단일 트랜잭션으로 수행한다. 새 정정/영수증/rebuild 이력이 있으면 downgrade를 거부해 손실을 막는다.
+
+## 2026-10-16 기록 내보내기 저장소 (0020_trip_exports)
+trip_exports(id UUID PK, user_id UUID FK users ON DELETE CASCADE, range_from/range_to TIMESTAMPTZ, created_at, expires_at24시간, download_expires_at10분). 범위 시작<끝 CHECK·(user_id,expires_at) 인덱스. 파일/이벤트/좌표·이동ID 목록은 저장하지 않으며 사용자 이동 advisory lock으로 정정/삭제와 다운로드를 직렬화한다. 범위/500건 제한·만료 청소와 응답은 trip_export_api.md/Notion5.13. 개발DB 업그레이드 전후 기존 자료 보존 확인은 development_log.md 기록 내보내기를 따른다.

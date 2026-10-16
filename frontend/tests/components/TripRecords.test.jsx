@@ -30,7 +30,7 @@ it('진행 중인 이동의 정정은 차단하고 조건 정정도 관측 버�
  await mount('active');expect(screen.getByRole('button',{name:'승차 지점 도착 기록 정정'}).disabled).toBe(true);
 });
 it('보행 조건 정정에 기준초나 계수를 보내지 않는다',async()=>{
- await mount();mutateRecord.mockResolvedValue(result);await userEvent.click(screen.getByRole('button',{name:'보행 조건 정정'}));await userEvent.selectOptions(screen.getByRole('combobox'),'running');
+ await mount();mutateRecord.mockResolvedValue(result);await userEvent.click(screen.getByRole('button',{name:'보행 조건 정정'}));await userEvent.selectOptions(screen.getByRole('combobox',{name:/정정할 이동 상태/}),'running');
  await userEvent.click(screen.getByRole('button',{name:'보행 조건 정정하고 재학습'}));await screen.findByText(/정정을 저장했어요/);
  expect(mutateRecord.mock.calls[0][0].body).toEqual({client_request_id:expect.any(String),expected_version:1,same_scope:true,condition:'running'});
 });
