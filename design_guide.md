@@ -274,3 +274,6 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 
 ## 2026-10-16 기록 내보내기
 기존 TripRecords의 card/info-box/button-row/trip-progress-actions와 lucide Download를 재사용했다. 새 공통 값/CSS/폰트/색상 없음. 실제 PC1280×900/모바일390×844에서 기간 선택·다운로드·가로넘침없음 확인. API 계약은 trip_export_api.md/Notion5.13.
+
+## F09-09 구간 보행 카드 (2026-10-16)
+SegmentWalking은 기존 info-box/card/primary/secondary/input/select를 재사용한다. .segment-walking만 기존 --ink와14px로 본문 대비/가독성을 확보하고 긴 이름 줄바꿈·입력 최대100%·카드14px 간격을 적용한다. 색상/글꼴/전체 내비게이션은 유지한다. PC1280×900/모바일390×844 실제 브라우저 상태와 확인 범위는 개발 일지를 따른다.

@@ -30,10 +30,9 @@ def evaluate(route,departure,target_time,profile,at):
         for index,(connection,check) in enumerate(zip(connections,departure.transfers)):
             if check.feasibility!='estimated_feasible' or str(check.connection_id)!=connection['connection_id'] or str(check.from_leg_id)!=transit[index]['leg_id'] or str(check.to_leg_id)!=transit[index+1]['leg_id']:
                 return unknown('CONNECTIONS_UNCONFIRMED')
-            from app.guidance.route_walks import transfer_seconds
-            seconds=transfer_seconds(connection,departure)
-            if seconds is None or seconds<0 or (seconds==0 and connection['walking_seconds'] is not None):return unknown('TRANSFER_TIME_UNCONFIRMED')
-            walk=int((Decimal(seconds)*Decimal(str(profile['factor']))).to_integral_value(rounding=ROUND_CEILING))
+            from app.guidance.route_walks import adjusted_transfer
+            walk=adjusted_transfer(connection,departure,profile['factor'])
+            if walk is None:return unknown('TRANSFER_TIME_UNCONFIRMED')
             alight=board+timedelta(seconds=transit[index]['seconds']);minimum=alight+timedelta(seconds=walk+profile['transfer_buffer'])
             if check.transfer_walk_seconds!=walk or check.transfer_buffer_seconds!=profile['transfer_buffer'] or check.estimated_alighting_at!=alight or check.minimum_boarding_at!=minimum or check.next_boarding_at is None or check.next_boarding_at<minimum:
                 return unknown('CONNECTION_TIMELINE_UNCONFIRMED')

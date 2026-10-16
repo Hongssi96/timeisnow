@@ -2,6 +2,7 @@ import React from 'react';
 import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import ManualDeparture from '../../src/components/ManualDeparture';
+vi.mock('../../src/components/SegmentWalking',()=>({default:()=>null}));
 import {activeTrip,confirmDeparture,confirmProgress,cancelTrip} from '../../src/lib/trips';
 vi.mock('../../src/lib/trips',()=>({activeTrip:vi.fn(),confirmDeparture:vi.fn(),confirmProgress:vi.fn(),cancelTrip:vi.fn()}));
 const trip={trip_id:'t',guidance_id:'g',routine_id:'r',version:1,status:'active',departure_event:null};

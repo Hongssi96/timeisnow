@@ -80,7 +80,7 @@ def calculate(evidence,base,walking,profile,at,basis='recommended',*,choice=None
     return data
 
 
-def first_departure(user_id,search_id,candidate_id,basis='recommended',include_connections=False,*,access_origin_ref=None,destination_ref=None,selector=None,reported_departure=False,transfer_access=False):
+def first_departure(user_id,search_id,candidate_id,basis='recommended',include_connections=False,*,access_origin_ref=None,destination_ref=None,selector=None,reported_departure=False,transfer_access=False,personal_segments=None):
     deadline=time.monotonic()+20
     if basis not in ('recommended','now'):raise AuthError(422,'VALIDATION_ERROR','출발 기준을 확인해주세요.')
     user_id=arrivals.parsed_id(str(user_id));search_id=arrivals.parsed_id(str(search_id));candidate_id=arrivals.parsed_id(str(candidate_id))
@@ -132,6 +132,13 @@ def first_departure(user_id,search_id,candidate_id,basis='recommended',include_c
     if personal is not None:
         data.personal_walk=personal;data.approach_basis='ai_validated';data.reasons.append('AI_VALIDATED_ACCESS')
     data.supplemental_walks=supplements;data.reasons.extend(supplement_reasons)
+    data.personal_segment_walks=personal_segments or []
+    if data.personal_segment_walks:
+        from app.guidance.dto import PersonalSegmentWalk
+        data.personal_segment_walks=[PersonalSegmentWalk.model_validate(w) for w in data.personal_segment_walks]
+        if any(w.profile_version!=data.profile_version for w in data.personal_segment_walks):
+            raise AuthError(409,'VERSION_CONFLICT','개인 보행 기록이 변경됐어요.')
+        data.valid_until=min(data.valid_until,*(w.valid_until for w in data.personal_segment_walks))
     if supplements:data.valid_until=min(data.valid_until,*(w.valid_until for w in supplements))
     if walk_evidence is not None:
         data.provider_approach_source='boarding_walk'

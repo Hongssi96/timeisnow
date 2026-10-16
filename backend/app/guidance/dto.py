@@ -37,6 +37,17 @@ class SupplementalWalk(BaseModel):
         if self.valid_until<=self.fetched_at:raise ValueError('Expired walking evidence')
         return self
 
+class PersonalSegmentWalk(BaseModel):
+    kind:Literal['station_internal','transfer']
+    leg_id:UUID
+    label:str
+    source:Literal['manual_history']
+    profile_version:int=Field(ge=1)
+    basis_key:str=Field(pattern='^[0-9a-f]{64}$')
+    sample_count:int=Field(ge=5,le=20)
+    estimate_seconds:int=Field(ge=1,le=7200)
+    valid_until:datetime
+
 class TransferCheck(BaseModel):
     connection_id: UUID
     from_leg_id: UUID
@@ -98,6 +109,7 @@ class Departure(BaseModel):
     target_evaluation: TargetEvaluation|None=None
     supplemental_walks: list[SupplementalWalk]=Field(default_factory=list,max_length=3)
     personal_walk: PersonalWalk|None=None
+    personal_segment_walks:list[PersonalSegmentWalk]=Field(default_factory=list,max_length=5)
 
 class DepartureEnvelope(BaseModel):
     data: Departure

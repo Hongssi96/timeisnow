@@ -78,6 +78,8 @@ def download(request:Request,job_id:str):
         records=[]
         for trip in bounded(repo.rows(c,owner,row['range_from'],row['range_to'],row['created_at'])):
             observation=repo.observation(c,owner,trip['id'])
+            from app.personalization.segments import data as segment_data
+            from app.personalization.segments_repository import rows as segment_rows
             records.append({
               'trip_id':str(trip['id']),**{k:trip[k] for k in ('measurement_mode','status','version')},
               **{k:trip[k].astimezone(timezone.utc).isoformat() for k in ('created_at','expires_at')},
@@ -85,6 +87,7 @@ def download(request:Request,job_id:str):
               'corrections':[{'correction_id':str(a['id']),'reason':a['reason'],
                 'previous':a['previous_value'],'current':a['new_value'],'corrected_at':iso(a['created_at'])}
                 for a in repo.corrections(c,trip['id'])],
+              'walking_segments':[segment_data(c,owner,m) for m in segment_rows(c,owner,trip=trip['id'])],
               'walking_observation':None if observation is None else {**observation['response'],
                 'version':observation['version'],'confirmation':observation['confirmation']}})
         response=answer(request,{'schema_version':'trip-export.v1','generated_at':iso(datetime.now(timezone.utc)),

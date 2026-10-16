@@ -228,3 +228,6 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 
 ## 2026-10-16 기록 내보내기
 TripRecords에 TripExport를 연결해 최근7/30/90일 본인 JSON 다운로드와 준비/빈 결과/실패/로그인/이탈 취소를 제공한다. 기존 card/info-box/button-row/trip-progress-actions·lucide Download를 재사용하며 CSS/테마/내비게이션 변경 없음. 실제 합성 계정 PC1280×900/모바일390×844에서 다운로드1건/인증 차단/기간 선택·가로넘침없음을 확인했다. 계약 trip_export_api.md·Notion5.13.
+
+## F09-09 구간 보행 (2026-10-16)
+수동 출발 카드에 현재 가능한 역 입구/환승 전체 시작→구간 이름/시작 경계 확인→기존 승차 지점 도착→동일 범위/조건/명시 안내 적용 확인을 연결한다. 기록 상세에는 제외/해제·유효5회 미만/중앙값·초기화 이전/실패 재시도를 표시한다. 최신 출발에는 본인 기록 기반 구간 이름/표본수를 표시하고 역 내부 중복 합산을 금지한다. 상세 segment_walking_api.md.

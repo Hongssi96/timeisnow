@@ -258,3 +258,6 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 
 ## 2026-10-16 보관 만료 운영
 서버 시작 후 및 매시간 100명 단위로 순회하고 사용자별 트랜잭션으로 만료 원문·파생 참조 정리/재학습/산정 갱신을 수행한다. 관리 로그 `retention.sweep.completed`는 checked/changed/rebuilt/failed 집계만 기록한다. 실패한 사용자 트랜잭션은 롤백하고 다른 사용자를 계속 처리한다. 사용자ID/좌표/이벤트/본문/키/예외 원문은 추가하지 않는다. 실행 로그14일의 외부 수집/회전은 별도 후속이며 상세 retention_api.md·Notion5.14.
+
+## F09-09 구간 기록 (2026-10-16)
+수동 구간 이름·시각·기록 ID·원본 이벤트·개인 추정 본문은 기존 DB/본인 응답·내보내기에만 보관한다. 일반 요청 로그에는 기존 route template/status/request_id/duration만 남기며 URL ID/본문/이름을 추가하지 않는다. 외부 AI/지도 호출은 없다.

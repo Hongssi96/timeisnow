@@ -97,6 +97,10 @@ def create(request,body):
         if cache.fingerprint(candidate)!=cache.fingerprint(route) or row['profile_version']!=d['profile_version'] or row['walking_duration_factor']!=d['applied_duration_factor'] or row['first_boarding_buffer_seconds']!=d['buffer_seconds'] or row['transfer_buffer_seconds']!=value['profile']['transfer_buffer']:conflict()
         if value['expires_at']<datetime.now(timezone.utc):missing()
         if datetime.fromisoformat(d['vehicle_arrival_at'].replace('Z','+00:00'))-datetime.now(timezone.utc)<timedelta(seconds=d['approach_seconds']):missing()
+        from app.personalization.segments import for_guidance
+        current=for_guidance(owner,binding,route,c)
+        before={(v['kind'],v['leg_id'],v['basis_key']) for v in d.get('personal_segment_walks',[])}
+        if before!={(v['kind'],v['leg_id'],v['basis_key']) for v in current}:conflict()
         d['guidance_id']=str(body.guidance_id)
         snapshot={'departure':d,'candidate':route,'routine_version':binding.version,'place_refs':list(binding.place_refs)}
         from app.guidance.onboard import collect

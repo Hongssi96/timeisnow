@@ -109,6 +109,7 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
             {c.next_boarding_at&&<p>다음 차량 예상 {connectionTime(c.next_boarding_at)}</p>}
             {c.reasons?.includes('NO_SUPPLIED_VEHICLE_AFTER_MINIMUM')&&<p>현재 제공된 차량은 도착하기 전에 지나가요. 이후 차량 정보는 다시 확인해야 해요.</p>}
           </li>)}</ul>}
+          {!!departure.personal_segment_walks?.length&&<div className="info-box segment-walking">{departure.personal_segment_walks.map(w=><p key={w.kind+w.leg_id}>{w.kind==='station_internal'?'역 내부 구간':'환승 전체 구간'} · {w.label}: 본인 기록 기반 약 {w.estimate_seconds}초 · 최근 {w.sample_count}회{w.kind==='station_internal'?' (전체 도보와 중복 합산하지 않음)':''}</p>)}</div>}
           {!!departure.transfers?.length&&<p>환승 도보와 차량 시각은 추정값이에요. 실제 환승 성공을 보장하지 않아요.</p>}
         </>}
       </>}

@@ -24,6 +24,7 @@ from app.trips.export_service import router as trip_exports_router
 from app.meetings.router import router as meetings_router
 from app.personalization.router import router as personalization_router
 from app.retention.service import lifespan
+from app.personalization.segments import router as segment_router
 
 app = FastAPI(title="지금이니? API", version="0.1.0",lifespan=lifespan)
 app.include_router(auth_router)
@@ -38,6 +39,7 @@ app.include_router(trips_router)
 app.include_router(trip_exports_router)
 app.include_router(meetings_router)
 app.include_router(personalization_router)
+app.include_router(segment_router)
 
 
 def error_response(request, status, code, message, details=None, headers=None):

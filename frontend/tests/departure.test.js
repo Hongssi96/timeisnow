@@ -2,6 +2,13 @@ import { afterEach,expect,it,vi } from 'vitest';
 import { getFirstDeparture } from '../src/lib/departure';
 function data(){const arrival={model_version:'arrival.evidence.v2',search_id:'s',candidate_id:'c',first_leg_id:'leg',status:'estimated',source_status:'unknown',timing_basis:'receipt_estimate',received_at:'2026-10-13T08:00:00Z',generated_at:null,expires_at:'2026-10-13T08:02:00Z',valid_for_guidance:true,candidates:[{candidate_id:'bus',provider_prediction_seconds:780,predicted_arrival_at:'2026-10-13T08:13:00Z'}]};return {model_version:'first.departure.v1',search_id:'s',candidate_id:'c',first_leg_id:'leg',status:'ready',valid_for_guidance:true,departure_basis:'recommended',calculated_at:'2026-10-13T08:00:00Z',valid_until:arrival.expires_at,profile_version:1,buffer_seconds:300,slack_status:'meets_buffer',slack_seconds:300,approach_basis:'provider_personalized',approach_seconds:300,provider_approach_seconds:300,applied_duration_factor:1,timing_basis:'receipt_estimate',recommended_departure_at:'2026-10-13T08:03:00Z',selected_departure_at:'2026-10-13T08:03:00Z',vehicle_arrival_at:'2026-10-13T08:13:00Z',arrival_candidate_id:'bus',arrival_evidence:arrival};}
 function mock(d){vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({data:d,meta:{request_id:'synthetic',server_time:'2026-10-13T08:00:00Z'}}),{status:200})));}
+it('accepts only version-bound manual segment evidence with sufficient samples',async()=>{
+ const d=data();const w={kind:'transfer',leg_id:'next',label:'같은 환승',source:'manual_history',profile_version:1,basis_key:'a'.repeat(64),sample_count:5,estimate_seconds:30,valid_until:'2026-10-13T08:05:00Z'};
+ d.personal_segment_walks=[w];mock(d);expect((await getFirstDeparture('s','c')).data.personal_segment_walks[0].estimate_seconds).toBe(30);
+ for(const change of [{sample_count:4},{profile_version:2},{source:'provider'},{estimate_seconds:0},{basis_key:'bad'},{valid_until:'2026-10-13T08:01:00Z'}]){
+  mock({...d,personal_segment_walks:[{...w,...change}]});await expect(getFirstDeparture('s','c')).rejects.toMatchObject({code:'INVALID_RESPONSE'});
+ }
+});
 afterEach(()=>vi.unstubAllGlobals());
 function supplemental(role='egress'){
  return {role,source:'walking_route',connection_id:role==='transfer'?'link':null,from_leg_id:'one',to_leg_id:role==='transfer'?'two':null,
