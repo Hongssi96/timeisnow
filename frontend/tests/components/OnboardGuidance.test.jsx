@@ -23,3 +23,8 @@ it('expires using monotonic deadline and stops display while hidden',async()=>{
  await act(async()=>{vi.advanceTimersByTime(1000);});expect(screen.queryByText(/하차 정류소까지 약/)).toBeNull();
  Object.defineProperty(document,'visibilityState',{value:'hidden'});await act(async()=>document.dispatchEvent(new Event('visibilitychange')));expect(screen.queryByText(/하차 정류소까지 약/)).toBeNull();
 });
+it('revisiting restores the existing server confirmation without resubmitting a vehicle number',async()=>{
+ getOnboard.mockResolvedValue(reply());render(<OnboardGuidance trip={trip}/>);
+ await act(async()=>{fireEvent.click(screen.getByText('차량 정보 다시 확인'));});
+ expect(screen.getByText(/하차 정류소까지 약 10분/)).toBeTruthy();expect(getOnboard).toHaveBeenCalledTimes(1);expect(confirmOnboard).not.toHaveBeenCalled();
+});

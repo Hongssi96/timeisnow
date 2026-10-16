@@ -79,7 +79,7 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
     {state.phase==='loading' && <p role="status">도착 정보를 확인하고 있어요.</p>}
     {state.phase==='blocked' && <p role="alert">{['AUTH_REQUIRED','SESSION_EXPIRED'].includes(state.error)?'로그인 후 다시 확인해주세요.':'경로를 다시 검색해 도착 정보를 확인해주세요.'}</p>}
     {state.error && state.phase!=='blocked' && <p role="alert">도착 정보를 다시 조회하지 못했어요. 이전 정보의 유효시간은 늘리지 않아요.</p>}
-    {reported&&<p role="status">출발 확인이 저장되어 출발 전 안내를 종료했어요. 이동 중 도착 안내는 아직 준비 중이에요.</p>}
+    {reported&&<p role="status">출발 확인이 저장되어 출발 전 안내를 종료했어요. 아래에서 현재 이동 구간을 확인해주세요.</p>}
     {d && !reported && <>
       {includeDeparture && <>
         {departureReady ? <>

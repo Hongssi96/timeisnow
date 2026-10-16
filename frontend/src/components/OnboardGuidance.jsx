@@ -43,7 +43,7 @@ export default function OnboardGuidance({trip}){
   {state.phase==='error'&&<p role="alert">{state.message}</p>}
   <form className="routine-name-panel" onSubmit={e=>{e.preventDefault();run(true);}}>
    <label>탑승한 버스 차량번호 뒤 4자리<input inputMode="numeric" autoComplete="off" pattern="[0-9]{4}" maxLength={4} value={suffix} onChange={e=>setSuffix(e.target.value.replace(/[^0-9]/g,''))} disabled={state.phase==='loading'}/></label>
-   <div className="button-row trip-progress-actions"><button className="secondary" disabled={state.phase==='loading'||suffix.length!==4}>차량 확인하고 하차 예상 보기</button>{latest.current&&<button type="button" className="secondary" disabled={state.phase==='loading'} onClick={()=>run()}>차량 정보 다시 확인</button>}</div>
+   <div className="button-row trip-progress-actions"><button className="secondary" disabled={state.phase==='loading'||suffix.length!==4}>차량 확인하고 하차 예상 보기</button><button type="button" className="secondary" disabled={state.phase==='loading'} onClick={()=>run()}>차량 정보 다시 확인</button></div>
   </form>
   <p className="candidate-note">실제로 내린 뒤 하차를 확인해주세요. 차량번호는 이 구간 확인에만 사용해요.</p>
  </section>;

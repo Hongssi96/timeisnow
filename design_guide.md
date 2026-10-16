@@ -262,3 +262,8 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 ## 2026-10-15 F07-07b-2 차량 확인 기반 하차 안내
 
 기존 info-box·routine-name-panel 입력·button-row/trip-progress-actions·secondary/primary를 재사용한다. 새 CSS/디자인 값 없음. 탑승 중 카드에 하차 지점·명시 차량 확인·수신 기준 하차 추정을 표시하고 로딩/오류·기한/숨김에서는 이전 숫자를 제거한다. 합성 공급자/실제 API 클라이언트·컴포넌트로 PC1280×720/모바일390×844 성공/실패·가로넘침 없음 확인. 실제 차량 안내 성공과 구분한다.
+
+
+## 2026-10-16 F07-07b-2 실제 통합 검증·복구
+
+차량 정보 다시 확인 버튼을 재방문·실패 상태에도 기존 secondary/trip-progress-actions로 제공한다. 새 CSS/디자인 값 없음. 전체 앱/실제 공급자를 연결해 PC1280×720·모바일390×844의 기존 확인 복구/하차 예상 및 하차 후 숫자 제거·환승 전환을 확인했다. 모바일 width390/content375, 가로 넘침 없음.
