@@ -5,8 +5,8 @@ def lock_owner(c,owner):
     c.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('manual-trip:'+str(owner),))
 
 def clean(c,owner):
-    c.execute('DELETE FROM manual_trip_creation_keys WHERE user_id=%s AND expires_at<=clock_timestamp()',(owner,))
-    c.execute('DELETE FROM guidance_snapshots WHERE user_id=%s AND expires_at<=clock_timestamp()',(owner,))
+    from app.retention.service import sweep
+    sweep(c,owner)
 
 def retry_key(c,owner,key):
     return c.execute('SELECT * FROM manual_trip_creation_keys WHERE user_id=%s AND key=%s',(owner,key)).fetchone()
