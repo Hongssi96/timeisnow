@@ -160,7 +160,8 @@ class MigrationTest(unittest.TestCase):
                                       'auth_sessions', 'guidance_snapshots', 'jobs', 'journey_plans', 'journey_search_keys', 'journey_searches',
                                       'manual_trip_creation_keys', 'manual_trip_events', 'manual_trips',
                                       'meeting_idempotency_keys', 'meeting_invite_replays', 'meeting_invites',
-                                      'meeting_journeys', 'meeting_members', 'meeting_revisions', 'meetings',
+                                      'meeting_journeys', 'meeting_members', 'meeting_revisions',
+                                      'meeting_share_events', 'meetings',
                                       'place_creation_keys', 'place_location_confirmations', 'place_searches',
                                       'routine_creation_keys', 'routines', 'saved_places', 'user_profiles', 'users',
                                       'walking_estimate_revisions', 'walking_estimates', 'walking_paths'])

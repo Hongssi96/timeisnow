@@ -163,18 +163,6 @@ class MeetingRepository(ABC):
         """Consumed or revoked invites lose their replayable response immediately."""
 
     @abstractmethod
-    def drop_meeting_invite_replays(self, connection, meeting_id):
-        """Re-issuing invalidates every earlier invite response of the meeting."""
-
-    @abstractmethod
-    def delete_expired_replays(self, connection):
-        """Replay rows past their invite expiry stop being visible."""
-
-    @abstractmethod
-    def update_member_origin(self, connection, member_id, origin, consent):
-        """Store the member's private origin and consent; bumps the member version."""
-
-    @abstractmethod
     def find_reusable_journey(self, connection, member_id, revision_id):
         """The member's live journey for this revision (no terminal trip, fresh search)."""
 
@@ -229,6 +217,34 @@ class MeetingRepository(ABC):
     @abstractmethod
     def delete_expired_replays(self, connection):
         """Expired invite response caches stop being visible."""
+
+    @abstractmethod
+    def update_member_sharing(self, connection, member_id, enabled):
+        """Store the member's sharing choice; bumps the member version."""
+
+    @abstractmethod
+    def insert_share_event(self, connection, values):
+        """Insert an arrival or correction row with its client dedup key."""
+
+    @abstractmethod
+    def find_share_event(self, connection, event_id):
+        """One share event row by id, or None."""
+
+    @abstractmethod
+    def find_share_event_by_client(self, connection, member_id, client_event_id):
+        """The member's event for one client_event_id, or None."""
+
+    @abstractmethod
+    def find_latest_arrival(self, connection, member_id):
+        """The member's latest arrival row with its latest correction attached, or None."""
+
+    @abstractmethod
+    def bump_arrival_version(self, connection, arrival_id, version):
+        """Record a correction by bumping the arrival version; returns the arrival row."""
+
+    @abstractmethod
+    def find_meeting_journey(self, connection, journey_id):
+        """One journey row by id, or None."""
 
 
 class PostgresMeetingRepository(MeetingRepository):
@@ -369,6 +385,38 @@ class PostgresMeetingRepository(MeetingRepository):
 
     def delete_expired_replays(self, connection):
         connection.execute('DELETE FROM meeting_invite_replays WHERE expires_at <= now()')
+
+    def update_member_sharing(self, connection, member_id, enabled):
+        return connection.execute("""UPDATE meeting_members SET sharing_enabled=%s, sharing_updated_at=now(),
+            version=version+1, updated_at=now() WHERE id=%s RETURNING *""", (enabled, member_id)).fetchone()
+
+    def insert_share_event(self, connection, values):
+        return connection.execute("""INSERT INTO meeting_share_events(id, meeting_id, member_id, meeting_journey_id,
+            client_event_id, kind, occurred_at, source, excluded, correction_reason, corrects_event_id, version)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""", values).fetchone()
+
+    def find_share_event(self, connection, event_id):
+        return connection.execute('SELECT * FROM meeting_share_events WHERE id=%s', (event_id,)).fetchone()
+
+    def find_share_event_by_client(self, connection, member_id, client_event_id):
+        if member_id is None:
+            return connection.execute('SELECT * FROM meeting_share_events WHERE client_event_id=%s',
+                (client_event_id,)).fetchone()
+        return connection.execute('SELECT * FROM meeting_share_events WHERE member_id=%s AND client_event_id=%s',
+            (member_id, client_event_id)).fetchone()
+
+    def find_latest_arrival(self, connection, member_id):
+        return connection.execute("""SELECT a.*, (SELECT to_jsonb(c) FROM meeting_share_events c
+            WHERE c.corrects_event_id = a.id ORDER BY c.received_at DESC, c.id DESC LIMIT 1) AS correction
+            FROM meeting_share_events a WHERE a.member_id=%s AND a.kind='arrival'
+            ORDER BY a.received_at DESC, a.id DESC LIMIT 1""", (member_id,)).fetchone()
+
+    def bump_arrival_version(self, connection, arrival_id, version):
+        return connection.execute('UPDATE meeting_share_events SET version=%s WHERE id=%s RETURNING *',
+            (version, arrival_id)).fetchone()
+
+    def find_meeting_journey(self, connection, journey_id):
+        return connection.execute('SELECT * FROM meeting_journeys WHERE id=%s', (journey_id,)).fetchone()
 
     def update_member_origin(self, connection, member_id, origin, consent):
         return connection.execute("""UPDATE meeting_members SET private_origin=%s, origin_version=origin_version+1,

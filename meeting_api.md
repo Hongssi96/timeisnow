@@ -115,11 +115,11 @@ meeting_arrival_slack_seconds = target_arrival_at - estimated_arrival_at. 기존
 | GET /meetings/{meeting_id}/shared-statuses | 활성 참여자 | 200 {items:SharedStatus[]}. 비공유 사용자는 sharing_off와 NULL 시간만 제공 |
 | POST /meetings/{meeting_id}/arrival-corrections | {arrival_id,expected_version,occurred_at?:datetime,excluded?:bool,correction_reason:wrong_time/wrong_action} | 201 {arrival_id,version,received_at}. 원본 보존·새 정정 이력, 본인 것만 가능 |
 
-공유 enabled=true인 상태에서 저장에 성공한 departed/boarded 등 이벤트와 서버 산정 ETA를 공유 상태에 반영한다. **클라이언트가 상대에게 공개할 ETA를 직접 지정할 수 없다.** 서버가 개인 경로로 계산한다. trips 생성·WS 접속 자체는 출발이 아니다.
+공유 enabled=true인 상태에서 저장에 성공한 departed/boarded 등 이벤트와 서버 산정 ETA를 공유 상태에 반영한다. **클라이언트가 상대에게 공개할 ETA를 직접 지정할 수 없다.** 서버가 개인 경로로 계산한다. trips 생성·WS 접속 자체는 출발이 아니다. F13 구현(2026-10-16): arrived는 약속 도착 신고(meeting arrivals, 미제외)나 연결 이동의 arrived 이벤트, in_transit/reported_departed는 연결 이동의 boarded/departed 이벤트, 나머지는 unknown이다. v1 ETA는 여정 스냅샷 안내(최종 하차 추정+하차 도보)를 기준으로 계산해 계산 후 120초와 교통 근거 유효기한 중 이른 값까지 유효하고, 없거나 만료면 ETA 필드를 NULL로 두고 unavailable로 표시한다(실시간 재계산은 후속).
 
-공유 도중 켜면 그 순간 본인 최신 상태 요약만 공유하고 과거 원문 이벤트는 제공하지 않는다. 출발 이벤트 정정/삭제, 도착 정정은 공유 상태에 반영한다. 정상 공유 상태 변경과 재전송 이벤트 저장은 같은 트랜잭션으로 처리한다.
+공유 도중 켜면 그 순간 본인 최신 상태 요약만 공유하고 과거 원문 이벤트는 제공하지 않는다. 출발 이벤트 정정/삭제, 도착 정정은 공유 상태에 반영한다. 정상 공유 상태 변경과 재전송 이벤트 저장은 같은 트랜잭션으로 처리한다. F13 구현: sharing 토글은 활성 참여자의 member 버전을 올려 반영하고 expected_version 불일치는 409 VERSION_CONFLICT, 취소·completed 약속은 409 MEETING_CLOSED다(초안에서도 설정 가능). SharedStatus.version은 member 버전이고 updated_at은 공유 상태 구성 요소의 최신 시각이다.
 
-철회·탈퇴·약속 종료·취소 시 ETA/출발 시각을 다음 응답에서 제거하고 연결된 클라이언트에 상태 무효화를 전달한다. 동의 철회로 본인 trip 학습까지 자동 삭제하지는 않는다. 네트워크 단절과 ETA 만료는 unavailable이며 '아직 출발 안 함'으로 단정하지 않는다. 이미 상대 기기에 표시된 내용을 소급 회수할 수 있다고 약속하지 않는다.
+철회·탈퇴·약속 종료·취소 시 ETA/출발 시각을 다음 응답에서 제거하고 연결된 클라이언트에 상태 무효화를 전달한다. 동의 철회로 본인 trip 학습까지 자동 삭제하지는 않는다. 네트워크 단절과 ETA 만료는 unavailable이며 '아직 출발 안 함'으로 단정하지 않는다. 이미 상대 기기에 표시된 내용을 소급 회수할 수 있다고 약속하지 않는다. F13 구현: 도착 신고는 Idempotency-Key 필수이고 연결 여정의 이동에 departed 기록이 있어야 하며, 없으면 409 EVENT_ORDER_CONFLICT다. 같은 client_event_id·같은 본문 재전송은 200으로 원본 응답을 재현하고 다른 본문은 409 IDEMPOTENCY_CONFLICT다. 미래 시각 신고도 허용한다(예고 도착). 정정은 본인 arrival만 허용하고 원본 occurred_at·received_at·source를 보존하며 excluded는 이전 정정 값을 이어받는다.
 
 공유 기본꺼짐, 종료 시점은 약속 종료/취소/본인 철회 중 먼저 발생한 때. 종료 처리가 없으면 확정 약속 시각6시간후 공유 종료 및 confirmed 약속 completed 자동 정리(실제 참석/도착 판정 아님). 종결 뒤 공유 재활성화는409 MEETING_CLOSED.
 
@@ -259,7 +259,7 @@ GET /meetings/{meeting_id}/sync
 
 다른 사람이 적은 메시지에 개인정보가 있을 수 있으므로 작성자 탈퇴 처리만으로 모든 개인정보 삭제가 보장된다고 표현하지 않는다. 기존 개인 품질 이력·trip 삭제 정책은 유지하며 공동 약속과 따로 정리한다. 공유 철회 후 재전송 로그에 개인 상태 원문을 남기지 않는다.
 
-기존 8개 약속 테이블에 다음 컬럼·테이블 설계를 추가한다(2026-10-16에 migration 0018_meeting_personal_flows로 members origin 컬럼·meeting_journeys·guidance_snapshots.meeting_journey_id·meeting_invite_replays(pgcrypto)를 적용했고 나머지는 미적용이다).
+기존 8개 약속 테이블에 다음 컬럼·테이블 설계를 추가한다(2026-10-16에 migration 0018_meeting_personal_flows로 members origin·공유 컬럼, meeting_journeys, guidance_snapshots.meeting_journey_id, meeting_invite_replays(pgcrypto), meeting_share_events를 적용했고 나머지는 미적용이다).
 - meetings: max_members, last_event_seq, closed_at, delete_after; members: private_origin jsonb, origin_version, recommendation_consent 및 버전/공유 종료.
 - recommendations: target_arrival_at, input member/version 목록, status, job_id, error. 메시지: version와 본문 해시, share_events: version·정정 대상·arrival 기록.
 - meeting_realtime_events 신규: meeting_id, seq, event_id, type, entity_ref, occurred_at, expires_at; UNIQUE(meeting_id,seq), 이벤트 본문에는 민감한 내용 제외. 24시간 청소.
@@ -288,3 +288,4 @@ GET /meetings/{meeting_id}/sync
 2026-10-14 main 통합: meeting-core 2cc3d3f/8420f17의 코어·초대·포트 주입을 기존 루틴/수동 이동과 함께 유지한다. DBhead는0014_integrated_features로 두0013 이력을 연결한다. 요청/응답/버전 충돌 details/current_version·보관·권한 계약은 Notion v0.82와 동일하며 후속 추천·개인 출발·채팅은 미구현 상태 유지. 상세 development_log.md 미병합 브랜치 main 통합 기록.
 
 2026-10-16 v0.4: 개인 출발지 origin API, 약속 개인 출발 안내 guidance-queries(동기 200·여정 후보 선택 v1·재계산 멱등 정책), trips와 meeting_journey 연결(trip 응답에 meeting_journey_id 추가), 초대 응답 암호화 캐시(pgcrypto·MEETING_INVITE_CACHE_KEY). migration 0018_meeting_personal_flows. 2026-10-16 사용자 결정으로 중간 만남 추천은 후순위 보류(명세·엔드포인트는 유지). Notion v0.90 본문과 함께 갱신·검증 완료.
+2026-10-16 v0.5: F13 공유 설정·상태 구현 — PATCH sharing(member 버전 증가·초안 허용·종료 409 MEETING_CLOSED), GET shared-statuses(상태 계산 v1: arrivals·이동 arrived/departed/boarded 이벤트 + 스냅샷 기반 서버 산정 ETA 120초 유효, 만료·없음은 unavailable), POST arrivals(client_event_id 멱등·departed 전제 EVENT_ORDER_CONFLICT·재전송 200), POST arrival-corrections(원본 보존·version 증가·excluded 이어받기). meeting_share_events 테이블 + members 공유 컬럼(0018 확장). Notion 6절·11절 본문과 함께 갱신·재조회 검증 완료.

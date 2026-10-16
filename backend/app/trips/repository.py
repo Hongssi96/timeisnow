@@ -89,3 +89,16 @@ def listed(c,owner,rid,status,cursor,limit):
       WHERE t.user_id=%s AND t.expires_at>clock_timestamp() AND (%s::uuid IS NULL OR g.routine_id=%s)
       AND (%s::text IS NULL OR t.status=%s) AND (%s::uuid IS NULL OR (t.created_at,t.id)<(%s,%s))
       ORDER BY t.created_at DESC,t.id DESC LIMIT %s''',(owner,rid,rid,status,status,cursor['id'] if cursor else None,cursor['created_at'] if cursor else None,cursor['id'] if cursor else None,limit+1)).fetchall()
+
+
+def meeting_trip_summary(c,meeting_id,member_id):
+    row=c.execute("""SELECT t.*,g.meeting_journey_id,g.snapshot FROM manual_trips t
+      JOIN guidance_snapshots g ON g.id=t.guidance_id
+      JOIN meeting_journeys j ON j.id=g.meeting_journey_id
+      JOIN meeting_members mm ON mm.id=j.member_id
+      WHERE mm.meeting_id=%s AND mm.id=%s ORDER BY t.created_at DESC,t.id DESC LIMIT 1""",
+      (meeting_id,member_id)).fetchone()
+    if row is None:
+        return None
+    events=c.execute('SELECT * FROM manual_trip_events WHERE trip_id=%s ORDER BY occurred_at,id',(row['id'],)).fetchall()
+    return {'trip':row,'events':events}

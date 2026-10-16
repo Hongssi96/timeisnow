@@ -106,6 +106,59 @@ class MemberOriginInput(BaseModel):
         return self
 
 
+class SharingToggleInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    enabled: bool
+    expected_version: StrictInt
+
+    @model_validator(mode='after')
+    def positive_version(self):
+        if self.expected_version < 1:
+            raise ValueError('Expected version must be positive')
+        return self
+
+
+class ArrivalsInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    meeting_journey_id: str
+    client_event_id: str
+    occurred_at: datetime
+    source: Literal['manual']
+
+    @model_validator(mode='after')
+    def uuid_shape(self):
+        for name in ('meeting_journey_id', 'client_event_id'):
+            try:
+                UUID(getattr(self, name))
+            except (ValueError, AttributeError, TypeError) as error:
+                raise ValueError(f'{name} must be a UUID string') from error
+        return self
+
+
+class ArrivalCorrectionInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    arrival_id: str
+    expected_version: StrictInt
+    occurred_at: datetime | None = None
+    excluded: bool | None = None
+    correction_reason: Literal['wrong_time', 'wrong_action']
+
+    @model_validator(mode='after')
+    def shape(self):
+        if self.expected_version < 1:
+            raise ValueError('Expected version must be positive')
+        try:
+            UUID(self.arrival_id)
+        except (ValueError, AttributeError, TypeError) as error:
+            raise ValueError('arrival_id must be a UUID string') from error
+        if self.occurred_at is None and self.excluded is None:
+            raise ValueError('One of occurred_at or excluded is required')
+        return self
+
+
 class GuidanceQueryInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     meeting_revision_id: str

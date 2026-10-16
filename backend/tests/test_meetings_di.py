@@ -70,10 +70,17 @@ class InMemoryMeetingRepository(MeetingRepository):
     consume_invite = _unused
     revoke_invite = _unused
     update_member_origin = _unused
+    update_member_sharing = _unused
     find_reusable_journey = _unused
     insert_meeting_journey = _unused
     supersede_meeting_journeys = _unused
     update_journey_candidate = _unused
+    find_meeting_journey = _unused
+    insert_share_event = _unused
+    find_share_event = _unused
+    find_share_event_by_client = _unused
+    find_latest_arrival = _unused
+    bump_arrival_version = _unused
     find_invite_replay = _unused
     insert_invite_replay = _unused
     drop_invite_replays = _unused

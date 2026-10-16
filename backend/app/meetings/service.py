@@ -7,8 +7,9 @@
 import base64
 import hashlib
 import json
-from uuid import UUID, uuid4
-
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_CEILING
+from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
 from app.common.errors import AuthError
 from app.common.ports import Clock, Database, Identity, TokenIssuer
 from app.common.response import answer
@@ -53,6 +54,56 @@ def member_data(row):
     return {'member_id': str(row['id']), 'display_name': row['display_name'], 'role': row['role'],
             'participation_status': row['participation_status'],
             'origin_ready': row['private_origin'] is not None, 'version': row['version']}
+
+
+def share_event_digest(body):
+    """Body fingerprint for arrival/correction retransmission checks."""
+    return hashlib.sha256(json.dumps(body.model_dump(mode='json'), sort_keys=True,
+                                     ensure_ascii=False).encode('utf-8')).hexdigest()
+
+
+def meeting_trip_summary(connection, meeting_id, member_id):
+    from app.trips import repository as trip_repository
+    return trip_repository.meeting_trip_summary(connection, meeting_id, member_id)
+
+
+def share_time(value):
+    """jsonb correction fields come back as strings; DB timestamps stay datetimes."""
+    if value is None or isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+
+
+def share_eta(snapshot, now):
+    """Server-estimated arrival from the trip's stored guidance, valid until min(calculation+120s, evidence)."""
+    departure = snapshot.get('departure') or {}
+    calculated = departure.get('calculated_at')
+    alighting = departure.get('estimated_final_alighting_at')
+    if not calculated or not alighting:
+        return None
+    legs = (snapshot.get('candidate') or {}).get('ordered_legs') or []
+    last_vehicle = -1
+    for index, leg in enumerate(legs):
+        if leg.get('type') != 'WALKING':
+            last_vehicle = index
+    if last_vehicle < 0:
+        return None
+    tail = legs[last_vehicle + 1:]
+    if not tail or not all(leg.get('type') == 'WALKING' and leg.get('walking_role') == 'egress'
+                           and leg.get('seconds', 0) > 0 for leg in tail):
+        return None
+    calculated_at = datetime.fromisoformat(str(calculated).replace('Z', '+00:00'))
+    estimated = datetime.fromisoformat(str(alighting).replace('Z', '+00:00')) + timedelta(
+        seconds=sum(leg['seconds'] for leg in tail))
+    valid_until = calculated_at + timedelta(seconds=120)
+    evidence_until = (departure.get('arrival_evidence') or {}).get('valid_until')
+    if evidence_until:
+        until = datetime.fromisoformat(str(evidence_until).replace('Z', '+00:00'))
+        if until < valid_until:
+            valid_until = until
+    if now > valid_until:
+        return None
+    return {'estimated_arrival_at': estimated, 'eta_calculated_at': calculated_at, 'valid_until': valid_until}
 
 
 def origin_data(row):
@@ -391,6 +442,149 @@ class MeetingService:
         with self.database.connect() as connection:
             meeting, member = self._entered(connection, request, meeting_id_value(meeting_id), write=False)
             return {'private_origin': origin_data(member), 'member_version': member['version']}
+
+    def set_sharing(self, request, meeting_id, body):
+        with self.database.connect() as connection:
+            meeting, member = self._entered(connection, request, meeting_id_value(meeting_id), write=True, lock=True)
+            if meeting['status'] in ('completed', 'cancelled'):
+                raise AuthError(409, 'MEETING_CLOSED', '종료된 약속은 공유 설정을 바꿀 수 없어요.')
+            if body.expected_version != member['version']:
+                raise AuthError(409, 'VERSION_CONFLICT', '참여 정보가 다른 화면에서 변경됐어요. 새로 확인해주세요.',
+                                details=[{'field': 'expected_version', 'current_version': member['version']}])
+            row = self.repository.update_member_sharing(connection, member['id'], body.enabled)
+        return {'enabled': row['sharing_enabled'], 'member_version': row['version'],
+                'updated_at': iso(row['sharing_updated_at'])}
+
+    def shared_statuses(self, request, meeting_id):
+        with self.database.connect() as connection:
+            user_id = self.identity.authenticate(connection, request)
+            meeting = self.repository.find_meeting(connection, meeting_id_value(meeting_id))
+            if meeting is None:
+                missing_meeting()
+            member = self.repository.find_member(connection, meeting['id'], user_id)
+            if member is None or member['participation_status'] != 'active':
+                missing_meeting()
+            rows = self.repository.list_active_members(connection, [meeting['id']])
+            now = self.clock.now()
+            items = [self.share_state(connection, row, meeting, now) for row in rows]
+        return {'items': items}
+
+    def share_state(self, connection, row, meeting, now):
+        """SharedStatus for one active member; personal coordinates never leave this computation."""
+        base = {'member_id': str(row['id']), 'version': row['version'],
+                'updated_at': iso(row['sharing_updated_at'] or row['joined_at']),
+                'state': 'unknown', 'source': 'none', 'reported_at': None,
+                'estimated_arrival_at': None, 'eta_calculated_at': None, 'valid_until': None}
+        if meeting['status'] != 'confirmed' or not row['sharing_enabled']:
+            base['state'] = 'sharing_off'
+            return base
+        arrival = self.repository.find_latest_arrival(connection, row['id'])
+        if arrival is not None:
+            correction = arrival['correction'] or {}
+            if not correction.get('excluded'):
+                occurred = share_time(correction.get('occurred_at')) or arrival['occurred_at']
+                updated = share_time(correction.get('received_at')) or arrival['received_at']
+                return {**base, 'state': 'arrived', 'source': arrival['source'],
+                        'reported_at': iso(occurred), 'updated_at': iso(updated)}
+        summary = meeting_trip_summary(connection, meeting['id'], row['id'])
+        if summary is not None:
+            events = summary['events']
+            latest = events[-1] if events else None
+            if latest is not None and latest['type'] == 'arrived':
+                return {**base, 'state': 'arrived', 'source': 'manual',
+                        'reported_at': iso(latest['occurred_at']), 'updated_at': iso(latest['received_at'])}
+            departed = next((e for e in events if e['type'] == 'departed'), None)
+            if departed is not None and summary['trip']['status'] == 'active':
+                boarded = next((e for e in events if e['type'] == 'boarded'), None)
+                reported = boarded if boarded is not None else departed
+                eta = share_eta(summary['trip']['snapshot'], now)
+                state = 'in_transit' if boarded is not None else 'reported_departed'
+                if eta is None:
+                    return {**base, 'state': 'unavailable', 'source': 'manual',
+                            'reported_at': iso(reported['occurred_at']), 'updated_at': iso(reported['received_at'])}
+                return {**base, 'state': state, 'source': 'manual', 'reported_at': iso(reported['occurred_at']),
+                        'estimated_arrival_at': iso(eta['estimated_arrival_at']),
+                        'eta_calculated_at': iso(eta['eta_calculated_at']), 'valid_until': iso(eta['valid_until']),
+                        'updated_at': iso(reported['received_at'])}
+        return base
+
+    def create_arrival(self, request, meeting_id, body):
+        key = checked_idempotency_key(request)
+        digest = share_event_digest(body)
+        with self.database.connect() as connection:
+            user_id = self.identity.authenticate(connection, request, True)
+            self.repository.delete_expired_keys(connection)
+            self.repository.advisory_lock(connection, 'meeting-arrival:' + str(user_id) + ':' + key)
+            previous = self.repository.find_idempotency_key(connection, user_id, 'meeting-arrival', key)
+            if previous is not None and previous['body_hash'] != digest:
+                raise AuthError(409, 'IDEMPOTENCY_CONFLICT', '같은 도착 신고 키로 다른 내용을 보냈어요.')
+            meeting, member = self._entered(connection, request, meeting_id_value(meeting_id), write=True)
+            if meeting['status'] != 'confirmed':
+                raise AuthError(409, 'MEETING_NOT_CONFIRMED', '먼저 약속 장소와 시각을 확정해주세요.')
+            journey = self.repository.find_meeting_journey(connection, meeting_id_value(body.meeting_journey_id))
+            if journey is None or journey['member_id'] != member['id']:
+                raise AuthError(404, 'RESOURCE_NOT_FOUND', '안내 여정을 찾을 수 없어요.')
+            event = self.repository.find_share_event_by_client(connection, member['id'],
+                                                               meeting_id_value(body.client_event_id))
+            if event is not None:
+                if event['kind'] != 'arrival' or str(event['meeting_journey_id']) != body.meeting_journey_id \
+                        or event['occurred_at'].astimezone(timezone.utc).isoformat() \
+                        != body.occurred_at.astimezone(timezone.utc).isoformat() or event['source'] != body.source:
+                    raise AuthError(409, 'IDEMPOTENCY_CONFLICT', '같은 도착 신고의 내용이 달라요.')
+                return answer(request, {'arrival_id': str(event['id']), 'version': event['version'],
+                                        'received_at': iso(event['received_at']), 'source': event['source']}, 200)
+            summary = meeting_trip_summary(connection, meeting['id'], member['id'])
+            trip = summary['trip'] if summary else None
+            if trip is None or str(trip['meeting_journey_id'] or '') != body.meeting_journey_id:
+                raise AuthError(404, 'RESOURCE_NOT_FOUND', '연결된 이동을 찾을 수 없어요.')
+            if not any(e['type'] == 'departed' for e in summary['events']):
+                raise AuthError(409, 'EVENT_ORDER_CONFLICT', '출발 확인 뒤에 도착을 기록할 수 있어요.')
+            arrival = self.repository.insert_share_event(connection, (
+                uuid4(), meeting['id'], member['id'], journey['id'], meeting_id_value(body.client_event_id),
+                'arrival', body.occurred_at, body.source, False, None, None, 1))
+            self.repository.insert_idempotency_key(connection, (user_id, 'meeting-arrival', key, digest, meeting['id']))
+        return answer(request, {'arrival_id': str(arrival['id']), 'version': arrival['version'],
+                                'received_at': iso(arrival['received_at']), 'source': arrival['source']}, 201)
+
+    def correct_arrival(self, request, meeting_id, body):
+        key = checked_idempotency_key(request)
+        digest = share_event_digest(body)
+        replay_id = uuid5(NAMESPACE_URL, 'meeting-correction:' + key)
+        with self.database.connect() as connection:
+            user_id = self.identity.authenticate(connection, request, True)
+            self.repository.delete_expired_keys(connection)
+            self.repository.advisory_lock(connection, 'meeting-correction:' + str(user_id) + ':' + key)
+            previous = self.repository.find_idempotency_key(connection, user_id, 'meeting-correction', key)
+            if previous is not None and previous['body_hash'] != digest:
+                raise AuthError(409, 'IDEMPOTENCY_CONFLICT', '같은 정정 키로 다른 내용을 보냈어요.')
+            replay = self.repository.find_share_event_by_client(connection, None, replay_id)
+            meeting, member = self._entered(connection, request, meeting_id_value(meeting_id), write=True)
+            if meeting['status'] == 'cancelled':
+                raise AuthError(409, 'MEETING_CLOSED', '취소된 약속은 도착을 정정할 수 없어요.')
+            if replay is not None:
+                if replay['member_id'] != member['id']:
+                    raise AuthError(404, 'RESOURCE_NOT_FOUND', '도착 기록을 찾을 수 없어요.')
+                return answer(request, {'arrival_id': str(replay['corrects_event_id']), 'version': replay['version'],
+                                        'received_at': iso(replay['received_at'])}, 200)
+            arrival = self.repository.find_share_event(connection, meeting_id_value(body.arrival_id))
+            if arrival is None or arrival['member_id'] != member['id'] or arrival['kind'] != 'arrival' \
+                    or str(arrival['meeting_id']) != str(meeting['id']):
+                raise AuthError(404, 'RESOURCE_NOT_FOUND', '도착 기록을 찾을 수 없어요.')
+            if body.expected_version != arrival['version']:
+                raise AuthError(409, 'VERSION_CONFLICT', '이미 다른 정정이 반영됐어요. 최신 기록을 확인해주세요.',
+                                details=[{'field': 'expected_version', 'current_version': arrival['version']}])
+            occurred_at = body.occurred_at if body.occurred_at is not None else arrival['occurred_at']
+            latest = self.repository.find_latest_arrival(connection, member['id'])
+            carried = bool((latest['correction'] or {}).get('excluded')) \
+                if latest is not None and str(latest['id']) == str(arrival['id']) else False
+            excluded = carried if body.excluded is None else body.excluded
+            correction = self.repository.insert_share_event(connection, (
+                uuid4(), meeting['id'], member['id'], arrival['meeting_journey_id'], replay_id, 'correction',
+                occurred_at, arrival['source'], excluded, body.correction_reason, arrival['id'], arrival['version'] + 1))
+            updated = self.repository.bump_arrival_version(connection, arrival['id'], arrival['version'] + 1)
+            self.repository.insert_idempotency_key(connection, (user_id, 'meeting-correction', key, digest, meeting['id']))
+        return answer(request, {'arrival_id': str(updated['id']), 'version': updated['version'],
+                                'received_at': iso(correction['received_at'])}, 201)
 
     def job_result(self, request, job_id):
         """GET /jobs/{job_id} fallback for meeting deletion jobs; journey jobs stay in journeys."""

@@ -8,8 +8,9 @@ from fastapi.responses import Response
 
 from app.common.response import answer
 from app.meetings import guidance as meeting_guidance
-from app.meetings.dto import (ConfirmationInput, GuidanceQueryInput, InviteIssueInput, InviteTokenInput,
-                              MeetingCreateInput, MeetingUpdateInput, MemberOriginInput, TransitionInput)
+from app.meetings.dto import (ArrivalCorrectionInput, ArrivalsInput, ConfirmationInput, GuidanceQueryInput,
+                              InviteIssueInput, InviteTokenInput, MeetingCreateInput, MeetingUpdateInput,
+                              MemberOriginInput, SharingToggleInput, TransitionInput)
 from app.meetings.service import MeetingService
 from app.meetings.wiring import get_meeting_service
 
@@ -100,3 +101,26 @@ def get_origin(request: Request, meeting_id: str, service: MeetingService = Depe
 @router.post('/meetings/{meeting_id}/guidance-queries')
 def guidance_queries(request: Request, meeting_id: str, body: GuidanceQueryInput):
     return answer(request, meeting_guidance.guidance_query(request, meeting_id, body))
+
+
+@router.patch('/meetings/{meeting_id}/members/me/sharing')
+def set_sharing(request: Request, meeting_id: str, body: SharingToggleInput,
+                service: MeetingService = Depends(get_meeting_service)):
+    return answer(request, service.set_sharing(request, meeting_id, body))
+
+
+@router.get('/meetings/{meeting_id}/shared-statuses')
+def shared_statuses(request: Request, meeting_id: str, service: MeetingService = Depends(get_meeting_service)):
+    return answer(request, service.shared_statuses(request, meeting_id))
+
+
+@router.post('/meetings/{meeting_id}/arrivals', status_code=201)
+def create_arrival(request: Request, meeting_id: str, body: ArrivalsInput,
+                   service: MeetingService = Depends(get_meeting_service)):
+    return service.create_arrival(request, meeting_id, body)
+
+
+@router.post('/meetings/{meeting_id}/arrival-corrections', status_code=201)
+def correct_arrival(request: Request, meeting_id: str, body: ArrivalCorrectionInput,
+                    service: MeetingService = Depends(get_meeting_service)):
+    return service.correct_arrival(request, meeting_id, body)

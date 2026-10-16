@@ -1,5 +1,5 @@
 ﻿"""F12 personal meeting flows: private origin, invite replay cache, per-member guidance."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
@@ -204,3 +204,191 @@ class MeetingFlowTests(MeetingTests):
         with database() as connection:
             rows = connection.execute('SELECT id FROM meeting_journeys').fetchall()
         self.assertEqual(len(rows), 1)
+
+    def _no_egress_routes(self):
+        single = route(walking=300)
+        single['steps'] = single['steps'][:2]
+        return {'status': 'OK', 'routes': [single]}
+
+    async def report_departed(self, trip_id, key='departed-key', event_type='departed'):
+        async def send(kind, leg_id, event_key):
+            return await self.call(f'/trips/{trip_id}/events', method='POST', user='main', key=event_key,
+                                   body={'client_event_id': str(uuid4()), 'type': kind, 'source': 'manual',
+                                         'occurred_at': datetime.now(timezone.utc).isoformat(), 'leg_id': leg_id})
+        detail = await self.call(f'/trips/{trip_id}', user='main')
+        progress = detail[2]['data']['trip']['progress']
+        if event_type == 'boarded':
+            approach = await send('approach_arrived', progress['actions']['approach_arrived'], 'approach-' + key)
+            self.assertEqual(approach[0], 201, approach)
+            progress = (await self.call(f'/trips/{trip_id}', user='main'))[2]['data']['trip']['progress']
+        event = await send(event_type, progress['actions'][event_type], key)
+        self.assertEqual(event[0], 201, event)
+        return event
+
+    async def set_sharing(self, meeting_id, enabled=True, expected_version=2):
+        return await self.call(f'/meetings/{meeting_id}/members/me/sharing', method='PATCH', user='main',
+                               body={'enabled': enabled, 'expected_version': expected_version})
+
+    async def statuses(self, meeting_id):
+        return await self.call(f'/meetings/{meeting_id}/shared-statuses', user='main')
+
+    async def test_sharing_toggle_and_trip_event_states(self):
+        meeting, _ = await self.solo_confirmed()
+        meeting_id = meeting['meeting_id']
+        states = await self.statuses(meeting_id)
+        self.assertEqual(states[0], 200)
+        self.assertEqual(states[2]['data']['items'][0]['state'], 'sharing_off')
+        enabled = await self.set_sharing(meeting_id)
+        self.assertEqual(enabled[0], 200, enabled)
+        self.assertTrue(enabled[2]['data']['enabled'])
+        self.assertEqual(enabled[2]['data']['member_version'], 3)
+        states = await self.statuses(meeting_id)
+        self.assertEqual(states[2]['data']['items'][0]['state'], 'unknown')
+        stale = await self.set_sharing(meeting_id, expected_version=2)
+        self.assertEqual(stale[0], 409)
+        self.assertEqual(stale[2]['error']['code'], 'VERSION_CONFLICT')
+        guidance = await self.guidance(meeting_id, meeting['current_revision_id'])
+        trip = await self.call('/trips', user='main', key='status-trip-key',
+                               body={'guidance_id': guidance[2]['data']['guidance']['guidance_id'],
+                                     'measurement_mode': 'assisted'})
+        self.assertEqual(trip[0], 201, trip)
+        trip_id = trip[2]['data']['trip_id']
+        states = await self.statuses(meeting_id)
+        self.assertEqual(states[2]['data']['items'][0]['state'], 'unknown')
+        await self.report_departed(trip_id, key='departed-key')
+        row = (await self.statuses(meeting_id))[2]['data']['items'][0]
+        self.assertEqual(row['state'], 'reported_departed')
+        self.assertEqual(row['source'], 'manual')
+        self.assertIsNotNone(row['reported_at'])
+        self.assertIsNotNone(row['estimated_arrival_at'])
+        self.assertIsNotNone(row['eta_calculated_at'])
+        self.assertIsNotNone(row['valid_until'])
+        await self.report_departed(trip_id, key='boarded-key', event_type='boarded')
+        row = (await self.statuses(meeting_id))[2]['data']['items'][0]
+        self.assertEqual(row['state'], 'in_transit')
+        arrival = await self.call(f'/meetings/{meeting_id}/arrivals', method='POST', user='main', key='arrival-key',
+                                  body={'meeting_journey_id': guidance[2]['data']['meeting_journey_id'],
+                                        'client_event_id': str(uuid4()),
+                                        'occurred_at': datetime.now(timezone.utc).isoformat(), 'source': 'manual'})
+        self.assertEqual(arrival[0], 201, arrival)
+        row = (await self.statuses(meeting_id))[2]['data']['items'][0]
+        self.assertEqual(row['state'], 'arrived')
+
+    async def test_departed_without_eta_shows_unavailable(self):
+        meeting, _ = await self.solo_confirmed()
+        meeting_id = meeting['meeting_id']
+        await self.set_sharing(meeting_id)
+        with patch.object(places_provider, 'region_for_location', return_value='서울 합성동'), \
+             patch.object(journey_provider, 'fetch_routes', return_value=self._no_egress_routes()), \
+             patch.object(public_mapping, 'resolve', side_effect=resolve_any), \
+             patch.object(arrivals_provider, 'fetch', return_value=[('123', 780)]):
+            guidance = await self.call(f'/meetings/{meeting_id}/guidance-queries', user='main', key='no-egress-key',
+                                       body={'meeting_revision_id': meeting['current_revision_id'],
+                                             'departure_basis': 'recommended'})
+        self.assertEqual(guidance[0], 200, guidance)
+        self.assertIsNone(guidance[2]['data']['meeting_arrival_slack_seconds'])
+        trip = await self.call('/trips', user='main', key='no-egress-trip-key',
+                               body={'guidance_id': guidance[2]['data']['guidance']['guidance_id'],
+                                     'measurement_mode': 'assisted'})
+        self.assertEqual(trip[0], 201, trip)
+        await self.report_departed(trip[2]['data']['trip_id'], key='no-egress-departed-key')
+        row = (await self.statuses(meeting_id))[2]['data']['items'][0]
+        self.assertEqual(row['state'], 'unavailable')
+        self.assertEqual(row['source'], 'manual')
+        self.assertIsNotNone(row['reported_at'])
+        self.assertIsNone(row['estimated_arrival_at'])
+        self.assertIsNone(row['valid_until'])
+
+    async def test_arrival_reports_corrections_and_idempotency(self):
+        meeting, _ = await self.solo_confirmed()
+        meeting_id = meeting['meeting_id']
+        guidance = await self.guidance(meeting_id, meeting['current_revision_id'])
+        journey_id = guidance[2]['data']['meeting_journey_id']
+        trip = await self.call('/trips', user='main', key='arrival-trip-key',
+                               body={'guidance_id': guidance[2]['data']['guidance']['guidance_id'],
+                                     'measurement_mode': 'assisted'})
+        self.assertEqual(trip[0], 201, trip)
+        trip_id = trip[2]['data']['trip_id']
+        enabled = await self.set_sharing(meeting_id, expected_version=2)
+        self.assertEqual(enabled[0], 200)
+        early = await self.call(f'/meetings/{meeting_id}/arrivals', method='POST', user='main', key='early-arrival-key',
+                                body={'meeting_journey_id': journey_id, 'client_event_id': str(uuid4()),
+                                      'occurred_at': datetime.now(timezone.utc).isoformat(), 'source': 'manual'})
+        self.assertEqual(early[0], 409)
+        self.assertEqual(early[2]['error']['code'], 'EVENT_ORDER_CONFLICT')
+        await self.report_departed(trip_id, key='arrival-departed-key')
+        client_id = str(uuid4())
+        occurred = datetime.now(timezone.utc).isoformat()
+        arrival = await self.call(f'/meetings/{meeting_id}/arrivals', method='POST', user='main', key='arrival-key',
+                                  body={'meeting_journey_id': journey_id, 'client_event_id': client_id,
+                                        'occurred_at': occurred, 'source': 'manual'})
+        self.assertEqual(arrival[0], 201, arrival)
+        data = arrival[2]['data']
+        self.assertEqual(data['version'], 1)
+        self.assertEqual(data['source'], 'manual')
+        replay = await self.call(f'/meetings/{meeting_id}/arrivals', method='POST', user='main', key='arrival-key',
+                                 body={'meeting_journey_id': journey_id, 'client_event_id': client_id,
+                                       'occurred_at': occurred, 'source': 'manual'})
+        self.assertEqual(replay[0], 200)
+        self.assertEqual(replay[2]['data']['arrival_id'], data['arrival_id'])
+        conflict = await self.call(f'/meetings/{meeting_id}/arrivals', method='POST', user='main', key='arrival-key',
+                                   body={'meeting_journey_id': journey_id, 'client_event_id': client_id,
+                                         'occurred_at': datetime.now(timezone.utc).isoformat(), 'source': 'manual'})
+        self.assertEqual(conflict[0], 409)
+        self.assertEqual(conflict[2]['error']['code'], 'IDEMPOTENCY_CONFLICT')
+        row = (await self.statuses(meeting_id))[2]['data']['items'][0]
+        self.assertEqual(row['state'], 'arrived')
+        before = row['reported_at']
+        missing_field = await self.call(f'/meetings/{meeting_id}/arrival-corrections', method='POST', user='main',
+                                        key='missing-field-key',
+                                        body={'arrival_id': data['arrival_id'], 'expected_version': 1,
+                                              'correction_reason': 'wrong_time'})
+        self.assertEqual(missing_field[0], 422)
+        wrong_version = await self.call(f'/meetings/{meeting_id}/arrival-corrections', method='POST', user='main',
+                                        key='wrong-version-key',
+                                        body={'arrival_id': data['arrival_id'], 'expected_version': 2,
+                                              'occurred_at': occurred, 'correction_reason': 'wrong_time'})
+        self.assertEqual(wrong_version[0], 409)
+        self.assertEqual(wrong_version[2]['error']['code'], 'VERSION_CONFLICT')
+        corrected_at = (datetime.now(timezone.utc) + timedelta(seconds=90)).isoformat()
+        corrected = await self.call(f'/meetings/{meeting_id}/arrival-corrections', method='POST', user='main',
+                                    key='correct-time-key',
+                                    body={'arrival_id': data['arrival_id'], 'expected_version': 1,
+                                          'occurred_at': corrected_at,
+                                          'correction_reason': 'wrong_time'})
+        self.assertEqual(corrected[0], 201, corrected)
+        self.assertEqual(corrected[2]['data']['arrival_id'], data['arrival_id'])
+        self.assertEqual(corrected[2]['data']['version'], 2)
+        row = (await self.statuses(meeting_id))[2]['data']['items'][0]
+        self.assertEqual(row['state'], 'arrived')
+        self.assertNotEqual(row['reported_at'], before)
+        replay = await self.call(f'/meetings/{meeting_id}/arrival-corrections', method='POST', user='main',
+                                 key='correct-time-key',
+                                 body={'arrival_id': data['arrival_id'], 'expected_version': 1,
+                                       'occurred_at': corrected_at,
+                                       'correction_reason': 'wrong_time'})
+        self.assertEqual(replay[0], 200)
+        self.assertEqual(replay[2]['data']['version'], 2)
+        excluded = await self.call(f'/meetings/{meeting_id}/arrival-corrections', method='POST', user='main',
+                                   key='exclude-key',
+                                   body={'arrival_id': data['arrival_id'], 'expected_version': 2, 'excluded': True,
+                                         'correction_reason': 'wrong_action'})
+        self.assertEqual(excluded[0], 201)
+        row = (await self.statuses(meeting_id))[2]['data']['items'][0]
+        self.assertEqual(row['state'], 'reported_departed')
+        await self.signin('other', 'other@example.invalid')
+        foreign = await self.call(f'/meetings/{meeting_id}/arrival-corrections', method='POST', user='other',
+                                  key='foreign-key',
+                                  body={'arrival_id': data['arrival_id'], 'expected_version': 2,
+                                        'occurred_at': corrected_at,
+                                        'correction_reason': 'wrong_time'})
+        self.assertEqual(foreign[0], 404)
+
+    async def test_draft_meeting_sharing_stays_off(self):
+        await self.signin('main', 'main@example.invalid')
+        meeting = await self.make_meeting()
+        enabled = await self.call(f"/meetings/{meeting['meeting_id']}/members/me/sharing", method='PATCH', user='main',
+                                  body={'enabled': True, 'expected_version': 1})
+        self.assertEqual(enabled[0], 200)
+        row = (await self.statuses(meeting['meeting_id']))[2]['data']['items'][0]
+        self.assertEqual(row['state'], 'sharing_off')
