@@ -319,3 +319,6 @@ ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조�
 ## 2026-10-15 F07-07b-2 차량 확인 기반 하차 안내
 
 새 DDL 없이 guidance_snapshots.snapshot.transit_bindings에 당시 검증된 공식 노선·승하차 정류소ID/순번·방향만 비공개로 보존한다. 기존 snapshot90일/삭제 정책을 따르며 새 좌표/차량번호/vehId는 저장하지 않는다. 공개 trip detail guidance는 기존4필드만 반환한다. 실제 확인 차량ID는 현재 boarded anchor의 메모리32개/30분만 유지한다. api_contract.md 5.7.14.
+
+## 2026-10-16 F09 실제 DDL0018
+walking_learning_state(user_id PK/세대/초기화 시작시각), walking_learning_observations(본인·이동 UNIQUE·본문 해시·세대·물리 키·장소 버전·기준/관측/갱신 전 예측초·비율·유효/제외 사유·멱등 응답·90일 기한), walking_learning_updates(사용자/프로필 버전 UNIQUE·이전/새 계수·변경 종류·요청UUID/본문해시/응답·정책·선택 풀/최대20개 표본ID)를 추가한다. 관측은 이동/계정 삭제 cascade, 상태/변경 이력은 계정 삭제 cascade. 개인 주소·좌표·AI 원문은 추가 저장하지 않는다. 활성 계수는 기존 user_profiles.walking_duration_factor와version을 같은 트랜잭션에서 갱신한다. 관측의 일반 삭제 API/그에 따른 재학습은 후속이다. 격리 스키마 downgrade/upgrade에서 기존 회원·이동 이벤트/계수 보존 확인.
