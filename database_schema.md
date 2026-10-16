@@ -326,8 +326,19 @@ ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조�
 
 guidance_snapshots에 meeting_journey_id uuid(meeting_journeys SET NULL)를 추가하고 CHECK로 routine_id와의 동시 non-NULL을 금지한다. 약속 이동은 routine_id=NULL·meeting_journey_id로 저장되며 trips 응답에 meeting_journey_id를 함께 반환한다. meeting_invite_replays 신규: PK(user_id,key), body_hash char(64), invite_id(meeting_invites CASCADE), response bytea, expires_at, created_at. response는 pgcrypto PGP 대칭(pgcrypto 전용 스키마, 이동식 확장이라 search_path 오염 방지)으로 암호화하며 키는 환경변수 MEETING_INVITE_CACHE_KEY(SHA-256 해시를 패스프레이즈로 사용)다. meeting_idempotency_keys scope CHECK에 'meeting-guidance'를 추가한다.
 
-다른 담당의 미병합 0018_walking_learning(같은 0017 부모)이 개발 DB에 이미 적용돼 있어 이 브랜치 단독으로는 개발 DB upgrade를 하지 않는다. 병합 시 두 0018을 부모로 하는 no-op merge revision(0014 선례)이 필요하다.
+## 2026-10-16 F09 실제 DDL0018
+walking_learning_state(user_id PK/세대/초기화 시작시각), walking_learning_observations(본인·이동 UNIQUE·본문 해시·세대·물리 키·장소 버전·기준/관측/갱신 전 예측초·비율·유효/제외 사유·멱등 응답·90일 기한), walking_learning_updates(사용자/프로필 버전 UNIQUE·이전/새 계수·변경 종류·요청UUID/본문해시/응답·정책·선택 풀/최대20개 표본ID)를 추가한다. 관측은 이동/계정 삭제 cascade, 상태/변경 이력은 계정 삭제 cascade. 개인 주소·좌표·AI 원문은 추가 저장하지 않는다. 활성 계수는 기존 user_profiles.walking_duration_factor와version을 같은 트랜잭션에서 갱신한다. 관측의 일반 삭제 API/그에 따른 재학습은 후속이다. 격리 스키마 downgrade/upgrade에서 기존 회원·이동 이벤트/계수 보존 확인.
 
-F13 확장(같은 0018): meeting_members에 sharing_enabled bool(기본false)·sharing_updated_at을 추가하고 토글 시 members 버전을 함께 올린다. meeting_share_events 신규: PK id, meeting_id(meetings CASCADE), member_id(meeting_members CASCADE), meeting_journey_id(meeting_journeys SET NULL), client_event_id, kind arrival/correction, occurred_at, source manual, excluded bool, correction_reason wrong_time/wrong_action, corrects_event_id(자기 참조), version int(기본1), received_at. (member_id, client_event_id) UNIQUE로 도착 신고 멱등을 보장하고 인덱스 (member_id, received_at DESC)로 최신 기록을 조회한다. 도착은 원본 kind=arrival과 정정 kind=correction 행으로 원본을 보존하며 version은 arrival 행에서 증가한다. meeting_idempotency_keys scope CHECK에 'meeting-arrival'·'meeting-correction'을 추가한다.
+## 2026-10-16 실제 DDL0019 기록 정정·재학습
+trip_event_corrections는 이벤트 FK cascade/이전·새 event 요약/고정 사유 코드·시각을 저장한다. trip_record_mutations는 계정 FK/사용자·요청UUID PK/대상UUID·삭제 안내UUID/종류·정규화 해시·응답·24시간 기한이며 삭제 뒤 원본 정정 응답은 제거한다. walking_learning_observations에 version/confirmation 추가(기존 valid만 normal/same_scope=true로 이관, 제외 조건은 추측 금지). walking_learning_updates에 rebuild 종류/restorable을 추가하여 오염된 과거 계수 복구를 막는다. 삭제는 snapshot→trip→event/audit/관측 cascade·생성 키/학습 표본 참조 정리·계수 재생성을 단일 트랜잭션으로 수행한다. 새 정정/영수증/rebuild 이력이 있으면 downgrade를 거부해 손실을 막는다.
+
+## 2026-10-16 기록 내보내기 저장소 (0020_trip_exports)
+trip_exports(id UUID PK, user_id UUID FK users ON DELETE CASCADE, range_from/range_to TIMESTAMPTZ, created_at, expires_at24시간, download_expires_at10분). 범위 시작<끝 CHECK·(user_id,expires_at) 인덱스. 파일/이벤트/좌표·이동ID 목록은 저장하지 않으며 사용자 이동 advisory lock으로 정정/삭제와 다운로드를 직렬화한다. 범위/500건 제한·만료 청소와 응답은 trip_export_api.md/Notion5.13. 개발DB 업그레이드 전후 기존 자료 보존 확인은 development_log.md 기록 내보내기를 따른다.
+
+## 2026-10-16 F13 확장 (같은 0018_meeting_personal_flows)
+
+meeting_members에 sharing_enabled bool(기본false)·sharing_updated_at을 추가하고 토글 시 members 버전을 함께 올린다. meeting_share_events 신규: PK id, meeting_id(meetings CASCADE), member_id(meeting_members CASCADE), meeting_journey_id(meeting_journeys SET NULL), client_event_id, kind arrival/correction, occurred_at, source manual, excluded bool, correction_reason wrong_time/wrong_action, corrects_event_id(자기 참조), version int(기본1), received_at. (member_id, client_event_id) UNIQUE로 도착 신고 멱등을 보장하고 인덱스 (member_id, received_at DESC)로 최신 기록을 조회한다. 도착은 원본 kind=arrival과 정정 kind=correction 행으로 원본을 보존하며 version은 arrival 행에서 증가한다. meeting_idempotency_keys scope CHECK에 'meeting-arrival'·'meeting-correction'을 추가한다.
+
+두 0018(walking_learning·meeting_personal_flows)은 같은 0017 부모를 두므로 0021_meeting_flow_merge no-op merge revision(0014 선례)으로 연결했다.
 
 구현 상태(2026-10-16): F13 공유 설정·상태(meeting_api.md v0.5·Notion 6절) 검증 완료. 전체 백엔드 테스트 529개 중 528 통과(유일 실패 test_access_walk는 main에도 있는 기존 sys.path 문제).

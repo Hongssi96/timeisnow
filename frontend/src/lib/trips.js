@@ -5,7 +5,7 @@ const invalid=()=>{throw new ApiError('INVALID_RESPONSE');};
 export function readEvent(event,tripId){
  if(!event||!['event_id','client_event_id','leg_id'].every(key=>safeJourneyId(event[key]))||event.trip_id!==tripId||!['departed','approach_arrived','boarded','alighted','missed','arrived'].includes(event.type)||event.source!=='manual'
   ||!isServerTime(event.occurred_at)||!isServerTime(event.received_at)||Date.parse(event.occurred_at)>Date.parse(event.received_at)
-  ||!Number.isSafeInteger(event.input_delay_seconds)||event.input_delay_seconds<0||event.excluded!==false||event.version!==1)invalid();
+  ||!Number.isSafeInteger(event.input_delay_seconds)||event.input_delay_seconds<0||typeof event.excluded!=='boolean'||!Number.isSafeInteger(event.version)||event.version<1)invalid();
  return event;
 }
 export function readTrip(value){

@@ -6,6 +6,8 @@ import '../styles/styles.css';
 import { apiRequest, ApiError, isServerTime } from '../lib/api';
 import AccountForm from '../components/AccountForm';
 import PlacesCard from '../components/PlacesCard';
+import PersonalizationCard from '../components/PersonalizationCard';
+import TripRecords from '../components/TripRecords';
 import OriginSelector from '../components/OriginSelector';
 import JourneyComparison from '../components/JourneyComparison';
 import RoutinesPanel, { RoutineSummary, RoutineStatus } from '../components/RoutinesPanel';
@@ -23,7 +25,6 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
 
-  const history = [];
 
   const [origin, setOrigin] = useState(null);
   const [originExpired, setOriginExpired] = useState(false);
@@ -53,7 +54,7 @@ export default function App() {
       <button className="profile" onClick={() => { clearRoutines(); setSelected(null); setModal('account'); }}><span className="avatar">나</span><span><strong>나의 하루</strong><small>회원가입 · 로그인</small></span><ChevronRight size={17}/></button>
     </aside>
     <div className="workspace">
-      <header className="topbar"><span className="breadcrumb">나의 일상 <ChevronRight size={14}/> {page==='journeys'?'경로 후보 비교':navItems.find(n=>n[0]===page)?.[2]}</span><span className="preview-label"><span/> {['home','routines','journeys'].includes(page)?'저장한 루틴 · 경로 예상값':'설정 · 이동 기록 준비'}</span><button className="icon-button" aria-label="미리보기 도움말" onClick={() => setModal('help')}><CircleHelp size={20}/></button></header>
+      <header className="topbar"><span className="breadcrumb">나의 일상 <ChevronRight size={14}/> {page==='journeys'?'경로 후보 비교':navItems.find(n=>n[0]===page)?.[2]}</span><span className="preview-label"><span/> {['home','routines','journeys'].includes(page)?'저장한 루틴 · 경로 예상값':page==='history'?'본인 이동 기록 · 직접 확인':'설정 · 본인 저장 정보'}</span><button className="icon-button" aria-label="미리보기 도움말" onClick={() => setModal('help')}><CircleHelp size={20}/></button></header>
       <main id="main">
         {page === 'home' && <>
           <div className="page-heading"><div><p className="eyebrow">YOUR DAILY DEPARTURE</p><h1>오늘도, 여유 있게 출발해요<span>.</span></h1><p>밖에서 기다리는 시간 대신, 집에서 조금 더 편안하게.</p></div><div className="morning"><Sun size={23}/><span>좋은 아침이에요</span></div></div>
@@ -71,10 +72,10 @@ export default function App() {
           </>}
         </>}
         {page==='routines'&&<><PageHeading eyebrow="MY ROUTINES" title="매일 가는 길을 기억해요." description="한 번 저장한 경로로, 내일 아침은 조금 더 간단하게."/><RoutinesPanel state={routineState} onRetry={()=>loadRoutines()} onMore={()=>loadRoutines(true)} onLogin={()=>setModal('account')} onAdd={addRoutine} onSelect={value=>{setSelected(value.routine_id);setOrigin(null);setOriginExpired(false);navigate('home');}} onRouteChange={changeRoute} onChanged={message=>{refreshRoutines();notify(message);}} onAuthError={()=>{clearRoutines();setSelected(null);}}/></>}
-        {page==='history'&&<><PageHeading eyebrow="MY JOURNEYS" title="내 걸음이 쌓이는 곳." description="실제 이동과 기다린 시간을 나누어, 더 잘 맞는 출발을 준비해요."/><div className="card history-summary"><span className="soft-icon"><Footprints size={26}/></span><div><h2>{history.length}개의 이동 기록</h2><p>실제 관측 데이터가 없어 개인화 학습은 시작하지 않았어요.</p></div></div>{history.length?history.map(h=><div className="card history-row" key={h.id}><span className="soft-icon"><Check size={20}/></span><div><h3>{h.name}</h3><p>{h.time} · {h.events}개 이벤트 · 이동 기록</p></div><span className="tag">{h.outcome}</span></div>):<div className="empty-state"><History size={38}/><h2>첫 번째 이동을 기다리고 있어요</h2><p>이동 기록 기능은 준비 중이에요. 지금은 루틴과 경로를 저장할 수 있어요.</p><button className="primary" onClick={()=>navigate('home')}>출발 화면으로 <ArrowRight size={18}/></button></div>}</>}
+        {page==='history'&&<><PageHeading eyebrow="MY JOURNEYS" title="내 걸음이 쌓이는 곳." description="이동 기록을 확인하고 잘못된 입력을 바로잡아요."/>{modal!=='account'&&<TripRecords onLogin={()=>setModal('account')}/>}</>}
         {page==='journeys'&&<JourneyComparison initialOrigin={originExpired?null:origin} onBack={()=>navigate('home')} onLogin={()=>setModal('account')} onAuthError={()=>{setOrigin(null);setOriginExpired(false);clearRoutines();setSelected(null);setRoutineToReplace(null);}} routineToReplace={routineToReplace} onRoutineSaved={savedRoutine} onRoutineReload={()=>{setRoutineToReplace(null);refreshRoutines();navigate('routines');}}/>}
-        {page==='settings'&&<><PageHeading eyebrow="MADE FOR YOU" title="나에게 맞는 작은 설정." description="익숙한 장소와 편안한 여유를 기억해둘게요."/><div className="settings-grid">{modal!=='account'&&<PlacesCard onLogin={()=>setModal('account')}/>}<section className="card"><h2>첫 탑승 여유</h2><p className="muted">정류장에 얼마나 여유 있게 도착할까요?</p><div className="buffer-control"><button aria-label="여유 1분 줄이기" disabled={buffer<=1} onClick={()=>setBuffer(b=>b-1)}>−</button><strong>{buffer}<small>분</small></strong><button aria-label="여유 1분 늘리기" disabled={buffer>=10} onClick={()=>setBuffer(b=>b+1)}>+</button></div><p className="small muted">처음에는 5분으로 시작해요.<br/>내 걸음을 학습해도 여유는 자동으로 줄이지 않아요.</p><p className="small">화면 체험 범위: 1~10분 · 서버 저장 전</p></section><section className="card"><h2>내 걸음 학습</h2><div className="progress-track"><span/></div><p>실제 유효 기록 <strong>0 / 5개</strong></p><p className="muted small">도착 시각과 탑승 시각을 따로 기록해요. 버스를 기다린 시간은 걷는 시간에 포함하지 않아요.</p></section><section className="card"><h2>계정과 알림</h2><button className="place-row" onClick={()=>{clearRoutines();setSelected(null);setModal('account');}}><LogIn size={20}/><span>회원가입 · 로그인</span><ChevronRight size={18}/></button><p className="muted small">백그라운드 출발 알림은 아직 제공하지 않아요. 이 화면을 닫으면 알림이 오지 않습니다.</p></section><section className="card"><h2>서버 연결</h2><p className="muted small">이 화면이 백엔드 서버와 통신되는지 확인해요. 화면 체험용 예시와는 별개예요.</p><ServerCheck/></section></div></>}
-        <footer><span>지금이니? <span className="footer-dot">·</span> 기다림을 줄이는 작은 습관</span><span>{page==='journeys'?'경로와 첫 승차 출발은 공급자 근거에 따른 추정입니다.':'첫 승차 출발은 추정 안내입니다. 이동 기록은 준비 중입니다.'}</span></footer>
+        {page==='settings'&&<><PageHeading eyebrow="MADE FOR YOU" title="나에게 맞는 작은 설정." description="익숙한 장소와 편안한 여유를 기억해둘게요."/><div className="settings-grid">{modal!=='account'&&<PlacesCard onLogin={()=>setModal('account')}/>}<section className="card"><h2>첫 탑승 여유</h2><p className="muted">정류장에 얼마나 여유 있게 도착할까요?</p><div className="buffer-control"><button aria-label="여유 1분 줄이기" disabled={buffer<=1} onClick={()=>setBuffer(b=>b-1)}>−</button><strong>{buffer}<small>분</small></strong><button aria-label="여유 1분 늘리기" disabled={buffer>=10} onClick={()=>setBuffer(b=>b+1)}>+</button></div><p className="small muted">처음에는 5분으로 시작해요.<br/>내 걸음을 학습해도 여유는 자동으로 줄이지 않아요.</p><p className="small">화면 체험 범위: 1~10분 · 서버 저장 전</p></section>{modal!=='account'&&<PersonalizationCard/>}<section className="card"><h2>계정과 알림</h2><button className="place-row" onClick={()=>{clearRoutines();setSelected(null);setModal('account');}}><LogIn size={20}/><span>회원가입 · 로그인</span><ChevronRight size={18}/></button><p className="muted small">백그라운드 출발 알림은 아직 제공하지 않아요. 이 화면을 닫으면 알림이 오지 않습니다.</p></section><section className="card"><h2>서버 연결</h2><p className="muted small">이 화면이 백엔드 서버와 통신되는지 확인해요. 화면 체험용 예시와는 별개예요.</p><ServerCheck/></section></div></>}
+        <footer><span>지금이니? <span className="footer-dot">·</span> 기다림을 줄이는 작은 습관</span><span>{page==='journeys'?'경로와 첫 승차 출발은 공급자 근거에 따른 추정입니다.':'첫 승차 출발은 추정 안내이며 이동 기록은 본인 신고입니다.'}</span></footer>
       </main>
     </div>
     <nav className="mobile-nav" aria-label="모바일 메뉴">{navItems.map(([key,Icon,label])=><button key={key} className={page===key?'active':''} aria-current={page===key?'page':undefined} onClick={()=>navigate(key)}><Icon size={21}/><span>{label}</span></button>)}</nav>

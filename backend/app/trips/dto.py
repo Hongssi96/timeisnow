@@ -1,6 +1,6 @@
 from typing import Literal
 from uuid import UUID
-from pydantic import BaseModel,ConfigDict,AwareDatetime,StrictInt,Field,field_validator
+from pydantic import BaseModel,ConfigDict,AwareDatetime,StrictInt,StrictBool,Field,field_validator,model_validator
 
 class Create(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -25,6 +25,26 @@ class Cancel(BaseModel):
     model_config=ConfigDict(extra='forbid')
     outcome:Literal['cancelled']
     expected_version:StrictInt=Field(ge=1)
+
+class RecordMutation(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    expected_version:StrictInt=Field(ge=1)
+    client_request_id:UUID
+
+class EventCorrection(RecordMutation):
+    occurred_at:AwareDatetime|None=None
+    excluded:StrictBool|None=None
+    correction_reason:Literal['timestamp_error','accidental_input','learning_exclusion','learning_restore']
+    @field_validator('occurred_at',mode='before')
+    @classmethod
+    def time_text(cls,value):
+        if not isinstance(value,str):raise ValueError('ISO timestamp required')
+        return value
+    @model_validator(mode='after')
+    def fields(self):
+        if not self.model_fields_set.intersection({'occurred_at','excluded'}):raise ValueError('Change required')
+        if 'excluded' in self.model_fields_set and self.excluded is None:raise ValueError('Boolean required')
+        return self
 
 from app.journeys.dto import CurrentLocation
 from app.origins.dto import MapOrigin

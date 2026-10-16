@@ -179,6 +179,9 @@ def job_result(request, job_id):
     except AuthError as error:
         if error.status != 404 or error.code != 'RESOURCE_NOT_FOUND':
             raise
+        from app.trips.export_service import job
+        export=job(request,job_id,optional=True)
+        if export is not None:return export
         # Meeting deletion jobs live in the meetings domain; the shared /jobs view resolves them here.
         from app.meetings.wiring import build_meeting_service
         return build_meeting_service().job_result(request, job_id)

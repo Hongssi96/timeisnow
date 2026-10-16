@@ -8,6 +8,8 @@ const nav = (label) => within(screen.getByRole('navigation', { name: '주 메뉴
 vi.mock('../../src/lib/routines',async original=>({...await original(),useRoutines:()=>({state:{phase:'ready',items:[],next:null},load:vi.fn(),clear:vi.fn()})}));
 // 장소 API는 PlacesCard.test.jsx에서 별도로 검증한다.
 vi.mock('../../src/components/PlacesCard', () => ({ default: () => <section><h2>내 장소</h2></section> }));
+// 학습 API/실패/초기화는 Personalization.test.jsx에서 독립 검증한다.
+vi.mock('../../src/components/PersonalizationCard', () => ({default:()=> <section><h2>내 걸음 학습</h2></section>}));
 vi.mock('../../src/components/OriginSelector', () => ({ default: ({ purpose, onSelect }) => <button onClick={() => onSelect({ label: purpose === 'origin' ? '출발 검증역' : '도착 검증역', location_address: '서울 공개 검증 위치', origin: { type: 'saved_place', place_id: purpose === 'origin' ? 'place_origin' : 'place_destination', location_version: 1 }, deadline: Date.now() + 600000 })}>검증 위치 적용</button> }));
 describe('경로 비교 화면의 계정 모달', () => {
   afterEach(() => vi.unstubAllGlobals());

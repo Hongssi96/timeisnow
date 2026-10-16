@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {activeTrip,confirmDeparture,confirmProgress,cancelTrip} from '../lib/trips';
 import RemainingGuidance from './RemainingGuidance';
 import OnboardGuidance from './OnboardGuidance';
+import WalkingObservation from './WalkingObservation';
 
 const failure=error=>['AUTH_REQUIRED','SESSION_EXPIRED'].includes(error?.code)?'로그인 후 이동 기록을 다시 확인해주세요.':error?.code==='ACTIVE_TRIP_EXISTS'?'다른 이동이 진행 중이에요. 기존 이동을 먼저 확인하거나 취소해주세요.':['VERSION_CONFLICT','RESOURCE_NOT_FOUND'].includes(error?.code)?'안내가 바뀌었거나 만료됐어요. 최신 출발을 다시 확인해주세요.':'출발 확인을 저장하지 못했어요. 다시 시도해주세요.';
 export default function ManualDeparture({routineId,departure,available,onReported=null,onCancelled=null}){
@@ -45,6 +46,7 @@ export default function ManualDeparture({routineId,departure,available,onReporte
    {state.error&&<p role="alert">{state.error}</p>}
    {state.trip?.departure_event?<p role="status">출발 확인을 저장했어요.</p>:state.trip?<p>진행 중인 이동에 출발 확인을 남길 수 있어요.</p>:null}
    {state.trip?.approach_event&&<p role="status">정류장 도착 확인을 저장했어요.</p>}
+   {state.trip?.approach_event&&<WalkingObservation key={state.trip.trip_id} trip={state.trip}/>}
    {state.trip?.boarding_event&&!progress&&<p role="status">탑승 확인을 저장했어요. 차량 안 안내는 준비 중이에요.</p>}
    {progress?.stage==='onboard'&&state.phase==='ready'&&!state.error&&<OnboardGuidance key={`${state.trip.trip_id}:${progress.anchor_event_id}`} trip={state.trip}/>}
    {['transfer','transfer_waiting'].includes(progress?.stage)&&<div className="info-box" role="status"><strong>다음 차량: {progress.vehicle_name}</strong><p>승차 지점: {progress.boarding_stop}</p><p>하차 후 현재 위치를 확인하면 다음 차량까지 남은 경로를 조회할 수 있어요.</p></div>}

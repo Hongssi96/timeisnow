@@ -21,7 +21,7 @@ def authenticate(request,kind=None):
         owner=security.authenticated(c,request,kind is not None)
         if kind:
             _,secret,_=security.settings()
-            security.increment(c,security.bucket(c,'trip-'+kind,str(owner),60,10 if kind=='create' else 30,secret))
+            security.increment(c,security.bucket(c,'trip-'+kind,str(owner),60,10 if kind in ('create','create-export') else 30,secret))
     return owner
 
 def event_data(row):
@@ -55,6 +55,8 @@ def create(request,body):
     digest=hashlib.sha256(json.dumps(body.model_dump(mode='json'),sort_keys=True).encode()).hexdigest()
     with database() as c:
         repo.lock_owner(c,owner);repo.clean(c,owner)
+        from app.trips.record_repository import was_deleted
+        if was_deleted(c,owner,body.guidance_id):missing()
         previous_key=repo.retry_key(c,owner,key) if key is not None else None
         if previous_key:
             if previous_key['body_hash']!=digest:raise AuthError(409,'IDEMPOTENCY_CONFLICT','같은 키의 이동 요청이 달라요.')
@@ -109,7 +111,8 @@ def detail(request,trip_id):
         row=repo.owned(c,owner,parsed_id(trip_id))
         if row is None:missing()
         public={k:row['snapshot'][k] for k in row['snapshot'] if k in ('departure','candidate','routine_version','meeting_revision_id','place_refs')}
-        return answer(request,{'trip':trip_data(c,row),'guidance':public,
+        from app.trips.record_service import correction_data
+        return answer(request,{'trip':trip_data(c,row),'guidance':public,'corrections':correction_data(c,row['id']),
             'events':[event_data(e) for e in repo.events(c,row['id'])],'outcome':None if row['status']=='active' else row['status']})
 
 def listed(request,limit,cursor,routine_id,status):
