@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {records,record,observation,mutateRecord} from '../lib/tripRecords';
+import TripExport from './TripExport';
 const names={departed:'출발',approach_arrived:'승차 지점 도착',boarded:'탑승',alighted:'하차',missed:'놓침',arrived:'목적지 도착'};
 const states={active:'진행 중',completed:'도착 완료',cancelled:'취소',missed:'놓침 종료'};
 const reasons={timestamp_error:'시각 입력 오류',accidental_input:'잘못 누른 기록',learning_exclusion:'학습에서 제외',learning_restore:'학습 제외 해제'};
@@ -46,6 +47,7 @@ export default function TripRecords({onLogin}){
  }
  const locked=!!state.loading||!!state.saving||!!pending.current;
  return <section aria-label="내 이동 기록">
+  <TripExport onLogin={onLogin}/>
   {(list.loading||state.loading)&&<p role="status">이동 기록을 확인하고 있어요.</p>}
   {state.error&&<div className="info-box" role="alert"><p>{state.error}</p>{state.auth&&<button className="secondary" onClick={onLogin}>로그인하고 기록 확인</button>}<button className="secondary" onClick={()=>{pending.current=null;setRetry(n=>n+1);}}>최신 기록 다시 확인</button></div>}
   {state.notice&&<p className="info-box" role="status">{state.notice}</p>}

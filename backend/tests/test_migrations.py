@@ -47,7 +47,7 @@ class MigrationTest(unittest.TestCase):
                         connection.commit()
                         command.upgrade(config, 'head')
                         self.assertEqual(connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one(),
-                                         '0017_trip_outcomes')
+                                         '0020_trip_exports')
                         self.assertEqual(str(connection.execute(text(f'SELECT id FROM {table}')).scalar_one()), item)
                         if parent == '0013_manual_trips':
                             self.assertEqual(str(connection.execute(text('SELECT id FROM manual_trip_events')).scalar_one()),event_id)
@@ -154,15 +154,15 @@ class MigrationTest(unittest.TestCase):
                     command.upgrade(config, 'head')
                     self.assertEqual(connection.execute(text(
                         "SELECT version_num FROM alembic_version")).scalars().all(),
-                        ["0017_trip_outcomes"])
+                        ["0020_trip_exports"])
                     self.assertEqual(sorted(inspect(connection).get_table_names(schema=schema)),
                                      ['ai_executions', 'alembic_version', 'auth_credentials', 'auth_rate_limit_buckets',
                                       'auth_sessions', 'guidance_snapshots', 'jobs', 'journey_plans', 'journey_search_keys', 'journey_searches',
                                       'manual_trip_creation_keys', 'manual_trip_events', 'manual_trips',
                                       'meeting_idempotency_keys', 'meeting_invites', 'meeting_members', 'meeting_revisions', 'meetings',
                                       'place_creation_keys', 'place_location_confirmations', 'place_searches',
-                                      'routine_creation_keys', 'routines', 'saved_places', 'user_profiles', 'users',
-                                      'walking_estimate_revisions', 'walking_estimates', 'walking_paths'])
+                                      'routine_creation_keys', 'routines', 'saved_places', 'trip_event_corrections', 'trip_exports', 'trip_record_mutations', 'user_profiles', 'users',
+                                      'walking_estimate_revisions', 'walking_estimates', 'walking_learning_observations', 'walking_learning_state', 'walking_learning_updates', 'walking_paths'])
                     connection.commit()
                     command.downgrade(config, "base")
                     self.assertEqual(connection.execute(text(

@@ -225,3 +225,6 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 
 ## 2026-10-16 이동 기록 정정·삭제·재학습
 이동 기록의 정적 빈 화면을 본인 목록20개/커서 더보기·상세로 연결했다. 종료/취소한 기록의 시각/학습 제외·보행 조건 정정과 최근 정정 이력, 명시 삭제 확인·재학습 계수/표본 수를 보여준다. 로그인·빈/로딩/실패/버전 충돌·재시도/중복 차단·화면 이탈 취소를 포함한다. 기존 card/place-row/info-box/button-row/trip-progress-actions를 재사용하고 CSS/테마 변경 없이 PC1280×900/모바일390×844 실제 HTTP 합성 계정에서 정정6→5/1.040배·삭제5→4/1.000배와 가로 넘침 없음을 확인했다. 내보내기는 후속이다.
+
+## 2026-10-16 기록 내보내기
+TripRecords에 TripExport를 연결해 최근7/30/90일 본인 JSON 다운로드와 준비/빈 결과/실패/로그인/이탈 취소를 제공한다. 기존 card/info-box/button-row/trip-progress-actions·lucide Download를 재사용하며 CSS/테마/내비게이션 변경 없음. 실제 합성 계정 PC1280×900/모바일390×844에서 다운로드1건/인증 차단/기간 선택·가로넘침없음을 확인했다. 계약 trip_export_api.md·Notion5.13.

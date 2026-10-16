@@ -271,3 +271,6 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 - F09(2026-10-16): PersonalizationCard/WalkingObservation는 기존 card/info-box/button-row/primary/secondary를 재사용한다. 신규 공통 디자인 값·CSS·폰트·팔레트 없음. 합성 학습 상태/관측 확인·초기화 화면1280×900/390×844를 확인했으며 실제 보행 정확도 검증과 구분한다.
 
 - 2026-10-16 기록 정정/재학습: TripRecords는 기존 card/place-row/info-box/primary/secondary·trip-progress-actions의 모바일 줄바꿈을 재사용한다. 새 CSS/공통 색/글꼴 없음. 실제 HTTP 합성 자료의 PC1280×900/모바일390×844 목록·시각 정정/제외·삭제 확인/성공·가로 넘침을 확인했다.
+
+## 2026-10-16 기록 내보내기
+기존 TripRecords의 card/info-box/button-row/trip-progress-actions와 lucide Download를 재사용했다. 새 공통 값/CSS/폰트/색상 없음. 실제 PC1280×900/모바일390×844에서 기간 선택·다운로드·가로넘침없음 확인. API 계약은 trip_export_api.md/Notion5.13.

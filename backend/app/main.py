@@ -20,6 +20,7 @@ from app.walking.router import router as walking_router
 from app.arrivals.router import router as arrivals_router
 from app.guidance.router import router as guidance_router
 from app.trips.router import router as trips_router
+from app.trips.export_service import router as trip_exports_router
 from app.meetings.router import router as meetings_router
 from app.personalization.router import router as personalization_router
 
@@ -33,6 +34,7 @@ app.include_router(walking_router)
 app.include_router(arrivals_router)
 app.include_router(guidance_router)
 app.include_router(trips_router)
+app.include_router(trip_exports_router)
 app.include_router(meetings_router)
 app.include_router(personalization_router)
 
