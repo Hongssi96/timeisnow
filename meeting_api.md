@@ -1,8 +1,9 @@
 # 지금이니? — 친구 약속·채팅 상세 API 초안
 
-- 문서 버전: 0.3 / 2026-10-14 / 대응 Notion API 버전: 0.78
+- 문서 버전: 0.4 / 2026-10-16 / 대응 Notion API 버전: 0.90
 - 상태: **상세 설계, 일부 구현**. 요청/응답 예시는 합성 데이터다.
-- F12 코어 구현·검증 완료(2026-10-14, migration 0013): POST/GET /meetings, GET/PATCH/DELETE /meetings/{meeting_id}, POST /meetings/{meeting_id}/confirmations(직접 목적지만), POST /meetings/{meeting_id}/transitions, POST/DELETE /meetings/{meeting_id}/invites(/{invite_id}), POST /meeting-invite-previews, POST /meeting-invite-acceptances, DELETE /meetings/{meeting_id}/members/me. 직접 목적지는 name 1~100자·위도 -90~90·경도 -180~180이고 provider/place_ref는 null만 허용하며, timezone은 Asia/Seoul만 받는다. 초대 응답 캐시는 미구현이라 같은 키 재요청은 409 INVITE_RESPONSE_EXPIRED다. 추천 기반 확정, 개인 출발지, 출발 안내, 공유, 채팅, WebSocket은 미구현이다.
+- F12 코어 구현·검증 완료(2026-10-14, migration 0013): POST/GET /meetings, GET/PATCH/DELETE /meetings/{meeting_id}, POST /meetings/{meeting_id}/confirmations(직접 목적지만), POST /meetings/{meeting_id}/transitions, POST/DELETE /meetings/{meeting_id}/invites(/{invite_id}), POST /meeting-invite-previews, POST /meeting-invite-acceptances, DELETE /meetings/{meeting_id}/members/me. 직접 목적지는 name 1~100자·위도 -90~90·경도 -180~180이고 provider/place_ref는 null만 허용하며, timezone은 Asia/Seoul만 받는다.
+- F12 개인 흐름 구현·검증 완료(2026-10-16, migration 0018_meeting_personal_flows): PUT/GET /meetings/{meeting_id}/members/me/origin, POST /meetings/{meeting_id}/guidance-queries(동기 200, POST /trips 연결·meeting_journey_id 반환), 초대 응답 암호화 캐시(meeting_invite_replays/pgcrypto). 추천 기반 확정(사용자 결정으로 후순위), 공유, 채팅, WebSocket은 미구현이다.
 - 기존 공통 계약과 함께 사용한다. 사용자 위임으로 D03~D05 수치/보관/공유 정책을 확정했다. [policy_decisions.md](./policy_decisions.md)와 Notion20절을 따른다. 구현 완료와 구분한다.
 - 범위: 약속 생성·초대·중간 만남 추천·확정·개인 출발 안내·채팅·출발 공유·재접속.
 - 친구 목록/친구 요청, 공개 신뢰 점수, 파일 채팅, 읽음 표시, 상시 위치 추적은 포함하지 않는다.
@@ -68,7 +69,7 @@ REST 접두사 /api/v1. 전부 로그인 필요. 로그인은 auth_api.md의 서
 
 초대 token은 256비트 이상 난수의 URL-safe 문자열, 본문 길이 32~256 제안이다. 링크를 만들면 브라우저 fragment에 넣어 읽고 수락 요청 본문으로 전송한다. 서버 URL/쿼리·로그에 원문을 남기지 않는다. 위 API는 링크를 반환할 뿐 자동으로 친구에게 발송하지 않는다.
 
-만료/철회/존재하지 않는 초대는 모두 404 INVITE_UNAVAILABLE. 같은 사람이 이미 수락한 같은 토큰을 재요청하면 아직 활성 참여 중일 때 200 반환, 다른 사람은 404. 신규 수락과 만석 검사는 약속 행 잠금 안에서 처리한다. 동일 사용자는 member가 중복 생성되지 않는다. 초대 발급의 멱등 응답 재현을 위해 필요한 token 응답은 만료/소비/철회 전까지만 암호화된 응답 캐시에 보관한다. 영구 초대 레코드에는 해시만 둔다. 캐시 정리 후 같은 키에는 409 INVITE_RESPONSE_EXPIRED를 반환하며 새 발급이 필요하다. 탈퇴 후 재참여는 새 초대를 요구한다.
+만료/철회/존재하지 않는 초대는 모두 404 INVITE_UNAVAILABLE. 같은 사람이 이미 수락한 같은 토큰을 재요청하면 아직 활성 참여 중일 때 200 반환, 다른 사람은 404. 신규 수락과 만석 검사는 약속 행 잠금 안에서 처리한다. 동일 사용자는 member가 중복 생성되지 않는다. 초대 발급의 멱등 응답 재현을 위해 필요한 token 응답은 만료/소비/철회 전까지만 암호화된 응답 캐시에 보관한다. 영구 초대 레코드에는 해시만 둔다. 캐시 정리 후 같은 키에는 409 INVITE_RESPONSE_EXPIRED를 반환하며 새 발급이 필요하다. F12 구현(2026-10-16): 같은 키·같은 본문 재요청은 초대가 만료/소비/철회 전까지 pgcrypto PGP 대칭으로 암호화한 응답 캐시(meeting_invite_replays, 암호 키는 환경변수 MEETING_INVITE_CACHE_KEY)에서 원본 201 응답을 재현한다. 소비·철회·만료 후에는 409 INVITE_RESPONSE_EXPIRED로 같은 키로는 재발급하지 않는다. 캐시 키가 설정되지 않으면 발급은 503 SERVICE_UNAVAILABLE로 실패한다. 같은 키에 다른 본문은 409 IDEMPOTENCY_CONFLICT다. 탈퇴 후 재참여는 새 초대를 요구한다.
 
 멤버 추가/탈퇴는 약속 버전을 올리고 기존 중간 추천을 무효화한다. 실제 장소·시각이 같으면 확정 revision 자체는 바꾸지 않는다. 삭제된 약속 접근은 주최자도 404이며 삭제 job만 본인 조회 가능하다.
 
@@ -81,7 +82,7 @@ REST 접두사 /api/v1. 전부 로그인 필요. 로그인은 auth_api.md의 서
 | POST /meetings/{meeting_id}/recommendations | {expected_version:약속버전,target_arrival_at,timezone} | 202 {recommendation_id,job_id,status:queued}. 활성 2명, 둘 다 origin·추천 동의가 있어야 함 |
 | GET /meetings/{meeting_id}/recommendations/{recommendation_id} | 활성 참여자 | 200 {recommendation_id,status:queued/running/succeeded/failed/stale,candidates:Candidate[],expires_at:datetime/null,outcome:available/no_feasible_journey/null,error:공통오류객체/null} |
 
-origin은 기존 경로 검색 객체와 같다. saved_place는 본인 place_id, current_location은 latitude/longitude/accuracy_meters/captured_at, map_pin은 latitude/longitude를 받는다. 외부에 개인 출발지를 노출하지 않는다. 다른 사람에게는 origin_ready만 제공한다.
+origin은 기존 경로 검색 객체와 같다. saved_place는 본인 place_id, current_location은 latitude/longitude/accuracy_meters/captured_at, map_pin은 latitude/longitude를 받는다. 외부에 개인 출발지를 노출하지 않는다. 다른 사람에게는 origin_ready만 제공한다. F12 구현(2026-10-16): 200 {private_origin:{origin,origin_version,recommendation_consent,updated_at},member_version}. saved_place는 본인 장소 소유·위치 버전을 확인해 없으면 404, 버전 불일치는 409 VERSION_CONFLICT로 거부하고 응답에 현재 버전을 고정해 저장한다. expected_version(member 버전) 불일치도 409 VERSION_CONFLICT다. location_confirmed=false인 current_location은 거부하고 origin_ready는 private_origin 존재 여부다.
 
 추천의 시간과 동의·출발지 버전·활성 멤버 집합을 고정해 저장한다. 계산 완료 시에도 버전을 다시 검사한다. 바뀌면 stale, 결과를 확정에 사용할 수 없다. 시간 차이와 최대 이동시간을 함께 비교하는 초기 순위 정책을 제안하며 정책 버전을 저장한다. 실제 데이터가 부족하면 후보를 꾸며내지 않는다. 성공했지만 후보 없음은 status=succeeded, candidates=[], outcome=no_feasible_journey, error=null이다. 후보가 있으면 outcome=available, 진행 중/실패/만료면 outcome=null이다.
 
@@ -98,9 +99,9 @@ origin은 기존 경로 검색 객체와 같다. saved_place는 본인 place_id,
 
 약속이 confirmed이고 최신 revision이어야 한다. 오래된 revision은 409 MEETING_REVISION_CHANGED. 출발지가 없으면 409 ORIGIN_REQUIRED. 근거 부족·경로 없음은 기존 guidance.status를 사용하고 값을 NULL로 둔다. 계산 중 약속이 바뀌어도 성공 결과로 내보내지 않는다.
 
-첫 안내는 개인별 meeting_journey와 guidance를 연결한다. 같은 약속 revision·본인 여정의 재조회는 기존 여정을 사용하며 경로 변경/이전 이동 종료 후 새 이동은 새 여정을 만든다. trip_id는 본인·해당 약속 여정의 이동만 허용한다.
+첫 안내는 개인별 meeting_journey와 guidance를 연결한다. 같은 약속 revision·본인 여정의 재조회는 기존 여정을 사용하며 경로 변경/이전 이동 종료 후 새 이동은 새 여정을 만든다. trip_id는 본인·해당 약속 여정의 이동만 허용한다. F12 구현(2026-10-16): 요청은 동기 200으로 응답하고 루틴 검색 엔진(journeys 검색·first_departure)을 요청 안에서 실행한다. 여정 후보 선택 v1은 공급자 상위 대중교통 후보(없으면 최상위 후보)를 여정에 고정하고 같은 여정 재조회는 동일 후보로 재계산한다. 검색 만료(300초) 또는 이전 이동 종료 후에는 이전 활성 여정을 superseded로 표시하고 새 여정·새 검색을 만든다. 같은 Idempotency-Key·본문 재요청은 최초 응답 복제 대신 같은 여정 대상 최신 계산 결과를 반환한다(안내는 시간 민감이라 원본 복제 대신 재계산 정책). 연결된 trip_id는 본인·해당 여정 소속만 허용하고 아니면 404다.
 
-반환된 guidance.guidance_id를 기존 POST /trips에 전달한다. 서버가 guidance의 meeting_journey 연결을 따라 trip_id를 붙인다. 하나의 여정에 이미 진행 중 trip이 있으면 새 생성은 409 ACTIVE_TRIP_EXISTS. 루틴의 기존 POST /guidance-queries 요청은 변경하지 않으며 routine_id는 계속 필수다.
+반환된 guidance.guidance_id를 기존 POST /trips에 전달한다. 서버가 guidance의 meeting_journey 연결을 따라 trip_id를 붙인다. F12 구현(2026-10-16): trip 응답은 기존 routine_id와 함께 meeting_journey_id(해당 없으면 null)를 반환하고 스냅샷에는 meeting_revision_id를 저장한다. 약속 이동도 기존 90일 보관·만료 정책을 따른다. 하나의 여정에 이미 진행 중 trip이 있으면 새 생성은 409 ACTIVE_TRIP_EXISTS. 루틴의 기존 POST /guidance-queries 요청은 변경하지 않으며 routine_id는 계속 필수다.
 
 출발/정류장 도착/탑승/하차는 기존 POST /trips/{trip_id}/events와 정정 API를 재사용한다. 약속 arrivals는 최종 목적지 도착을 기록하는 별도 본인 신고이며 기존 type enum을 임의로 늘리지 않는다. 개인 보행 학습에는 넣지 않는다. arrivals는 연결된 trip에 departed가 있어야 한다. 잘못된 도착 신고는 아래 공유 상태의 '정정' 작업과 함께 새 기록으로 대체하며 원본은 보관 정책에 따라 이력 처리한다.
 
@@ -258,12 +259,14 @@ GET /meetings/{meeting_id}/sync
 
 다른 사람이 적은 메시지에 개인정보가 있을 수 있으므로 작성자 탈퇴 처리만으로 모든 개인정보 삭제가 보장된다고 표현하지 않는다. 기존 개인 품질 이력·trip 삭제 정책은 유지하며 공동 약속과 따로 정리한다. 공유 철회 후 재전송 로그에 개인 상태 원문을 남기지 않는다.
 
-기존 8개 약속 테이블에 다음 컬럼·테이블 설계를 추가한다(DDL 미적용).
+기존 8개 약속 테이블에 다음 컬럼·테이블 설계를 추가한다(2026-10-16에 migration 0018_meeting_personal_flows로 members origin 컬럼·meeting_journeys·guidance_snapshots.meeting_journey_id·meeting_invite_replays(pgcrypto)를 적용했고 나머지는 미적용이다).
 - meetings: max_members, last_event_seq, closed_at, delete_after; members: private_origin jsonb, origin_version, recommendation_consent 및 버전/공유 종료.
 - recommendations: target_arrival_at, input member/version 목록, status, job_id, error. 메시지: version와 본문 해시, share_events: version·정정 대상·arrival 기록.
 - meeting_realtime_events 신규: meeting_id, seq, event_id, type, entity_ref, occurred_at, expires_at; UNIQUE(meeting_id,seq), 이벤트 본문에는 민감한 내용 제외. 24시간 청소.
 - meeting_realtime_tickets 신규: token_hash UNIQUE, member_id, expires_at, consumed_at, auth_session_ref. 연결 종료/세션 무효화 시 정리.
-- 약속 안내 FK는 guidance_snapshots에 meeting_journey_id? 추가. routine_id와 동시 사용 금지, 기존 기록의 루틴 삭제로 둘 다 NULL일 수 있음.
+- 약속 안내 FK는 guidance_snapshots에 meeting_journey_id? 추가. routine_id와 동시 사용 금지, 기존 기록의 루틴 삭제로 둘 다 NULL일 수 있음. 0018 적용: CHECK로 동시 non-NULL 금지, meeting_journeys 삭제 시 SET NULL로 trip은 유지.
+- meeting_journeys 신규(0018): member_id, meeting_revision_id, journey_search_id, candidate_id/candidate_signature, origin_fingerprint, trip_id, status(active/superseded). 활성 여정은 (member_id, meeting_revision_id) 부분 UNIQUE로 하나만 유지한다.
+- meeting_invite_replays 신규(0018): PK(user_id,key), invite_id(CASCADE), body_hash, response bytea(pgcrypto PGP 대칭 암호), expires_at. meeting_idempotency_keys scope에 'meeting-guidance' 추가.
 - arrivals와 arrival-corrections는 meeting_share_events에 private 원본/정정 관계로 저장하고 공유 동의와 별개로 본인 기록을 유지. GET 공용 상태는 동의한 최신 요약만 제공.
 
 로그 이벤트: meeting.created/confirmed/closed, invite.accepted/rejected, chat.message.persisted/deleted, sharing.updated, realtime.connected/disconnected/resync. request_id·자원 참조·결과·소요 시간만 기록하며 본문·주소·좌표·초대/티켓 원문·쿠키 금지.
@@ -283,3 +286,5 @@ GET /meetings/{meeting_id}/sync
 - [ ] 기존 루틴 안내 요청·응답의 회귀 검증과 약속 여유/탑승 여유 분리.
 
 2026-10-14 main 통합: meeting-core 2cc3d3f/8420f17의 코어·초대·포트 주입을 기존 루틴/수동 이동과 함께 유지한다. DBhead는0014_integrated_features로 두0013 이력을 연결한다. 요청/응답/버전 충돌 details/current_version·보관·권한 계약은 Notion v0.82와 동일하며 후속 추천·개인 출발·채팅은 미구현 상태 유지. 상세 development_log.md 미병합 브랜치 main 통합 기록.
+
+2026-10-16 v0.4: 개인 출발지 origin API, 약속 개인 출발 안내 guidance-queries(동기 200·여정 후보 선택 v1·재계산 멱등 정책), trips와 meeting_journey 연결(trip 응답에 meeting_journey_id 추가), 초대 응답 암호화 캐시(pgcrypto·MEETING_INVITE_CACHE_KEY). migration 0018_meeting_personal_flows. 2026-10-16 사용자 결정으로 중간 만남 추천은 후순위 보류(명세·엔드포인트는 유지). Notion v0.90 본문과 함께 갱신·검증 완료.

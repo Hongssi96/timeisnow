@@ -13,6 +13,7 @@ from app.common.errors import AuthError
 from app.common.ports import Clock, Database, Identity, TokenIssuer
 from app.common.response import answer
 from app.common.timeutil import iso
+from app.journeys import service as journeys
 from app.meetings.dto import checked_idempotency_key, meeting_id_value
 from app.meetings.repository import MeetingRepository
 
@@ -50,7 +51,15 @@ def invite_usable(invite, now):
 
 def member_data(row):
     return {'member_id': str(row['id']), 'display_name': row['display_name'], 'role': row['role'],
-            'participation_status': row['participation_status'], 'origin_ready': False, 'version': row['version']}
+            'participation_status': row['participation_status'],
+            'origin_ready': row['private_origin'] is not None, 'version': row['version']}
+
+
+def origin_data(row):
+    if row['private_origin'] is None:
+        return None
+    return {'origin': row['private_origin'], 'origin_version': row['origin_version'],
+            'recommendation_consent': row['recommendation_consent'], 'updated_at': iso(row['updated_at'])}
 
 
 def destination_data(snapshot):
@@ -246,13 +255,18 @@ class MeetingService:
         with self.database.connect() as connection:
             user_id = self.identity.authenticate(connection, request, True)
             self.repository.delete_expired_keys(connection)
+            self.repository.delete_expired_replays(connection)
             self.repository.advisory_lock(connection, 'meeting-invite:' + str(user_id) + ':' + key)
             previous = self.repository.find_idempotency_key(connection, user_id, 'invite-issue', key)
             if previous:
-                # Token responses are never stored, so a lost response always needs a new key.
-                if previous['body_hash'] == fingerprint:
+                if previous['body_hash'] != fingerprint:
+                    raise AuthError(409, 'IDEMPOTENCY_CONFLICT', '다른 발급 요청이에요. 다시 확인해주세요.')
+                # The encrypted cache can only reproduce a response while its invite stays usable.
+                replay = self.repository.find_invite_replay(connection, user_id, key)
+                invite = self.repository.find_invite_by_id(connection, replay['invite_id']) if replay else None
+                if not replay or not invite or not invite_usable(invite, self.clock.now()):
                     raise AuthError(409, 'INVITE_RESPONSE_EXPIRED', '초대 응답을 다시 만들 수 없어요. 새 요청 키로 다시 발급해주세요.')
-                raise AuthError(409, 'IDEMPOTENCY_CONFLICT', '다른 발급 요청이에요. 다시 확인해주세요.')
+                return json.loads(replay['response_json'])
             meeting, member = self._entered(connection, request, meeting_id_value(meeting_id), write=True,
                                             organizer=True, lock=True)
             if meeting['status'] in ('completed', 'cancelled'):
@@ -261,12 +275,17 @@ class MeetingService:
             if self.repository.count_active_members(connection, meeting['id']) >= meeting['max_members']:
                 raise AuthError(409, 'MEETING_FULL', '참여 인원이 가득 찼어요.')
             self.repository.revoke_active_invites(connection, meeting['id'])
+            self.repository.drop_meeting_invite_replays(connection, meeting['id'])
             token = self.tokens.issue()
             invite = self.repository.insert_invite(connection, (uuid4(), meeting['id'], member['id'], digest(token)))
             self.repository.insert_idempotency_key(connection, (user_id, 'invite-issue', key, fingerprint, None))
             meeting = self.repository.bump_meeting_version(connection, meeting['id'])
-            return {'invite_id': str(invite['id']), 'token': token, 'expires_at': iso(invite['expires_at']),
-                    'meeting_version': meeting['version']}
+            response = {'invite_id': str(invite['id']), 'token': token, 'expires_at': iso(invite['expires_at']),
+                        'meeting_version': meeting['version']}
+            # Only the hash stays in the invite row; the replay cache holds the encrypted response.
+            self.repository.insert_invite_replay(connection, (user_id, key, fingerprint, invite['id'],
+                                                              json.dumps(response, sort_keys=True), invite['expires_at']))
+            return response
 
     def revoke_invite(self, request, meeting_id, invite_id, expected_version):
         with self.database.connect() as connection:
@@ -277,6 +296,7 @@ class MeetingService:
             if not invite or not invite_usable(invite, self.clock.now()):
                 missing_invite()
             self.repository.revoke_invite(connection, invite['id'])
+            self.repository.drop_invite_replays(connection, invite['id'])
             self.repository.bump_meeting_version(connection, meeting['id'])
 
     def preview(self, request, body):
@@ -301,6 +321,7 @@ class MeetingService:
         with self.database.connect() as connection:
             user_id = self.identity.authenticate(connection, request, True)
             self.repository.delete_expired_keys(connection)
+            self.repository.delete_expired_replays(connection)
             self.repository.advisory_lock(connection, 'meeting-accept:' + str(user_id) + ':' + key)
             previous = self.repository.find_idempotency_key(connection, user_id, 'invite-accept', key)
             if previous and previous['body_hash'] != fingerprint:
@@ -331,6 +352,7 @@ class MeetingService:
             else:
                 member = self.repository.insert_member(connection, (uuid4(), meeting_id, user_id, 'participant'))
             self.repository.consume_invite(connection, invite['id'], user_id)
+            self.repository.drop_invite_replays(connection, invite['id'])
             if not previous:
                 self.repository.insert_idempotency_key(connection, (user_id, 'invite-accept', key, fingerprint, meeting_id))
             meeting = self.repository.bump_meeting_version(connection, meeting_id)
@@ -347,6 +369,28 @@ class MeetingService:
                                 details=[{'field': 'expected_version', 'current_version': member['version']}])
             self.repository.leave_member(connection, member['id'])
             self.repository.bump_meeting_version(connection, meeting['id'])
+
+    def set_origin(self, request, meeting_id, body):
+        with self.database.connect() as connection:
+            meeting, member = self._entered(connection, request, meeting_id_value(meeting_id), write=True, lock=True)
+            if meeting['status'] in ('completed', 'cancelled'):
+                raise AuthError(409, 'MEETING_CLOSED', '종료되거나 취소된 약속은 출발지를 바꿀 수 없어요.')
+            if body.expected_version != member['version']:
+                raise AuthError(409, 'VERSION_CONFLICT', '참여 정보가 다른 화면에서 변경됐어요. 새로 확인해주세요.',
+                                details=[{'field': 'expected_version', 'current_version': member['version']}])
+            # saved_place is checked against the caller's own place and its current version.
+            refs = []
+            journeys.resolve(connection, member['user_id'], body.origin, refs)
+            origin = body.origin.model_dump(mode='json')
+            if refs:
+                origin['location_version'] = refs[0]['location_version']
+            row = self.repository.update_member_origin(connection, member['id'], origin, body.recommendation_consent)
+            return {'private_origin': origin_data(row), 'member_version': row['version']}
+
+    def get_origin(self, request, meeting_id):
+        with self.database.connect() as connection:
+            meeting, member = self._entered(connection, request, meeting_id_value(meeting_id), write=False)
+            return {'private_origin': origin_data(member), 'member_version': member['version']}
 
     def job_result(self, request, job_id):
         """GET /jobs/{job_id} fallback for meeting deletion jobs; journey jobs stay in journeys."""

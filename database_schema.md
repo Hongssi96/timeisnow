@@ -319,3 +319,11 @@ ai_executions는 최소 입력/Context와 reason을 제외한 안전한 구조�
 ## 2026-10-15 F07-07b-2 차량 확인 기반 하차 안내
 
 새 DDL 없이 guidance_snapshots.snapshot.transit_bindings에 당시 검증된 공식 노선·승하차 정류소ID/순번·방향만 비공개로 보존한다. 기존 snapshot90일/삭제 정책을 따르며 새 좌표/차량번호/vehId는 저장하지 않는다. 공개 trip detail guidance는 기존4필드만 반환한다. 실제 확인 차량ID는 현재 boarded anchor의 메모리32개/30분만 유지한다. api_contract.md 5.7.14.
+
+## 2026-10-16 F12 개인 출발지·안내 연결·초대 응답 캐시 (0018_meeting_personal_flows)
+
+0017_trip_outcomes를 잇는다. meeting_members에 private_origin jsonb·origin_version int(기본0)·recommendation_consent bool(기본false)·updated_at을 추가하고 members 버전과 함께 갱신한다. meeting_journeys 신규: member_id(meeting_members CASCADE), meeting_revision_id(meeting_revisions CASCADE), journey_search_id(journey_searches SET NULL), candidate_id/candidate_signature(여정에 고정한 후보), origin_fingerprint char(64), trip_id(manual_trips SET NULL), status active/superseded, created/updated_at. 활성 여정은 (member_id, meeting_revision_id) 부분 UNIQUE WHERE status='active'로 하나만 유지하고 새 여정은 이전 활성 여정을 superseded로 표시한 뒤 만든다.
+
+guidance_snapshots에 meeting_journey_id uuid(meeting_journeys SET NULL)를 추가하고 CHECK로 routine_id와의 동시 non-NULL을 금지한다. 약속 이동은 routine_id=NULL·meeting_journey_id로 저장되며 trips 응답에 meeting_journey_id를 함께 반환한다. meeting_invite_replays 신규: PK(user_id,key), body_hash char(64), invite_id(meeting_invites CASCADE), response bytea, expires_at, created_at. response는 pgcrypto PGP 대칭(pgcrypto 전용 스키마, 이동식 확장이라 search_path 오염 방지)으로 암호화하며 키는 환경변수 MEETING_INVITE_CACHE_KEY(SHA-256 해시를 패스프레이즈로 사용)다. meeting_idempotency_keys scope CHECK에 'meeting-guidance'를 추가한다.
+
+다른 담당의 미병합 0018_walking_learning(같은 0017 부모)이 개발 DB에 이미 적용돼 있어 이 브랜치 단독으로는 개발 DB upgrade를 하지 않는다. 병합 시 두 0018을 부모로 하는 no-op merge revision(0014 선례)이 필요하다.

@@ -47,7 +47,8 @@ class MeetingTests(unittest.IsolatedAsyncioTestCase):
         self.db_patch = patch.object(common_database, 'connect_db', isolated)
         self.db_patch.start()
         self.env_patch = patch.dict(os.environ, {'AUTH_RATE_LIMIT_SECRET': 'synthetic-secret-for-testing-32-characters',
-                                                 'AUTH_ENV': 'development', 'AUTH_PUBLIC_ORIGIN': 'http://127.0.0.1:5173'})
+                                                 'AUTH_ENV': 'development', 'AUTH_PUBLIC_ORIGIN': 'http://127.0.0.1:5173',
+                                                 'MEETING_INVITE_CACHE_KEY': 'synthetic-invite-cache-secret-32-chars!!'})
         self.env_patch.start()
         self.sessions = {}
 
@@ -296,14 +297,19 @@ class MeetingTests(unittest.IsolatedAsyncioTestCase):
         self.assertLess(expires - datetime.now(timezone.utc), timedelta(hours=24, minutes=1))
         self.assertGreater(expires - datetime.now(timezone.utc), timedelta(hours=23, minutes=59))
         replay = await self.invite(meeting['meeting_id'], key='first-invite-key')
-        self.assertEqual(replay[0], 409)
-        self.assertEqual(replay[2]['error']['code'], 'INVITE_RESPONSE_EXPIRED')
+        self.assertEqual(replay[0], 201)
+        # The encrypted cache reproduces the original response while the invite stays usable.
+        self.assertEqual(replay[2]['data'], issued[2]['data'])
         different = await self.invite(meeting['meeting_id'], version=2, key='first-invite-key')
         self.assertEqual(different[0], 409)
         self.assertEqual(different[2]['error']['code'], 'IDEMPOTENCY_CONFLICT')
         second = await self.invite(meeting['meeting_id'], version=2)
         self.assertEqual(second[0], 201)
         self.assertNotEqual(second[2]['data']['invite_id'], issued[2]['data']['invite_id'])
+        # Re-issue revoked the first invite, so its cached response can never be replayed again.
+        dead_replay = await self.invite(meeting['meeting_id'], key='first-invite-key')
+        self.assertEqual(dead_replay[0], 409)
+        self.assertEqual(dead_replay[2]['error']['code'], 'INVITE_RESPONSE_EXPIRED')
         old_preview = await self.call('/meeting-invite-previews', {'token': token}, user='other')
         self.assertEqual(old_preview[0], 404)
         self.assertEqual(old_preview[2]['error']['code'], 'INVITE_UNAVAILABLE')

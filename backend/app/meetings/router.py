@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
 from app.common.response import answer
-from app.meetings.dto import (ConfirmationInput, InviteIssueInput, InviteTokenInput, MeetingCreateInput,
-                              MeetingUpdateInput, TransitionInput)
+from app.meetings import guidance as meeting_guidance
+from app.meetings.dto import (ConfirmationInput, GuidanceQueryInput, InviteIssueInput, InviteTokenInput,
+                              MeetingCreateInput, MeetingUpdateInput, MemberOriginInput, TransitionInput)
 from app.meetings.service import MeetingService
 from app.meetings.wiring import get_meeting_service
 
@@ -83,3 +84,19 @@ def leave(request: Request, meeting_id: str, expected_version: int = Query(ge=1)
           service: MeetingService = Depends(get_meeting_service)):
     service.leave(request, meeting_id, expected_version)
     return Response(status_code=204, headers={'Cache-Control': 'no-store'})
+
+
+@router.put('/meetings/{meeting_id}/members/me/origin')
+def set_origin(request: Request, meeting_id: str, body: MemberOriginInput,
+               service: MeetingService = Depends(get_meeting_service)):
+    return answer(request, service.set_origin(request, meeting_id, body))
+
+
+@router.get('/meetings/{meeting_id}/members/me/origin')
+def get_origin(request: Request, meeting_id: str, service: MeetingService = Depends(get_meeting_service)):
+    return answer(request, service.get_origin(request, meeting_id))
+
+
+@router.post('/meetings/{meeting_id}/guidance-queries')
+def guidance_queries(request: Request, meeting_id: str, body: GuidanceQueryInput):
+    return answer(request, meeting_guidance.guidance_query(request, meeting_id, body))

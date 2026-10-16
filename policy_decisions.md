@@ -74,3 +74,10 @@ F03-03 구체화(2026-10-07, Notion v0.37): 현재 장소 단건 삭제는 현 �
 후보 상세에서 예상 출발 HH:MM(KST)·다른 날짜라면 날짜·접근 약N분/설정 여유(초 단위 보존)·공급자 개인 계수 추정·수신 기준 예상/조회경과를 표시한다. 부족/만료·선택차량 경과/현재 접근 불가 시 기존 출발 숫자를 제거한다. 루틴 선택 자동재검색/검증 개인 도보 연결은 F07-02a 후속이며 기존 routine_id 필수 POST /guidance-queries 초안은 유지한다. F07-03 이후 환승/목표도착/다음차량 선택/이동중 잔여 계산은 미구현이다. 후보 첫 차량 계산 성공을 전체 여정 연결/도착 보장으로 표시하지 않는다.
 
 검증: 신규 백엔드15개4.903초·최종 전체329개123.044초, 프론트196개11.25초·빌드427ms 통과. 합성 실제브라우저1280×800/390×844에서 카드/추정표시·줄바꿈·가로넘침 없음 확인. 로컬DB0011→0012·회원20/장소35/루틴12 보존·계수범위 정상, 서버health/프론트200·비로그인first-departure401 확인. 이번 실제 교통키/AI 호출0회·실제 경로 출발 숫자/물리보행/예측 정확도 미검증. API 신규필드/endpoint·프로필필드/DB추가이며 기존arrival v2 계약은 유지. Notion v0.73:https://app.notion.com/p/3ebace1670c6806c8199cde33ebfbdfa. 자세한 이유·검증·실패수정은 development_log.md.
+
+## 2026-10-16 F12 개인 흐름 구현 결정
+
+- 개인 출발지(Notion 16절 4절): PrivateOrigin={origin,origin_version,recommendation_consent,updated_at}. saved_place는 본인 장소 소유·위치 버전을 확인해 현재 버전을 고정 저장(이후 버전 불일치 409). member 버전 불일치 409 VERSION_CONFLICT. origin_ready=private_origin 존재. location_confirmed=false current_location 거부.
+- 초대 응답 캐시: 같은 키·같은 본문 재요청은 초대 만료/소비/철회 전까지 meeting_invite_replays에서 원본 201 재현(pgcrypto PGP·MEETING_INVITE_CACHE_KEY). 무효화 후 같은 키는 409 INVITE_RESPONSE_EXPIRED, 다른 본문 409 IDEMPOTENCY_CONFLICT, 키 미설정 503.
+- 약속 개인 안내(16절 5절): 동기 200. 루틴 검색 엔진(journeys 검색+first_departure)을 요청 안에서 인라인 실행. 여정 후보 선택 v1=공급자 상위 대중교통 후보(없으면 최상위)를 여정에 고정, 같은 여정 재조회는 동일 후보 재계산. 검색 300초 만료·이전 이동 종료 후 새 여정(superseded 표시). 같은 키·본문 재요청은 원본 복제 대신 최신 재계산(시간 민감 안내 특성, 공통 멱등 재현 정책의 예외로 명세에 기록). meeting_arrival_slack_seconds=목표 도착−(최종 하차 예상+종료 도보 공급자 추정), 근거 부족이면 null. 환승·접근 도보 보완(검증된 지점 도보)은 루틴과 동일하게 후속.
+- trips 연결: POST /trips가 meeting 바인딩을 지원해 스냅샷에 meeting_journey_id·meeting_revision_id 저장, trip 응답에 meeting_journey_id 반환. 진행 중 trip은 기존 사용자 단위 ACTIVE_TRIP_EXISTS를 그대로 적용.

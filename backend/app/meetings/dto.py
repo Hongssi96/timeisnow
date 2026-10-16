@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, StrictInt, model_validator
 
 from app.common.errors import AuthError
+from app.journeys.dto import Endpoint
 
 SUPPORTED_TIMEZONE = 'Asia/Seoul'
 TOKEN_FORMAT = re.compile(r'[A-Za-z0-9_-]{32,256}$')
@@ -90,6 +91,27 @@ class InviteTokenInput(BaseModel):
         if not TOKEN_FORMAT.fullmatch(self.token):
             raise AuthError(422, 'VALIDATION_ERROR', '초대 토큰 형식을 확인해주세요.')
         return self
+
+
+class MemberOriginInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    origin: Endpoint
+    recommendation_consent: bool
+    expected_version: StrictInt
+
+    @model_validator(mode='after')
+    def positive_version(self):
+        if self.expected_version < 1:
+            raise ValueError('Expected version must be positive')
+        return self
+
+
+class GuidanceQueryInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    meeting_revision_id: str
+    departure_basis: Literal['recommended', 'now']
+    origin_override: Endpoint | None = None
+    trip_id: str | None = None
 
 
 def checked_idempotency_key(request):

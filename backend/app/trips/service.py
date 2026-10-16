@@ -39,6 +39,7 @@ def trip_data(c,row):
     access=legs[first-1]['leg_id'] if first else legs[first]['leg_id']
     return {'trip_id':str(row['id']),'guidance_id':str(row['guidance_id']),
         'routine_id':str(row['routine_id']) if row['routine_id'] else None,
+        'meeting_journey_id':str(row['meeting_journey_id']) if row['meeting_journey_id'] else None,
         'measurement_mode':row['measurement_mode'],'status':row['status'],'version':row['version'],
         'created_at':iso(row['created_at']),'expires_at':iso(row['expires_at']),
         'progress':progress_state(row['snapshot']['candidate'],values),
@@ -67,6 +68,24 @@ def create(request,body):
             return answer(request,trip_data(c,previous),200)
         value=issued.owned(owner,body.guidance_id);binding=value['binding'];d=value['departure'];route=value['route']
         if repo.active(c,owner):raise AuthError(409,'ACTIVE_TRIP_EXISTS','진행 중인 이동을 먼저 확인하거나 취소해주세요.')
+        if hasattr(binding,'meeting_journey_id'):
+            row=repo.meeting_source(c,owner,binding,parsed_id(d['search_id']))
+            if row is None:missing()
+            if row['meeting_status']!='confirmed' or row['meeting_version']!=binding.version or str(row['meeting_revision_id'])!=str(binding.meeting_revision_id):conflict()
+            if row['candidate_id'] is None or str(row['candidate_id'])!=str(d['candidate_id']) or row['candidate_signature']!=binding.signature:conflict()
+            if tuple((r['place_id'],r['location_version']) for r in row['place_refs'])!=binding.place_refs:conflict()
+            candidate=next((item for item in row['candidates'] if item['candidate_id']==d['candidate_id']),None)
+            if row['search_status']!='succeeded' or row['search_expires']<=datetime.now(timezone.utc) or candidate is None:missing()
+            if cache.fingerprint(candidate)!=cache.fingerprint(route) or row['profile_version']!=d['profile_version'] or row['walking_duration_factor']!=d['applied_duration_factor'] or row['first_boarding_buffer_seconds']!=d['buffer_seconds'] or row['transfer_buffer_seconds']!=value['profile']['transfer_buffer']:conflict()
+            if value['expires_at']<datetime.now(timezone.utc):missing()
+            if datetime.fromisoformat(d['vehicle_arrival_at'].replace('Z','+00:00'))-datetime.now(timezone.utc)<timedelta(seconds=d['approach_seconds']):missing()
+            d['guidance_id']=str(body.guidance_id)
+            snapshot={'departure':d,'candidate':route,'meeting_revision_id':str(binding.meeting_revision_id),'place_refs':list(binding.place_refs)}
+            from app.guidance.onboard import collect
+            snapshot['transit_bindings']=collect(owner,d['search_id'],route)
+            trip=repo.insert(c,owner,body.guidance_id,uuid4(),None,snapshot,body.measurement_mode,meeting_journey_id=binding.meeting_journey_id)
+            if key is not None:repo.save_key(c,owner,key,digest,trip['id'])
+            return answer(request,trip_data(c,trip),201)
         row,places=repo.source(c,owner,binding,parsed_id(d['search_id']))
         if row is None or any(p is None for p in places):missing()
         if row['routine_status']!='active' or row['routine_version']!=binding.version or row['journey_plan_id']!=binding.plan_id or routine.signature(row['plan_candidate'])!=binding.signature:conflict()
@@ -89,7 +108,7 @@ def detail(request,trip_id):
     with database() as c:
         row=repo.owned(c,owner,parsed_id(trip_id))
         if row is None:missing()
-        public={k:row['snapshot'][k] for k in ('departure','candidate','routine_version','place_refs')}
+        public={k:row['snapshot'][k] for k in row['snapshot'] if k in ('departure','candidate','routine_version','meeting_revision_id','place_refs')}
         return answer(request,{'trip':trip_data(c,row),'guidance':public,
             'events':[event_data(e) for e in repo.events(c,row['id'])],'outcome':None if row['status']=='active' else row['status']})
 
