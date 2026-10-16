@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, StrictInt, model_validator
 
 from app.common.errors import AuthError
+from app.journeys.dto import Endpoint
 
 SUPPORTED_TIMEZONE = 'Asia/Seoul'
 TOKEN_FORMAT = re.compile(r'[A-Za-z0-9_-]{32,256}$')
@@ -90,6 +91,80 @@ class InviteTokenInput(BaseModel):
         if not TOKEN_FORMAT.fullmatch(self.token):
             raise AuthError(422, 'VALIDATION_ERROR', '초대 토큰 형식을 확인해주세요.')
         return self
+
+
+class MemberOriginInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    origin: Endpoint
+    recommendation_consent: bool
+    expected_version: StrictInt
+
+    @model_validator(mode='after')
+    def positive_version(self):
+        if self.expected_version < 1:
+            raise ValueError('Expected version must be positive')
+        return self
+
+
+class SharingToggleInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    enabled: bool
+    expected_version: StrictInt
+
+    @model_validator(mode='after')
+    def positive_version(self):
+        if self.expected_version < 1:
+            raise ValueError('Expected version must be positive')
+        return self
+
+
+class ArrivalsInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    meeting_journey_id: str
+    client_event_id: str
+    occurred_at: datetime
+    source: Literal['manual']
+
+    @model_validator(mode='after')
+    def uuid_shape(self):
+        for name in ('meeting_journey_id', 'client_event_id'):
+            try:
+                UUID(getattr(self, name))
+            except (ValueError, AttributeError, TypeError) as error:
+                raise ValueError(f'{name} must be a UUID string') from error
+        return self
+
+
+class ArrivalCorrectionInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    arrival_id: str
+    expected_version: StrictInt
+    occurred_at: datetime | None = None
+    excluded: bool | None = None
+    correction_reason: Literal['wrong_time', 'wrong_action']
+
+    @model_validator(mode='after')
+    def shape(self):
+        if self.expected_version < 1:
+            raise ValueError('Expected version must be positive')
+        try:
+            UUID(self.arrival_id)
+        except (ValueError, AttributeError, TypeError) as error:
+            raise ValueError('arrival_id must be a UUID string') from error
+        if self.occurred_at is None and self.excluded is None:
+            raise ValueError('One of occurred_at or excluded is required')
+        return self
+
+
+class GuidanceQueryInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    meeting_revision_id: str
+    departure_basis: Literal['recommended', 'now']
+    origin_override: Endpoint | None = None
+    trip_id: str | None = None
 
 
 def checked_idempotency_key(request):

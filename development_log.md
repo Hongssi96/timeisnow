@@ -1,4 +1,4 @@
-# 지금이니? — 개발 일지
+﻿# 지금이니? — 개발 일지
 
 기능별 작업이 끝날 때 짧게 추가한다. 아래 ‘실제 기록’만 완료된 작업이며 템플릿은 기록 형식이다.
 
@@ -1708,6 +1708,23 @@ Notion 최신 읽기 최초 시도는 도구 오류로 응답을 받지 못했�
 - 검증/회귀: 재방문 시 번호 재전송 없이 서버 확인 복구하는 의미 있는 회귀를 frontend/tests/components/OnboardGuidance.test.jsx에 추가했다. 처음 관련3파일28개22.26초·빌드935ms 통과 후 준비 중 문구 수정까지 포함한 최종 관련4파일55개14.42초·빌드670ms 통과했다. 백엔드 운영 코드는 바꾸지 않아 이전 관련7개/공급자17개·이동/매핑 회귀를 반복하지 않고 이번 실제 HTTP/공급자 통합 검증으로 확인했다.
 - 문서/정리: Notion v0.90의 현재 상태·복구 정책·실제 검증 범위·호환성/변경 이력을 저장하고 최신 재조회한다. api_contract.md·moving_guidance_api.md·디자인/화면·TODO/동일 기능 목록을 동기화했다. F07-07b-2/지원 BUS F07-07b를 완료 처리하며 F07-07 전체의 차량 안 남은 경로/환승·목표 여유는 후속으로 남긴다. 임시 서버 정상 shutdown·소유 스키마0개 확인, 임시 스크립트/설정/정리 신호·검증 탭 삭제/viewport 복원. 배운 점: 서버의 유효 확인이 남아 있어도 재방문 화면에 GET 복구 진입점이 없으면 사용자는 다시 입력해야 한다. 다음은 미래 환승 시간표/운행 근거와 전체 남은 경로 목표 여유, 원천 최신성·실측 정확도이며 약속/채팅은 다른 담당을 유지한다.
 
+### 2026-10-16 — F12 나머지 개인 흐름 완료(혼자 일정·개인 출발지·초대 응답 캐시·개인별 출발 안내)와 F13 재정의
+- 기반/목표: 사용자 지시로 F12 남은 부분 진행 후 F13 진행. 최신 origin/main e6b20f6에서 worktree C:\projects\timeisnow-meeting + codex/meeting-personal-flows 생성(메인 체크아웃은 다른 담당의 codex/personal-walking-learning 진행 중이라 분리). 최신 Notion 명세 v0.90 16절과 meeting_api.md·policy_decisions.md·database_schema.md·기존 meetings 코드를 확인하고 설계를 확정했다. 아침에 사용자가 F13을 '약속 확정 + 출발 여부·도착 시간 상호 공유'로 재정의하고 중간 만남 추천은 후순위 유지(명세·엔드포인트 보존), F15는 F13에 흡수 삭제하기로 결정했다.
+- 구현: migration 0018_meeting_personal_flows(meeting_members에 private_origin/origin_version/recommendation_consent/updated_at, meeting_journeys 신설·활성 여정 부분 UNIQUE, guidance_snapshots.meeting_journey_id+동시 non-NULL 금지, meeting_invite_replays+pgcrypto 전용 스키마, meeting_idempotency_keys scope에 meeting-guidance 추가). PUT/GET /meetings/{id}/members/me/origin(saved_place 소유·버전 고정 검증, member 버전 충돌 409, origin_ready 실제 반영). 초대 응답 캐시(같은 키·본문 재요청은 pgcrypto PGP 대칭·MEETING_INVITE_CACHE_KEY로 만료/소비/철회 전 201 재현, 무효화 후 409 INVITE_RESPONSE_EXPIRED, 키 미설정 503, 다른 본문 409). POST /meetings/{id}/guidance-queries(동기 200, 루틴 검색 엔진 인라인 실행, 여정 후보 선택 v1=공급자 상위 대중교통 후보 고정, 검색 만료/이동 종료 후 새 여정, 같은 키·본문은 재계산 정책, meeting_arrival_slack_seconds=목표도착−(최종하차예상+종료도보), 계산 중 약속 변경은 최종 재검사로 409). POST /trips가 meeting 바인딩 지원(스냅샷 meeting_journey_id/meeting_revision_id, trip 응답 meeting_journey_id, 진행 중 이동 409 ACTIVE_TRIP_EXISTS 유지).
+- 검증: 백엔드 전체 525개 테스트 실행 — 524 통과, 유일한 실패는 origin/main에도 있는 기존 문제(test_access_walk가 알파벳 첫 로드 시 sys.path 미설정으로 import 실패, 본 변경과 무관 — 별도 후속 권장). 신규 test_meeting_flows.py 6개로 혼자 가는 일정 전 흐름(생성→확정→origin→안내→trip 연결→ACTIVE_TRIP 차단), origin 규칙/타인 404, 초대 캐시 소비 후 409, 경로 없음 insufficient_data, override/trip 검증, 계산 중 약속 변경 409+여정 1개 유지를 확인했다. test_meetings 15개·test_migrations 2개·trips/루틴 회귀 포함.
+- 문서/명세: Notion 16절에 구현 상태·초대 캐시·origin 응답·안내 정책(동기 200·후보 선택 v1·재계산 멱등 예외)·trip meeting_journey_id·0018 DDL 상태를 대상 편집으로 반영하고 재조회로 저장 확인. meeting_api.md v0.4 동기 갱신, database_schema.md·policy_decisions.md에 0018/정책 추가. todo.md·feature_breakdown.md F12 완료·F13 재정의·F15 흡수 반영. 계약 변경(새 필드/테이블/재계산 정책)이 있어 Notion 갱신이 필요했다.
+- 배운 점/남은 문제: pgcrypto는 이동식 확장이라 CREATE EXTENSION이 접속 스키마에 설치되어 테스트 스키마 격리와 충돌한다 — 전용 스키마 고정+스키마 한정 호출로 해결. 개발 DB에는 다른 담당의 미병합 0018_walking_learning이 이미 적용돼 있어 이 브랜치 단독 upgrade는 불가, 병합 시 0019 no-op merge revision(0014 선례)이 필요하다. .env에 MEETING_INVITE_CACHE_KEY 추가(값 커밋 금지). 다음 작업: F13 출발/도착 공유(PATCH sharing·GET shared-statuses·arrivals·정정), F14 채팅, 초대 캐시 만료 청소 배치는 공통 청소와 함께 후속 점검.
+
+## 2026-10-16 — F13 약속 확정·출발/도착 공유 구현 (F12 후속)
+
+- 목표/기반: 사용자 지시로 F12 남은 부분에 이어 F13(약속 확정 + 참여자 간 출발 여부·도착 시간 상호 공유, F15 흡수)을 같은 브랜치 codex/meeting-personal-flows에서 구현했다. 계약 기준은 meeting_api.md 6절과 Notion 16절 최신본(재조회 확인)이며 policy_decisions D05를 따랐다.
+- 변경 파일: meetings/service·repository·router·dto(공유 토글·상태 조회·도착 신고·정정), trips/repository(meeting_trip_summary), 0018 마이그레이션 확장(sharing 컬럼·meeting_share_events·scope 2종), tests/test_meeting_flows.py(공유 전이 테스트 4건), database_schema.md·policy_decisions.md·todo.md·feature_breakdown.md·meeting_api.md(v0.5).
+- 구현 요약: PATCH sharing(활성 참여자·member 버전 증가·초안 허용·종료 409 MEETING_CLOSED), GET shared-statuses(상태 계산 v1: sharing_off→arrived→in_transit/reported_departed→unknown, ETA는 여정 스냅샷 기반 서버 산정으로 계산+120초와 교통 근거 유효기한 중 이른 값, 만료·없음은 ETA NULL+unavailable), POST arrivals(client_event_id UNIQUE 멱등·재전송 200 원본 재현·departed 전제 없으면 409 EVENT_ORDER_CONFLICT), POST arrival-corrections(원본 보존·arrival.version 증가·excluded 이어받기·본인만 404). 도착·정정은 meeting_share_events에 원본/정정 관계로 저장한다.
+- 검증: backend 529개 테스트 중 528 통과(유일 실패 test_access_walk는 main 체크아웃에서도 동일한 기존 sys.path 문제, 본 변경 무관). 공유 상태 전체 전이(미동의→신고→도착→정정→버전 충돌→철회 무효화)를 합성 공급자 테스트로 확인했다. 실제 공급자(카카오) 호출 흐름은 브라우저 화면 검증이 F14 이후 통합 검증(10-20)에서 이어진다.
+- 명세 영향: 있음 — Notion 6절 3개 문단에 F13 구현 세부(상태 근거·v1 ETA 기준·토글 규칙·도착/정정 멱등·EVENT_ORDER_CONFLICT·미래 시각 허용)와 11절 적용 DDL 표기를 추가하고 저장·재조회로 확인했다. 계약 변경(상태 근거 명확화·v1 ETA 기준 문서화)이므로 meeting_api.md v0.5로 동기화했다.
+- 배운 개념: pgcrypto는 이동식 확장이라 테스트 스키마 search_path에 설치되면 스키마 drop 시 사라진다 — 전용 pgcrypto 스키마+스키마 한정 함수명으로 고정했다. psphycso Jsonb는 datetime을 담을 수 없어 model_dump(mode='json')이 필요하다. jsonb_build_object로 만든 jsonb 필드의 timestamp는 문자열로 반환된다.
+- 남은 문제: 개발 DB는 다른 담당의 0018_walking_learning이 이미 적용돼 있어 병합 시 0019 no-op merge revision(0014 선례)이 필요하다. 공유 상태 실시간 ETA 재계산은 F08 온보드 연계 후속 과제. F14 채팅은 다른 담당 범위 유지. MR 생성·병합은 사용자가 수행한다.
+
 ### 2026-10-16 — F09 첫 BUS 접근 보행 기록 학습
 - 목표/구현: 최신 main e6b20f6에서 codex/personal-walking-learning. backend/app/personalization의 router/service/repository와0018 마이그레이션으로 본인 수동 출발/접근 완료·검증된 산정 revision의 품질 선별/제외 사유·동일 경로 우선/유형 대체·최근20개/최소5개·중앙값0.2 갱신·버전/선택 표본 이력·초기화/세대/직전 계수 복구를 구현했다. 입력 지연60초·안내 만료·장소 변경·지원비율 밖은 제외하며 대기/탑승으로 역산하지 않는다. 최초 요청201/재시도200·내용 변경409·CSRF/소유권·사용자 잠금으로 중복 학습을 막는다.
 - 화면/파일: frontend의 personalization.js·PersonalizationCard·WalkingObservation를 App/ManualDeparture에 연결했다. 고정0개를 실제 상태/계수/갱신 전 MAE로 교체하고 명시 조건 확인·제외 사유·초기화/복구를 제공한다. 새 CSS 없이 기존 톤을 유지한다. 관련 테스트 및 personalization_api.md/api_contract.md·개인화/DB/화면/디자인/TODO·기능 목록을 동기화했다.
@@ -1742,3 +1759,9 @@ Notion 최신 읽기 최초 시도는 도구 오류로 응답을 받지 못했�
 ### 2026-10-16 — 내보내기 브랜치 main 문서 충돌 해결
 - 원인/해결: main7df31f9에 전체 자동 갱신4255905가 병합되면서 codex/trip-record-export의 api_contract.md·development_log.md·todo.md가 충돌했다. 최신 Notion v0.94를 확인하고 API5.12/5.13·변경 이력·두 개발 일지·F08-05/F09-05 완료 상태를 보존해 해결했다. main을 기능 브랜치에 반영했으며 MR 생성/병합은 하지 않았다. 다른 담당자의 F13 미커밋 문서는 임시 보존 후 복원한다.
 - 검증/명세: 개인화·전체 자동 갱신·정정/삭제·내보내기 통합32개118.065초 통과. 자동 갱신 실행 코드는 origin/main과 동일하며 신규 실행 코드 수정 없음. 두 계약/일지/TODO 보존·미해결 파일/충돌 표식 없음·git diff --check 확인. API 계약/DDL/화면 변경이 없어 Notion 수정과 프론트/시각 검증은 불필요하다. 배운 점: 최신 main에서 독립 분기한 기능도 공통 문서의 현재 상태/append 위치가 겹치면 충돌하므로 두 이력을 함께 남긴다. 다음 작업은 기존 보관기간 청소·재학습 연결이다.
+
+### 2026-10-16 — meeting 브랜치 최신 main 병합(0021 merge revision)
+- 원인/해결: 사용자 지시로 main 최신화(d96baff: walking 학습 2건·정정/재학습·기록 내보내기 병합)를 codex/meeting-personal-flows에 병합했다. 두 0018(walking_learning·meeting_personal_flows)이 같은 0017 부모를 두어 0021_meeting_flow_merge no-op merge revision(0014 선례)으로 연결했고 alembic heads는 단일 헤드가 되었다.
+- 충돌 해결: trips/service.py(공유 snapshot 키+corrections 응답 결합), test_migrations.py(기대 헤드 0021·테이블 양측 합집합), database_schema.md·development_log.md(양측 항목 모두 보존)를 해결했다. main.py·journeys/service.py·personal_walk.py 등 main의 코드는 그대로 유지되는 것을 diff로 확인했다.
+- 검증: 백엔드 전체 561개 테스트에서 560 통과(유일 실패 test_access_walk는 main에도 있는 기존 sys.path 문제). 마이그레이션 2개·meetings 15개·meeting_flows 41개 즉시 통과 확인. 프론트 변경은 main의 것만이므로 회귀 없음.
+- 명세 영향: 없음(계약 변경 없는 병합). MR 생성·병합은 사용자가 수행한다.

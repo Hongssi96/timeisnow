@@ -4,9 +4,27 @@ MeetingService는 MeetingRepository(ABC)에만 의존한다. SQL은
 PostgresMeetingRepository가 맡고, 테스트는 이 포트를 상속한 메모리
 구현체를 주입해 DB 없이 도메인 규칙을 검증할 수 있다.
 """
+import hashlib
+import os
 from abc import ABC, abstractmethod
+from pathlib import Path
 
+from dotenv import dotenv_values
 from psycopg.types.json import Jsonb
+
+from app.common.errors import AuthError
+
+
+def invite_cipher_key():
+    """Passphrase for the encrypted invite replay cache (pgcrypto PGP)."""
+    root = Path(__file__).resolve().parents[3]
+    values = {**dotenv_values(root / '.env'), **os.environ}
+    secret = values.get('MEETING_INVITE_CACHE_KEY')
+    if not isinstance(secret, str) or len(secret) < 32:
+        raise AuthError(503, 'SERVICE_UNAVAILABLE',
+                        '초대 응답 캐시 설정이 준비되지 않았어요. 관리자에게 문의해주세요.')
+    # A hex digest keeps the SQL passphrase binary-safe regardless of secret characters.
+    return hashlib.sha256(secret.encode()).hexdigest()
 
 
 class MeetingRepository(ABC):
@@ -125,24 +143,40 @@ class MeetingRepository(ABC):
         """Invite of this meeting by id, or None."""
 
     @abstractmethod
+    def find_invite_by_id(self, connection, invite_id):
+        """Invite lookup for replay-cache validation, or None."""
+
+    @abstractmethod
     def find_invite_by_token(self, connection, token_hash):
         """Invite lookup by sha256 hash, or None."""
 
     @abstractmethod
-    def consume_invite(self, connection, invite_id, user_id):
-        """Mark accepted so it can never be reused."""
+    def find_invite_replay(self, connection, user_id, key):
+        """Decrypted cached invite response for this key, or None."""
 
     @abstractmethod
-    def revoke_invite(self, connection, invite_id):
-        """Organizer-side invalidation."""
+    def insert_invite_replay(self, connection, values):
+        """Store (user_id, key, body_hash, invite_id, response_json, expires_at) encrypted at rest."""
 
     @abstractmethod
-    def reactivate_member(self, connection, member_id):
-        """A member who left may return through a new invite."""
+    def drop_invite_replays(self, connection, invite_id):
+        """Consumed or revoked invites lose their replayable response immediately."""
 
     @abstractmethod
-    def leave_member(self, connection, member_id):
-        """Soft-leave keeps history; version protects the caller's view."""
+    def find_reusable_journey(self, connection, member_id, revision_id):
+        """The member's live journey for this revision (no terminal trip, fresh search)."""
+
+    @abstractmethod
+    def supersede_meeting_journeys(self, connection, member_id, revision_id):
+        """Only one active journey per member and revision; older ones lose that status."""
+
+    @abstractmethod
+    def insert_meeting_journey(self, connection, values):
+        """Link (member, revision, search, origin fingerprint); None when a race already inserted."""
+
+    @abstractmethod
+    def update_journey_candidate(self, connection, journey_id, candidate_id, signature):
+        """Persist the selected route candidate so requeries stay on the same route."""
 
     @abstractmethod
     def insert_job(self, connection, values):
@@ -155,6 +189,62 @@ class MeetingRepository(ABC):
     @abstractmethod
     def find_job(self, connection, job_id, user_id):
         """Only the owner sees their job; others get None."""
+
+    @abstractmethod
+    def update_member_origin(self, connection, member_id, origin, consent):
+        """Store one member's private origin and recommendation consent; bumps the member version."""
+
+    @abstractmethod
+    def find_invite_by_id(self, connection, invite_id):
+        """Invite row by id alone, or None."""
+
+    @abstractmethod
+    def find_invite_replay(self, connection, user_id, key):
+        """The cached invite-issue response for one idempotency key, or None."""
+
+    @abstractmethod
+    def insert_invite_replay(self, connection, values):
+        """Cache (user_id, key, body_hash, invite_id, response_json, expires_at); the adapter encrypts response_json."""
+
+    @abstractmethod
+    def drop_invite_replays(self, connection, invite_id):
+        """A consumed or revoked invite can never be replayed."""
+
+    @abstractmethod
+    def drop_meeting_invite_replays(self, connection, meeting_id):
+        """Re-issue invalidates every cached response of this meeting's previous invites."""
+
+    @abstractmethod
+    def delete_expired_replays(self, connection):
+        """Expired invite response caches stop being visible."""
+
+    @abstractmethod
+    def update_member_sharing(self, connection, member_id, enabled):
+        """Store the member's sharing choice; bumps the member version."""
+
+    @abstractmethod
+    def insert_share_event(self, connection, values):
+        """Insert an arrival or correction row with its client dedup key."""
+
+    @abstractmethod
+    def find_share_event(self, connection, event_id):
+        """One share event row by id, or None."""
+
+    @abstractmethod
+    def find_share_event_by_client(self, connection, member_id, client_event_id):
+        """The member's event for one client_event_id, or None."""
+
+    @abstractmethod
+    def find_latest_arrival(self, connection, member_id):
+        """The member's latest arrival row with its latest correction attached, or None."""
+
+    @abstractmethod
+    def bump_arrival_version(self, connection, arrival_id, version):
+        """Record a correction by bumping the arrival version; returns the arrival row."""
+
+    @abstractmethod
+    def find_meeting_journey(self, connection, journey_id):
+        """One journey row by id, or None."""
 
 
 class PostgresMeetingRepository(MeetingRepository):
@@ -267,8 +357,91 @@ class PostgresMeetingRepository(MeetingRepository):
     def find_invite(self, connection, meeting_id, invite_id):
         return connection.execute('SELECT * FROM meeting_invites WHERE meeting_id=%s AND id=%s', (meeting_id, invite_id)).fetchone()
 
+    def find_invite_by_id(self, connection, invite_id):
+        return connection.execute('SELECT * FROM meeting_invites WHERE id=%s', (invite_id,)).fetchone()
+
     def find_invite_by_token(self, connection, token_hash):
         return connection.execute('SELECT * FROM meeting_invites WHERE token_hash=%s', (token_hash,)).fetchone()
+
+    def find_invite_replay(self, connection, user_id, key):
+        cipher = invite_cipher_key()
+        return connection.execute("""SELECT invite_id, body_hash, expires_at, pgcrypto.pgp_sym_decrypt(response, %s) AS response_json
+            FROM meeting_invite_replays WHERE user_id=%s AND key=%s AND expires_at > now()""",
+            (cipher, user_id, key)).fetchone()
+
+    def insert_invite_replay(self, connection, values):
+        cipher = invite_cipher_key()
+        user_id, key, body_hash, invite_id, response_json, expires_at = values
+        connection.execute("""INSERT INTO meeting_invite_replays(user_id,key,body_hash,invite_id,response,expires_at)
+            VALUES(%s,%s,%s,%s,pgcrypto.pgp_sym_encrypt(%s,%s),%s)""",
+            (user_id, key, body_hash, invite_id, response_json, cipher, expires_at))
+
+    def drop_invite_replays(self, connection, invite_id):
+        connection.execute('DELETE FROM meeting_invite_replays WHERE invite_id=%s', (invite_id,))
+
+    def drop_meeting_invite_replays(self, connection, meeting_id):
+        connection.execute("""DELETE FROM meeting_invite_replays r USING meeting_invites i
+            WHERE r.invite_id=i.id AND i.meeting_id=%s""", (meeting_id,))
+
+    def delete_expired_replays(self, connection):
+        connection.execute('DELETE FROM meeting_invite_replays WHERE expires_at <= now()')
+
+    def update_member_sharing(self, connection, member_id, enabled):
+        return connection.execute("""UPDATE meeting_members SET sharing_enabled=%s, sharing_updated_at=now(),
+            version=version+1, updated_at=now() WHERE id=%s RETURNING *""", (enabled, member_id)).fetchone()
+
+    def insert_share_event(self, connection, values):
+        return connection.execute("""INSERT INTO meeting_share_events(id, meeting_id, member_id, meeting_journey_id,
+            client_event_id, kind, occurred_at, source, excluded, correction_reason, corrects_event_id, version)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""", values).fetchone()
+
+    def find_share_event(self, connection, event_id):
+        return connection.execute('SELECT * FROM meeting_share_events WHERE id=%s', (event_id,)).fetchone()
+
+    def find_share_event_by_client(self, connection, member_id, client_event_id):
+        if member_id is None:
+            return connection.execute('SELECT * FROM meeting_share_events WHERE client_event_id=%s',
+                (client_event_id,)).fetchone()
+        return connection.execute('SELECT * FROM meeting_share_events WHERE member_id=%s AND client_event_id=%s',
+            (member_id, client_event_id)).fetchone()
+
+    def find_latest_arrival(self, connection, member_id):
+        return connection.execute("""SELECT a.*, (SELECT to_jsonb(c) FROM meeting_share_events c
+            WHERE c.corrects_event_id = a.id ORDER BY c.received_at DESC, c.id DESC LIMIT 1) AS correction
+            FROM meeting_share_events a WHERE a.member_id=%s AND a.kind='arrival'
+            ORDER BY a.received_at DESC, a.id DESC LIMIT 1""", (member_id,)).fetchone()
+
+    def bump_arrival_version(self, connection, arrival_id, version):
+        return connection.execute('UPDATE meeting_share_events SET version=%s WHERE id=%s RETURNING *',
+            (version, arrival_id)).fetchone()
+
+    def find_meeting_journey(self, connection, journey_id):
+        return connection.execute('SELECT * FROM meeting_journeys WHERE id=%s', (journey_id,)).fetchone()
+
+    def update_member_origin(self, connection, member_id, origin, consent):
+        return connection.execute("""UPDATE meeting_members SET private_origin=%s, origin_version=origin_version+1,
+            recommendation_consent=%s, version=version+1, updated_at=now() WHERE id=%s RETURNING *""",
+            (Jsonb(origin), consent, member_id)).fetchone()
+
+    def find_reusable_journey(self, connection, member_id, revision_id):
+        return connection.execute("""SELECT j.* FROM meeting_journeys j
+            LEFT JOIN manual_trips t ON t.id=j.trip_id
+            LEFT JOIN journey_searches s ON s.id=j.journey_search_id
+            WHERE j.member_id=%s AND j.meeting_revision_id=%s AND j.status='active'
+              AND (j.trip_id IS NULL OR t.status='active') AND s.expires_at>now()
+            ORDER BY j.created_at DESC, j.id DESC LIMIT 1""", (member_id, revision_id)).fetchone()
+
+    def supersede_meeting_journeys(self, connection, member_id, revision_id):
+        connection.execute("""UPDATE meeting_journeys SET status='superseded', updated_at=now()
+            WHERE member_id=%s AND meeting_revision_id=%s AND status='active'""", (member_id, revision_id))
+
+    def insert_meeting_journey(self, connection, values):
+        return connection.execute("""INSERT INTO meeting_journeys(id,member_id,meeting_revision_id,journey_search_id,origin_fingerprint)
+            VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING RETURNING *""", values).fetchone()
+
+    def update_journey_candidate(self, connection, journey_id, candidate_id, signature):
+        return connection.execute("""UPDATE meeting_journeys SET candidate_id=%s, candidate_signature=%s, updated_at=now()
+            WHERE id=%s RETURNING *""", (candidate_id, signature, journey_id)).fetchone()
 
     def consume_invite(self, connection, invite_id, user_id):
         return connection.execute('UPDATE meeting_invites SET accepted_by_user_id=%s, accepted_at=now() WHERE id=%s RETURNING *',
