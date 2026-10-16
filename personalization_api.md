@@ -10,7 +10,7 @@
 - 유효 표본은 최근90일 내 같은 사용자/세대/접근 유형에서 같은 물리 경로5개 우선, 부족하면 같은 유형5개를 사용한다. 선택한 풀 최근 최대20개 비율 중앙값으로 k=clamp(0.8*이전k+0.2*중앙값,0.5,2). 부족하면 기존 계수 유지. 동일 이벤트 재학습 금지. 변경 이력에 정책·선택 풀·최대20개 표본 ID를 저장한다. 첫 구현의 활동 계수는 기존 user_profiles.walking_duration_factor이며 지원 BUS 접근 안내가 재조회 시 새 profile.version으로 계산한다. 유형별 독립 적용은 후속.
 - GET /me/personalization: 200 {status:learning|active,profile_version,factors:[{type:provider_mapped_access,value}],sample_counts:{valid,excluded},policy_version,quality:{sample_count,baseline_mae_seconds,personalized_mae_seconds,baseline_underprediction_rate,personalized_underprediction_rate},can_restore}. 학습 전 예측을 관측과 비교하며 표본 없으면 MAE/과소예측률 null. valid는 현재 유효 표본 전체 수, quality는 최근 최대20개다. 개인정보·원문·좌표 없음.
 - POST /me/personalization/reset 및 /restore: {expected_version:positive_integer,client_request_id:UUID}, 200 위 상태. 초기화는 동기 처리로 기본1.0·새 세대를 만들고 초기화 전 시작한 관측은 재학습하지 않는다. restore는 직전 변경 전 계수를 새 버전으로 적용하며 표본 재처리는 하지 않는다. 소유권·CSRF·프로필 잠금, 같은 요청 재시도200/변경409, 버전409 VERSION_CONFLICT, 복구대상 없음409 RESTORE_UNAVAILABLE. 기존 미구현 reset 202 job_id 초안을 동기200으로 변경하므로 향후 클라이언트는 새 계약을 따른다.
-- 계수 변경은 여유300초를 줄이지 않는다. 과거 안내/예측은 불변이다. 기존 F05 명시 적용에서 유효한 동일 경로 기준초를 재계산하며 AI 호출/기한 연장을 하지 않는다. 관측 정정/삭제 후 현재 세대 재학습과 지원 유효 산정 일괄 재계산은5.11에 구현했다. 일반 신규 학습/초기화 후 산정 전체 자동 갱신은 후속이다.
+- 계수 변경은 여유300초를 줄이지 않는다. 과거 안내/예측은 불변이다. 기존 F05 명시 적용에서 유효한 동일 경로 기준초를 재계산하며 AI 호출/기한 연장을 하지 않는다. 관측 정정/삭제 후 현재 세대 재학습과 지원 유효 산정 일괄 재계산은5.11에 구현했다. 신규 학습/초기화/복구 후 검증된 산정 전체 자동 갱신은 profile_auto_refresh.md/Notion5.12를 따른다.
 - 관측/배제 사유는 이동과 동일90일·이동 삭제 cascade, 프로필 변경 이력은 계정 삭제까지 보관(표본 원문 없음), 샘플 집계는 유효기한과 현재 장소 버전 검사. 신규 추가 API로 기존 이동 API 호환성을 유지한다.
 
 
@@ -26,7 +26,7 @@
 
 - 격리 PostgreSQL + ASGI의 합성 수동 기록으로 계산·권한·동시성·세대·재시도·표본 풀·마이그레이션을 확인한다. 실제 사용자의5회 보행/입력 정확도·실기기 센서 검증은 수행하지 않았다.
 - 기준 경로/정류장 매핑/기준초를 클라이언트 신고로 만들지 않는다. 별도 AI 호출은 이번 학습에 없으며 공급자 시간만 있고 검증된 산정 revision이 없으면 UNVERIFIED_BASE로 제외한다.
-- 역 내부/환승·유형별 독립 계수·일괄 파생 산정 갱신·관측 정정/삭제에 따른 재학습은 후속이다. 초기화 전 기록은 되살리지 않으며 이전 계수 복구는 숫자와 버전만 새로 적용한다.
+- 정정/삭제 재학습은5.11, 계수 변경 후 검증된 전체 산정 자동 갱신은5.12에 구현했다. 역 내부/환승 신규 학습·유형별 독립 계수는 후속이다. 초기화 전 기록은 되살리지 않으며 이전 계수 복구는 숫자와 버전만 새로 적용한다.
 
 
 ## 2026-10-16 v0.92 확장
