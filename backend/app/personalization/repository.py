@@ -99,8 +99,8 @@ def recalculable(c,owner):
       JOIN ai_executions a ON (a.id,a.user_id)=(r.ai_execution_id,r.user_id)
       JOIN walking_estimate_revisions b ON b.estimate_id=e.id AND b.user_id=e.user_id AND b.revision_no=1
       JOIN ai_executions original ON original.id=b.ai_execution_id AND original.user_id=b.user_id
-      WHERE p.user_id=%s AND p.scope='provider_mapped_access' AND p.cache_key IS NOT NULL
-      AND p.evidence->'provider_duration_includes_personalization'='false'::jsonb
+      WHERE p.user_id=%s AND p.cache_key IS NOT NULL AND p.cache_identity IS NOT NULL
+      AND p.evidence->'is_walkable_route'='true'::jsonb AND p.evidence->'missing_segments'='[]'::jsonb
       AND p.expires_at>clock_timestamp() AND p.retained_until>clock_timestamp()
       AND r.expires_at>clock_timestamp() AND r.retained_until>clock_timestamp()
       AND a.retained_until>clock_timestamp() AND original.retained_until>clock_timestamp() AND a.validation_status='validated' ''',(owner,)).fetchall()

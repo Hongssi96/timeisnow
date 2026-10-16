@@ -144,9 +144,10 @@ class RecordRelearningTests(unittest.IsolatedAsyncioTestCase):
     async def test_expired_or_changed_place_base_not_recalculated(self):
         await self.learned()
         with database() as c:
+            before=c.execute('SELECT count(*) AS n FROM walking_estimate_revisions').fetchone()['n']
             c.execute("UPDATE walking_paths SET expires_at=clock_timestamp()-interval '1 second'")
         response=await self.mutation(self.event_path(),self.edit_body());self.assertEqual(response[0],200)
-        with database() as c:self.assertEqual(c.execute('SELECT count(*) AS n FROM walking_estimate_revisions').fetchone()['n'],1)
+        with database() as c:self.assertEqual(c.execute('SELECT count(*) AS n FROM walking_estimate_revisions').fetchone()['n'],before)
 
     async def test_legacy_missing_conditions_require_confirmation_and_audit_blocks_downgrade(self):
         await self.learned()
