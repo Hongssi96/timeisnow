@@ -184,8 +184,8 @@ def detail(request,estimate_id):
 def purge_expired_history(user_id):
     with database() as connection:
         user_id=parsed_id(str(user_id))
-        repository.lock(connection,user_id)
-        repository.purge(connection,user_id)
+        from app.retention.service import sweep
+        sweep(connection,user_id)
 
 
 def _estimate_and_store(user_id,value,*,context,cache_sources=None,validate_context=None):

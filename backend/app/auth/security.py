@@ -119,4 +119,6 @@ def authenticated(connection, request, write=False):
     if write:
         require_csrf(connection, request, origin, secure)
     repository.extend_session(connection, row['token_hash'])
+    from app.retention.service import sweep
+    sweep(connection,row['user_id'])
     return row['user_id']

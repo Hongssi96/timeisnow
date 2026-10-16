@@ -342,3 +342,6 @@ meeting_members에 sharing_enabled bool(기본false)·sharing_updated_at을 추�
 두 0018(walking_learning·meeting_personal_flows)은 같은 0017 부모를 두므로 0021_meeting_flow_merge no-op merge revision(0014 선례)으로 연결했다.
 
 구현 상태(2026-10-16): F13 공유 설정·상태(meeting_api.md v0.5·Notion 6절) 검증 완료. 전체 백엔드 테스트 529개 중 528 통과(유일 실패 test_access_walk는 main에도 있는 기존 sys.path 문제).
+
+## 2026-10-16 보관 만료 청소 (새 DDL 없음)
+기존90일/24시간·retained_until 컬럼을 사용해 사용자 잠금 안에서 만료 이동/관측·근거/산정/실행·원문 재시도 사본·학습 표본ID 참조를 함께 정리한다. 현재 세대 남은 관측 재학습·복구 차단·유효 산정 갱신을 같은 트랜잭션으로 저장한다. 테이블/외래키/보관 기한 추가 없음. 서버 시작·매시간/수동 관리와 실패 격리는 retention_api.md·Notion5.14.

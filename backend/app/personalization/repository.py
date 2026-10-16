@@ -3,9 +3,11 @@ from psycopg.types.json import Jsonb
 from app.trips.repository import lock_owner
 from app.walking.history_repository import lock
 
-def locked(c,owner):
+def locked(c,owner,maintain=True):
     lock_owner(c,owner);lock(c,owner)
-    c.execute('DELETE FROM walking_learning_observations WHERE user_id=%s AND expires_at<=clock_timestamp()',(owner,))
+    if maintain:
+        from app.retention.service import sweep
+        sweep(c,owner)
     c.execute('INSERT INTO walking_learning_state(user_id) VALUES(%s) ON CONFLICT DO NOTHING',(owner,))
     return c.execute('SELECT p.*,s.generation,s.started_at FROM user_profiles p JOIN walking_learning_state s USING(user_id) WHERE user_id=%s FOR UPDATE OF p,s',(owner,)).fetchone()
 

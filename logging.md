@@ -255,3 +255,6 @@ POST /api/v1/trips/{trip_id}/remaining-searches 및 GET /api/v1/trips/{trip_id}/
 ## 수동 놓침·목적지 도착 (2026-10-15)
 
 타려던 차량 놓침은 이번 이동 종료로 명시하며 다음 이용은 새 안내/이동으로 시작한다. 모든 차량 하차 뒤 목적지 도착을 사용자가 확인해야 completed로 종료한다. 기존 관측 보존·자동 학습/자동 도착 인증 없음. 계약/재시도/종료 복구와 검증 상태는 trip_api.md 5.8.3 및 development_log.md를 따른다.
+
+## 2026-10-16 보관 만료 운영
+서버 시작 후 및 매시간 100명 단위로 순회하고 사용자별 트랜잭션으로 만료 원문·파생 참조 정리/재학습/산정 갱신을 수행한다. 관리 로그 `retention.sweep.completed`는 checked/changed/rebuilt/failed 집계만 기록한다. 실패한 사용자 트랜잭션은 롤백하고 다른 사용자를 계속 처리한다. 사용자ID/좌표/이벤트/본문/키/예외 원문은 추가하지 않는다. 실행 로그14일의 외부 수집/회전은 별도 후속이며 상세 retention_api.md·Notion5.14.

@@ -75,6 +75,8 @@ def login(request, body):
 def me(request, secure):
     with database() as connection:
         row = security.session(connection, request, secure, required=True)
+        from app.retention.service import sweep
+        sweep(connection,row['user_id'])
         user = repository.find_display_name(connection, row['user_id'])
         profile = repository.find_profile(connection, row['user_id'])
         profile.pop('user_id')

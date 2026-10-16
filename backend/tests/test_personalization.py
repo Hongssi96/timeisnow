@@ -123,12 +123,23 @@ class PersonalizationTests(unittest.IsolatedAsyncioTestCase):
     def seed_valid(self,ratios,other_path=False):
         """Seed accepted historical fixtures to test bounded pool selection independently."""
         from app.personalization import repository as learning
+        other_key='f'*64
+        if other_path:
+            # Accepted samples need a retained base for their distinct synthetic segment.
+            with database() as c:
+                c.execute('''INSERT INTO walking_paths(id,user_id,path_key,candidate_id,origin_ref,destination_ref,direction,scope,
+                  place_refs,evidence,verified_at,calculated_at,expires_at,retained_until,cache_key,cache_identity)
+                  SELECT %s,user_id,%s,candidate_id,origin_ref,destination_ref,direction,scope,
+                    place_refs,evidence,verified_at,calculated_at,expires_at,retained_until,%s,cache_identity
+                  FROM walking_paths WHERE user_id=%s AND cache_key IS NOT NULL AND cache_key<>%s
+                    AND NOT EXISTS(SELECT 1 FROM walking_paths WHERE user_id=%s AND cache_key=%s) LIMIT 1''',
+                  (uuid4(),other_key,other_key,self.owner,other_key,self.owner,other_key))
         for ratio in ratios:
             tid=self.observation()
             with database() as c:
                 p=learning.locked(c,self.owner)
                 e=learning.evidence(c,self.owner,self.snapshot['departure']['personal_walk']['revision_id'])
-                learning.save_observation(c,(uuid4(),self.owner,tid,'b'*64,p['generation'],'different-path' if other_path else e['cache_key'],
+                learning.save_observation(c,(uuid4(),self.owner,tid,'b'*64,p['generation'],other_key if other_path else e['cache_key'],
                   Jsonb(e['place_refs']),436,436*ratio,436,ratio,'valid',Jsonb([]),Jsonb({}),datetime.now(timezone.utc)+timedelta(days=1)))
 
     async def test_same_segment_pool_wins_without_concatenating_other_type_samples(self):

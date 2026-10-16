@@ -98,3 +98,13 @@ AI 실패 원문·키·전체 URL·본문은 출력하지 않는다. DTO/JSON Sc
 
 
 F07-02(2026-10-13): 본인 활성 검색 후보의 first-departure GET으로 첫 버스 예상 출발을 계산한다. 사용자 승인 공급자 접근 도보×개인 계수 추정·기본여유300초, 후보 상세 표시/60초 재평가·기한/부족 차단. 로컬DB head0012_departure_profile·기존 데이터 보존 확인. 계수의 기본1.0/0.5~2.0은 GET /auth/me의 profile에 추가된다. 루틴 자동갱신/전체환승·목표도착/실제 보행·예측 정확도 확인은 후속이다. 상세 departure_api.md·Notion v0.73.
+
+## 보관 만료 관리 (F09-08)
+서버가 시작된 뒤 및 매시간 기존 보관 기한을 정리하고, 만료 표본의 영향을 제거하도록 개인 계수/유효 산정을 함께 갱신한다. 본인 인증 요청에서도 사용 전에 같은 처리를 실행한다. 수동 실행(프로젝트 루트 PowerShell):
+
+```powershell
+$env:PYTHONPATH='backend'
+backend/.venv/Scripts/python.exe -m app.retention
+```
+
+checked/changed/rebuilt/failed 집계만 출력하며 실패가 있으면 종료코드1이다. 실패 사용자는 롤백·나머지 계속, 다음 실행에서 재시도한다. 별도 외부 API·DDL·화면 변경 없음. 계약/보관/동시성/정확한 범위는 ../retention_api.md, 검증은 ../development_log.md.

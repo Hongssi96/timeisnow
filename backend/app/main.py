@@ -23,8 +23,9 @@ from app.trips.router import router as trips_router
 from app.trips.export_service import router as trip_exports_router
 from app.meetings.router import router as meetings_router
 from app.personalization.router import router as personalization_router
+from app.retention.service import lifespan
 
-app = FastAPI(title="지금이니? API", version="0.1.0")
+app = FastAPI(title="지금이니? API", version="0.1.0",lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(places_router)
 app.include_router(origins_router)
