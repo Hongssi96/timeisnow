@@ -69,3 +69,38 @@ def save_observation(c,values):
 
 def observation_response(c,oid,value):
     c.execute('UPDATE walking_learning_observations SET response=%s WHERE id=%s',(Jsonb(value),oid))
+
+def save_confirmation(c,oid,body):
+    c.execute('UPDATE walking_learning_observations SET confirmation=%s WHERE id=%s',(Jsonb(body),oid))
+
+def refreshed(c,old,body,reasons,observed,evidence,ratio,predicted,value):
+    c.execute('''UPDATE walking_learning_observations SET status=%s,reasons=%s,observed_seconds=%s,ratio=%s,
+      path_key=COALESCE(%s,path_key),base_seconds=COALESCE(%s,base_seconds),
+      predicted_seconds=COALESCE(predicted_seconds,%s),place_refs=COALESCE(%s,place_refs),confirmation=%s,version=version+1,response=%s WHERE id=%s''',
+      (value['status'],Jsonb(reasons),observed,ratio,evidence['cache_key'] if evidence else None,evidence['base_seconds'] if evidence else None,
+       predicted,Jsonb(evidence['place_refs']) if evidence else None,Jsonb(body) if body is not None else None,Jsonb(value),old['id']))
+
+def rebuild_samples(c,owner,generation):
+    return c.execute('''SELECT o.* FROM walking_learning_observations o
+      WHERE user_id=%s AND generation=%s AND status='valid' AND expires_at>clock_timestamp()
+      AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(o.place_refs) ref WHERE NOT EXISTS(
+        SELECT 1 FROM saved_places p WHERE p.user_id=o.user_id AND p.id=(ref->>'place_id')::uuid
+          AND p.location_version=(ref->>'location_version')::integer)) ORDER BY created_at,id''',(owner,generation)).fetchall()
+
+def revoke_restores(c,owner):c.execute('UPDATE walking_learning_updates SET restorable=false WHERE user_id=%s',(owner,))
+
+def recalculable(c,owner):
+    return c.execute('''SELECT r.*,COALESCE(r.candidate_id,p.candidate_id) AS candidate_id,p.place_refs,
+      p.expires_at AS path_expires_at,p.retained_until AS path_retained_until,
+      a.input_evidence,a.structured_result,a.context_snapshot,a.system_prompt_version,a.prompt_version,a.policy_version,
+      a.retained_until AS execution_retained_until
+      FROM walking_paths p JOIN walking_estimates e ON (e.walking_path_id,e.user_id)=(p.id,p.user_id)
+      JOIN LATERAL(SELECT * FROM walking_estimate_revisions x WHERE x.estimate_id=e.id AND x.user_id=e.user_id ORDER BY revision_no DESC LIMIT 1) r ON true
+      JOIN ai_executions a ON (a.id,a.user_id)=(r.ai_execution_id,r.user_id)
+      JOIN walking_estimate_revisions b ON b.estimate_id=e.id AND b.user_id=e.user_id AND b.revision_no=1
+      JOIN ai_executions original ON original.id=b.ai_execution_id AND original.user_id=b.user_id
+      WHERE p.user_id=%s AND p.scope='provider_mapped_access' AND p.cache_key IS NOT NULL
+      AND p.evidence->'provider_duration_includes_personalization'='false'::jsonb
+      AND p.expires_at>clock_timestamp() AND p.retained_until>clock_timestamp()
+      AND r.expires_at>clock_timestamp() AND r.retained_until>clock_timestamp()
+      AND a.retained_until>clock_timestamp() AND original.retained_until>clock_timestamp() AND a.validation_status='validated' ''',(owner,)).fetchall()

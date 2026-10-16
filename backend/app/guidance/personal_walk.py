@@ -30,7 +30,8 @@ def read(user_id,entry,first,origin_ref,profile):
     if not item['fetched_at']<=at<item['expires_at']:return None
     with database() as connection:
         row=history_repository.summary(connection,user_id,item['estimate_id'])
-        if row is None or row['scope']!=SCOPE or row['id']!=item['revision_id'] or row['profile_version']!=profile['version'] or row['expires_at']<=at:return None
+        if row is None or row['scope']!=SCOPE or row['profile_version']!=profile['version'] or row['expires_at']<=at:return None
+        if row['id']!=item['revision_id'] and row['source']!='profile_recalculation':return None
         check_refs(connection,user_id,row['place_refs'])
     if float(row['applied_duration_factor'])!=profile['factor']:return None
     from app.guidance.route_walks import personalized

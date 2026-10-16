@@ -23,6 +23,14 @@ def listed(request:Request,limit:int=Query(default=20,ge=1,le=100),cursor:str|No
 def detail(request:Request,trip_id:str):return service.detail(request,trip_id)
 @router.post('/{trip_id}/events',status_code=201)
 def event(request:Request,trip_id:str,body:dto.Event):return service.add_event(request,trip_id,body)
+@router.patch('/{trip_id}/events/{event_id}')
+def correct_event(request:Request,trip_id:str,event_id:str,body:dto.EventCorrection):
+    from app.trips import record_service
+    return record_service.correct(request,trip_id,event_id,body)
+@router.delete('/{trip_id}')
+def delete_trip(request:Request,trip_id:str,body:dto.RecordMutation):
+    from app.trips import record_service
+    return record_service.remove(request,trip_id,body)
 @router.patch('/{trip_id}')
 def cancel(request:Request,trip_id:str,body:dto.Cancel):return service.cancel(request,trip_id,body)
 
