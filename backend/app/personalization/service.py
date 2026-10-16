@@ -47,6 +47,8 @@ def mutate(request,body,kind):
         version=repo.change(c,owner,factor,kind)
         if kind=='reset':repo.reset_generation(c,owner)
         repo.save_change(c,(uuid4(),owner,version,p['walking_duration_factor'],factor,kind,body.client_request_id,hash_value))
+        from app.personalization.derived import recalculate
+        recalculate(c,owner,version,factor)
         value=summary(c,owner,repo.locked(c,owner));repo.save_response(c,owner,body.client_request_id,value)
         return answer(request,value)
 
@@ -106,6 +108,8 @@ def observe(request,trip_id,body):
                 version=repo.change(c,owner,factor,'observation')
                 repo.save_change(c,(uuid4(),owner,version,p['walking_duration_factor'],factor,'observation',None,None))
                 repo.save_samples(c,owner,version,rows,scope)
+                from app.personalization.derived import recalculate
+                recalculate(c,owner,version,factor)
                 result.update(profile_version=version,updated=True)
         repo.observation_response(c,oid,result)
         return answer(request,result,201)
