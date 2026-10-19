@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {records,record,observation,mutateRecord} from '../lib/tripRecords';
 import TripExport from './TripExport';
+import SegmentWalking from './SegmentWalking';
 const names={departed:'출발',approach_arrived:'승차 지점 도착',boarded:'탑승',alighted:'하차',missed:'놓침',arrived:'목적지 도착'};
 const states={active:'진행 중',completed:'도착 완료',cancelled:'취소',missed:'놓침 종료'};
 const reasons={timestamp_error:'시각 입력 오류',accidental_input:'잘못 누른 기록',learning_exclusion:'학습에서 제외',learning_restore:'학습 제외 해제'};
@@ -55,6 +56,7 @@ export default function TripRecords({onLogin}){
   {list.items.map(t=><button key={t.trip_id} className="card place-row" disabled={locked} onClick={()=>open(t.trip_id)}><span>{showTime(t.created_at)}<small>{states[t.status]} · 본인 수동 기록</small></span></button>)}
   {list.next_cursor&&<button className="secondary" disabled={locked} onClick={more}>이동 기록 더 보기</button>}
   {selected&&<section className="card" aria-label="선택한 이동 기록"><h2>{showTime(selected.trip.created_at)}</h2><p>{states[selected.trip.status]} · 버전 {selected.trip.version}</p>
+   <SegmentWalking trip={selected.trip}/>
    {selected.trip.status==='active'&&<p className="info-box">진행 중에는 정정할 수 없어요. 출발 화면에서 이동을 종료하거나 취소해주세요.</p>}
    {selected.events.map(e=><div key={e.event_id} className="place-row trip-progress-actions"><span><strong>{names[e.type]}</strong><small>{showTime(e.occurred_at)} · 버전 {e.version}{e.excluded?' · 학습 제외':''}</small></span><button className="secondary" disabled={locked||selected.trip.status==='active'} onClick={()=>{setEdit({event:e,time:localTime(e.occurred_at),excluded:e.excluded,reason:'timestamp_error'});setCondition(null);setRemove(false);}}>{names[e.type]} 기록 정정</button></div>)}
    {selected.walk&&<div className="info-box"><p>보행 학습: {selected.walk.status==='valid'?'유효':'제외'} · 버전 {selected.walk.version}</p><button className="secondary" disabled={locked||selected.trip.status==='active'} onClick={()=>{setCondition(selected.walk.confirmation||{same_scope:false,condition:'normal'});setEdit(null);setRemove(false);}}>보행 조건 정정</button></div>}

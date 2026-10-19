@@ -34,3 +34,5 @@ def remove(c,owner,trip):
       WHERE s#>>'{}' NOT IN(SELECT id::text FROM walking_learning_observations WHERE user_id=%s AND trip_id=%s)),'[]')
       WHERE user_id=%s''',(owner,trip['id'],owner))
     c.execute('DELETE FROM guidance_snapshots WHERE id=%s AND user_id=%s',(trip['guidance_id'],owner))
+    from app.personalization.segments_repository import clean
+    clean(c,owner)

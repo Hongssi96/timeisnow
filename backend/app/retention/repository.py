@@ -9,12 +9,14 @@ def pending(c,owner):
     queries=[]
     for table,expiry in [('guidance_snapshots','expires_at'),('manual_trips','expires_at'),
       ('walking_paths','retained_until'),('walking_estimate_revisions','retained_until'),('ai_executions','retained_until'),
-      ('manual_trip_creation_keys','expires_at'),('trip_record_mutations','expires_at'),('trip_exports','expires_at')]:
+      ('manual_trip_creation_keys','expires_at'),('trip_record_mutations','expires_at'),('trip_exports','expires_at'),('walking_segment_measurements','expires_at')]:
         queries.append(f'SELECT 1 FROM {table} WHERE user_id=%s AND {expiry}<=clock_timestamp()')
     queries.append('SELECT 1 FROM walking_learning_observations o WHERE o.user_id=%s AND '+OBS_EXPIRED)
     queries.append('''SELECT 1 FROM trip_record_mutations m WHERE m.user_id=%s AND m.kind<>'delete'
       AND NOT EXISTS(SELECT 1 FROM manual_trips t JOIN guidance_snapshots g ON g.id=t.guidance_id
         WHERE t.user_id=m.user_id AND t.id=m.trip_id AND t.expires_at>clock_timestamp() AND g.expires_at>clock_timestamp())''')
+    queries.append('''SELECT 1 FROM walking_segment_selections s WHERE s.user_id=%s AND NOT EXISTS(
+      SELECT 1 FROM walking_segment_measurements m WHERE m.user_id=s.user_id AND m.context_key=s.context_key AND m.expires_at>clock_timestamp())''')
     queries.append('''SELECT 1 FROM walking_learning_updates u WHERE u.user_id=%s AND EXISTS(
         SELECT 1 FROM jsonb_array_elements_text(u.sample_ids) s WHERE NOT EXISTS(
           SELECT 1 FROM walking_learning_observations o WHERE o.user_id=u.user_id AND o.id::text=s))''')
@@ -38,6 +40,8 @@ def remove(c,owner):
     from app.walking.history_repository import purge
     purge(c,owner)
     c.execute('DELETE FROM trip_exports WHERE user_id=%s AND expires_at<=clock_timestamp()',(owner,))
+    from app.personalization.segments_repository import clean
+    clean(c,owner)
     return {'observations':len(observations),'trips':trips,'rebuild':bool(references or any(o['status']=='valid' for o in observations))}
 
 def owners(c,after=None):

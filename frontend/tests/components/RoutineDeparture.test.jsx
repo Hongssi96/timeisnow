@@ -2,9 +2,10 @@ import React from 'react';
 import {render,screen,act,cleanup,fireEvent} from '@testing-library/react';
 import {afterEach,beforeEach,it,expect,vi} from 'vitest';
 import RoutineDeparture from '../../src/components/RoutineDeparture';
+import DepartureDetails from '../../src/components/DepartureDetails';
 import {refreshRoutine,getRoutineDeparture,estimateRoutineWalk} from '../../src/lib/routineDeparture';
 vi.mock('../../src/lib/routineDeparture',()=>({refreshRoutine:vi.fn(),getRoutineDeparture:vi.fn(),estimateRoutineWalk:vi.fn(),routineDepartureError:()=> '최신 안내 실패'}));
-vi.mock('../../src/components/FirstArrivals',()=>({default:({initialResponse,onReported,onCancelled})=><><p>예상 출발 {initialResponse.data.selected_departure_at}</p><button onClick={onReported}>합성 출발 확인</button><button onClick={onCancelled}>합성 이동 취소</button></>}));
+vi.mock('../../src/components/FirstArrivals',()=>({default:({initialResponse,onReported,onCancelled,detailsContent})=><><p>예상 출발 {initialResponse.data.selected_departure_at}</p><button onClick={onReported}>합성 출발 확인</button><button onClick={onCancelled}>합성 이동 취소</button><DepartureDetails>{detailsContent}</DepartureDetails></>}));
 const routine={routine_id:'r1',version:1,status:'active',origin_place:{place_id:'p1'},destination_place:{place_id:'p2'}};
 const value=(id='s1')=>({search:{search_id:id,deadline:Date.now()+300000},response:{meta:{server_time:new Date().toISOString()},data:{status:'ready',candidate_id:'c1',departure:{selected_departure_at:id}}}});
 beforeEach(()=>{vi.useFakeTimers();refreshRoutine.mockReset();estimateRoutineWalk.mockReset();getRoutineDeparture.mockReset();Object.defineProperty(document,'hidden',{configurable:true,value:false});refreshRoutine.mockResolvedValue(value());});
@@ -26,6 +27,7 @@ it('confirmed departure stops search expiry refresh and cancellation starts a fr
 
 it('AI is explicit and replaces pending guidance only after applying validated response',async()=>{
  await mount();expect(estimateRoutineWalk).not.toHaveBeenCalled();
+ expect(screen.queryByText('개인 도보 산정·저장값 적용')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'자세히 보기'}));
  estimateRoutineWalk.mockResolvedValue({data:{status:'validated'}});
  const v=value();v.response.data.departure.personal_walk={source:'ai_estimate',reused:false};getRoutineDeparture.mockResolvedValue(v.response);
  await act(async()=>{fireEvent.click(screen.getByText('개인 도보 산정·저장값 적용'));});
@@ -33,6 +35,7 @@ it('AI is explicit and replaces pending guidance only after applying validated r
 });
 it('late AI response from an expired search cannot update the new search',async()=>{
  let resolve;estimateRoutineWalk.mockImplementation(()=>new Promise(r=>resolve=r));await mount();
+ fireEvent.click(screen.getByRole('button',{name:'자세히 보기'}));
  await act(async()=>{fireEvent.click(screen.getByText('개인 도보 산정·저장값 적용'));});
  const signal=estimateRoutineWalk.mock.calls[0][3];refreshRoutine.mockResolvedValue(value('s2'));
  await act(async()=>{fireEvent.click(screen.getByText('최신 출발 다시 확인'));});
@@ -42,6 +45,7 @@ it('late AI response from an expired search cannot update the new search',async(
 
 it('departure confirmation hides AI action and aborts an in-flight estimate',async()=>{
  estimateRoutineWalk.mockImplementation(()=>new Promise(()=>{}));await mount();
+ fireEvent.click(screen.getByRole('button',{name:'자세히 보기'}));
  await act(async()=>{fireEvent.click(screen.getByText('개인 도보 산정·저장값 적용'));});
  const signal=estimateRoutineWalk.mock.calls[0][3];await act(async()=>{fireEvent.click(screen.getByText('합성 출발 확인'));});
  expect(signal.aborted).toBe(true);expect(screen.queryByText('개인 도보 산정 중…')).toBeNull();
@@ -49,7 +53,7 @@ it('departure confirmation hides AI action and aborts an in-flight estimate',asy
 
 it('AI indicator expires at the original estimate deadline without calling a model',async()=>{
  const v=value();v.response.data.departure.personal_walk={source:'ai_estimate',reused:false,expires_at:new Date(Date.now()+1000).toISOString()};refreshRoutine.mockResolvedValue(v);
- await mount();expect(screen.getByText('AI 도보 산정을 적용했어요')).toBeTruthy();
+ await mount();fireEvent.click(screen.getByRole('button',{name:'자세히 보기'}));expect(screen.getByText('AI 도보 산정을 적용했어요')).toBeTruthy();
  await act(async()=>{vi.advanceTimersByTime(1000);});
  expect(screen.queryByText('AI 도보 산정을 적용했어요')).toBeNull();expect(screen.getByText('도보 정보를 다시 확인해주세요')).toBeTruthy();expect(estimateRoutineWalk).not.toHaveBeenCalled();
 });

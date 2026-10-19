@@ -24,6 +24,14 @@ def transfer_seconds(connection,departure):
         and w.valid_until>=departure.calculated_at]
     return matches[0].provider_seconds if len(matches)==1 else None
 
+def adjusted_transfer(connection,departure,factor):
+    matches=[w for w in departure.personal_segment_walks if w.kind=='transfer'
+      and str(w.leg_id)==connection['to_leg_id'] and w.valid_until>=departure.calculated_at]
+    if len(matches)==1:return matches[0].estimate_seconds
+    seconds=transfer_seconds(connection,departure)
+    if seconds is None or seconds<0 or (seconds==0 and connection['walking_seconds'] is not None):return None
+    return personalized(seconds,factor)
+
 
 def egress_seconds(route,departure):
     legs=route['ordered_legs'];last=next(l for l in reversed(legs) if l['type']!='WALKING')

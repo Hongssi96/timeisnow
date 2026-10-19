@@ -345,3 +345,6 @@ meeting_members에 sharing_enabled bool(기본false)·sharing_updated_at을 추�
 
 ## 2026-10-16 보관 만료 청소 (새 DDL 없음)
 기존90일/24시간·retained_until 컬럼을 사용해 사용자 잠금 안에서 만료 이동/관측·근거/산정/실행·원문 재시도 사본·학습 표본ID 참조를 함께 정리한다. 현재 세대 남은 관측 재학습·복구 차단·유효 산정 갱신을 같은 트랜잭션으로 저장한다. 테이블/외래키/보관 기한 추가 없음. 서버 시작·매시간/수동 관리와 실패 격리는 retention_api.md·Notion5.14.
+
+## 2026-10-16 migration0022_segment_walking
+0021_meeting_flow_merge 다음 단일 head. walking_segment_measurements는 본인/이동 FK cascade, kind·leg·context·label·학습 세대·시작 멱등키/해시·원본 anchor/ready FK·시작/종료 수신 시각·확인 조건·제외/버전·불변 시작 당시 예측·90일 기한을 저장한다. trip/kind/leg와owner/start_request UNIQUE. walking_segment_selections는owner/context별 명시 선택 이름. 개인 명칭/원문은 일반 로그나 공급자/AI로 보내지 않는다. 만료/이동 삭제 때 고아 선택·segment 원문 영수증도 정리한다. 기록이 있으면 downgrade를 차단한다. 상세 segment_walking_api.md.

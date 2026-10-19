@@ -82,6 +82,21 @@ export function readFirstDeparture(result,searchId,candidateId) {
       if(seen.has(key))throw new ApiError('INVALID_RESPONSE');seen.add(key);
     }
   }
+  if(d.personal_segment_walks!==undefined){
+    if(!Array.isArray(d.personal_segment_walks)||d.personal_segment_walks.length>5)throw new ApiError('INVALID_RESPONSE');
+    const seen=new Set();
+    for(const w of d.personal_segment_walks){
+      const key=w?.kind+':'+w?.leg_id;
+      if(!w||!['station_internal','transfer'].includes(w.kind)||!safeJourneyId(w.leg_id)||w.source!=='manual_history'
+        ||typeof w.label!=='string'||!w.label.trim()||w.label.length>60
+        ||!Number.isSafeInteger(w.profile_version)||w.profile_version!==d.profile_version
+        ||typeof w.basis_key!=='string'||!/^[a-f0-9]{64}$/.test(w.basis_key)
+        ||!Number.isInteger(w.sample_count)||w.sample_count<5||w.sample_count>20
+        ||!Number.isInteger(w.estimate_seconds)||w.estimate_seconds<1||w.estimate_seconds>7200
+        ||!isServerTime(w.valid_until)||Date.parse(w.valid_until)<Date.parse(d.valid_until)||seen.has(key))throw new ApiError('INVALID_RESPONSE');
+      seen.add(key);
+    }
+  }
   const target=d.target_evaluation;
   if(target!==undefined&&target!==null){
     if(target.model_version!=='target.arrival.v1'||target.scope!=='selected_routine_candidate'||!['not_configured','estimated_meets','estimated_late','target_passed','unknown','stale'].includes(target.status)||!isServerTime(target.evaluated_at)

@@ -131,7 +131,9 @@ def result(request:Request,routine_id,search_id,expected_version):
                 candidate=matches[0];data['candidate_id']=candidate['candidate_id']
                 from app.guidance import selection
                 lease=selection.begin(binding)
-                value=departure.first_departure(user_id,search_id,parsed_id(candidate['candidate_id']),include_connections=True,access_origin_ref=binding.place_refs[0],destination_ref=binding.place_refs[1],selector=lease.choose,reported_departure=lease.reported)
+                from app.personalization.segments import for_guidance
+                segments=[] if lease.reported else for_guidance(user_id,binding,candidate)
+                value=departure.first_departure(user_id,search_id,parsed_id(candidate['candidate_id']),include_connections=True,access_origin_ref=binding.place_refs[0],destination_ref=binding.place_refs[1],selector=lease.choose,reported_departure=lease.reported,personal_segments=segments)
                 from app.guidance import target
                 profile=departure.settings(user_id)
                 if profile['version']!=value.profile_version or (value.applied_duration_factor is not None and profile['factor']!=value.applied_duration_factor) or profile['buffer']!=value.buffer_seconds:
@@ -144,6 +146,10 @@ def result(request:Request,routine_id,search_id,expected_version):
         if latest['candidates']!=row['candidates'] or latest['status']!=row['status'] or latest['place_refs']!=row['place_refs']:
             raise AuthError(409,'VERSION_CONFLICT','최신 경로가 변경됐어요.')
         if data['departure'] is not None:
+            from app.personalization.segments import for_guidance
+            current=[] if lease.reported else for_guidance(user_id,binding,candidate)
+            if {(w['kind'],w['leg_id'],w['basis_key']) for w in current}!={(w.kind,str(w.leg_id),w.basis_key) for w in value.personal_segment_walks}:
+                raise AuthError(409,'VERSION_CONFLICT','개인 보행 기록이 변경됐어요.')
             lease.commit(value)
             from app.guidance import issued
             data['departure']['guidance_id']=issued.publish(binding,candidate,value,profile)

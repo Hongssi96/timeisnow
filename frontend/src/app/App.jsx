@@ -1,7 +1,8 @@
 import RoutineDeparture from '../components/RoutineDeparture';
+import Modal from '../components/Modal';
 import React, { useState, useRef, useEffect } from 'react';
 
-import { ArrowUpRight, ArrowRight, Home, Repeat2, History, SlidersHorizontal, Footprints, X, Check, Clock3, ChevronRight, CircleHelp, Navigation, Leaf, Sun, RefreshCw, LogIn } from 'lucide-react';
+import { ArrowUpRight, ArrowRight, Home, Repeat2, History, SlidersHorizontal, Footprints, Check, Clock3, ChevronRight, CircleHelp, Navigation, Leaf, Sun, RefreshCw, LogIn } from 'lucide-react';
 import '../styles/styles.css';
 import { apiRequest, ApiError, isServerTime } from '../lib/api';
 import AccountForm from '../components/AccountForm';
@@ -123,9 +124,4 @@ function ServerCheck() {
     <button className="secondary" onClick={check} disabled={state.phase === 'loading'}>{state.phase === 'error' ? '다시 확인하기' : '서버 연결 확인'} <RefreshCw size={15}/></button>
     {state.requestId && <p className="muted small request-id">문의용 요청 ID: <code>{state.requestId}</code></p>}
   </div>;
-}
-function Modal({title,onClose,children}) {
-  const ref=useRef(null);
-  useEffect(()=>{const node=ref.current;node.showModal(); return()=>node.close();},[]);
-  return <dialog ref={ref} className="modal" onCancel={e=>{e.preventDefault();onClose();}} onClick={e=>{if(e.target===ref.current)onClose();}}><div className="modal-heading"><h2>{title}</h2><button className="icon-button" aria-label="닫기" onClick={onClose}><X size={22}/></button></div>{children}</dialog>;
 }

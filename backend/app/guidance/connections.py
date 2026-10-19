@@ -68,18 +68,19 @@ def evaluate(route,departure,profile,at,fetch):
         previous=legs[connection['from_leg_id']];following=legs[connection['to_leg_id']]
         if board is None:
             check.reasons=['PREVIOUS_BOARDING_UNCONFIRMED'];checks.append(check);continue
-        from app.guidance.route_walks import transfer_seconds
-        seconds=transfer_seconds(connection,departure)
-        if previous['seconds']<=0 or seconds is None or seconds<0 or (seconds==0 and connection['walking_seconds'] is not None):
+        from app.guidance.route_walks import adjusted_transfer
+        walk=adjusted_transfer(connection,departure,profile['factor'])
+        if previous['seconds']<=0 or walk is None:
             check.reasons=['TRANSFER_TIME_UNCONFIRMED'];board=None;overall='unknown';checks.append(check);continue
         try:
-            walk=int((Decimal(seconds)*Decimal(str(profile['factor']))).to_integral_value(rounding=ROUND_CEILING))
             alight=board+timedelta(seconds=previous['seconds']);minimum=alight+timedelta(seconds=walk+profile['transfer_buffer'])
         except (ArithmeticError,ValueError,OverflowError):
             check.reasons=['TRANSFER_TIME_UNCONFIRMED'];board=None;overall='unknown';checks.append(check);continue
         check.estimated_alighting_at=alight;check.minimum_boarding_at=minimum;check.transfer_walk_seconds=walk
-        if connection['walking_seconds'] is None:check.reasons.append('SUPPLEMENTAL_TRANSFER_WALK')
-        if seconds==0:check.reasons.append('SAME_STOP_TRANSFER')
+        manual=any(w.kind=='transfer' and str(w.leg_id)==connection['to_leg_id'] for w in departure.personal_segment_walks)
+        if connection['walking_seconds'] is None and not manual:check.reasons.append('SUPPLEMENTAL_TRANSFER_WALK')
+        if walk==0:check.reasons.append('SAME_STOP_TRANSFER')
+        if manual:check.reasons.append('MANUAL_HISTORY_WALK')
         if previous['type']!='BUS' or following['type']!='BUS':
             check.reasons=['TRANSFER_PROVIDER_UNSUPPORTED'];board=None;overall='unknown';checks.append(check);continue
         evidence=fetch(following)

@@ -3,6 +3,7 @@ import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,render,screen,waitFor,fireEvent} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TripRecords from '../../src/components/TripRecords';
+vi.mock('../../src/components/SegmentWalking',()=>({default:()=>null}));
 import {records,record,observation,mutateRecord} from '../../src/lib/tripRecords';
 vi.mock('../../src/lib/tripRecords',()=>({records:vi.fn(),record:vi.fn(),observation:vi.fn(),mutateRecord:vi.fn()}));
 const trip={trip_id:'trip',created_at:'2026-10-16T01:00:00Z',status:'cancelled',version:2};
