@@ -1,6 +1,6 @@
 import React from 'react';
 import { afterEach,beforeEach,expect,it,vi } from 'vitest';
-import { render,screen,act,cleanup } from '@testing-library/react';
+import { render,screen,act,cleanup,fireEvent,within } from '@testing-library/react';
 import FirstArrivals from '../../src/components/FirstArrivals';
 import { getFirstDeparture } from '../../src/lib/departure';
 import {activeTrip,confirmDeparture} from '../../src/lib/trips';
@@ -126,4 +126,27 @@ it('persisted manual departure immediately hides clocks and stops periodic depar
  render(<FirstArrivals includeDeparture searchId="search" candidateId="candidate" routineId="r" onReported={onReported}/>);await act(async()=>{});
  await act(async()=>{screen.getByText('지금 출발했어요').click();});expect(screen.queryByText('예상 출발 17:03')).toBeNull();expect(onReported).toHaveBeenCalledTimes(1);
  elapsed=300000;await act(async()=>{vi.advanceTimersByTime(300000);});expect(getFirstDeparture).toHaveBeenCalledTimes(1);expect(screen.getByText(/출발 전 안내를 종료/)).toBeTruthy();
+});
+
+
+it('compact guidance keeps details behind one modal button and closes on cancel',async()=>{
+  render(<FirstArrivals compact includeDeparture searchId="search" candidateId="candidate" detailsContent={<p>개인 도보 상세 안내</p>}/>);await act(async()=>{});
+  expect(screen.getByText('3분')).toBeTruthy();expect(screen.queryByText('수신 기준 예상')).toBeNull();expect(screen.queryByText('개인 도보 상세 안내')).toBeNull();
+  const trigger=screen.getByRole('button',{name:'자세히 보기'});trigger.focus();fireEvent.click(trigger);
+  const dialog=screen.getByRole('dialog',{name:'출발 안내 자세히 보기'});
+  expect(within(dialog).getByText('수신 기준 예상')).toBeTruthy();expect(within(dialog).getByText('개인 도보 상세 안내')).toBeTruthy();expect(getFirstDeparture).toHaveBeenCalledTimes(1);
+  fireEvent(dialog,new Event('cancel',{bubbles:false,cancelable:true}));expect(screen.queryByRole('dialog')).toBeNull();expect(document.activeElement).toBe(trigger);
+});
+it('open compact details lose expired arrival, transfer and goal numbers without closing',async()=>{
+  const r=withGoal();r.data.connection_status='estimated_feasible';r.data.transfers=[{connection_id:'one',feasibility:'estimated_feasible',next_boarding_at:'2026-10-13T08:25:00Z'}];getFirstDeparture.mockResolvedValue(r);
+  render(<FirstArrivals compact includeDeparture searchId="search" candidateId="candidate"/>);await act(async()=>{});fireEvent.click(screen.getByRole('button',{name:'자세히 보기'}));
+  const dialog=screen.getByRole('dialog');expect(within(dialog).getByText(/다음 차량 예상/)).toBeTruthy();expect(within(dialog).getByText(/예상 목적지 도착/)).toBeTruthy();
+  getFirstDeparture.mockRejectedValue({code:'PROVIDER_TIMEOUT'});elapsed=121000;await act(async()=>{vi.advanceTimersByTime(121000);});
+  expect(within(dialog).queryByText(/다음 차량 예상/)).toBeNull();expect(within(dialog).queryByText(/예상 목적지 도착/)).toBeNull();expect(within(dialog).queryByText(/첫 차량/)).toBeNull();expect(within(dialog).getByText(/환승 정보가 만료/)).toBeTruthy();expect(screen.queryByText('3분')).toBeNull();
+});
+it('authentication failure is visible inside an open details modal and clears stale values',async()=>{
+  render(<FirstArrivals compact includeDeparture searchId="search" candidateId="candidate"/>);await act(async()=>{});fireEvent.click(screen.getByRole('button',{name:'자세히 보기'}));
+  getFirstDeparture.mockRejectedValue({code:'AUTH_REQUIRED'});elapsed=60000;await act(async()=>{vi.advanceTimersByTime(60000);});
+  const dialog=screen.getByRole('dialog');expect(within(dialog).getByRole('alert').textContent).toContain('로그인 후');expect(within(dialog).queryByText(/첫 차량/)).toBeNull();expect(screen.queryByText('3분')).toBeNull();
+  fireEvent.click(within(dialog).getByRole('button',{name:'닫기'}));expect(screen.queryByRole('dialog')).toBeNull();
 });
