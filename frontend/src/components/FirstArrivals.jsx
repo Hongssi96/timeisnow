@@ -83,9 +83,14 @@ export default function FirstArrivals({ searchId, candidateId, includeDeparture=
     {d && !reported && <>
       {includeDeparture && <>
         {departureReady ? <>
+          <div className="departure-countdown" aria-label="출발까지 남은 시간">
+            <p className="departure-countdown-label"><Clock3 size={18} aria-hidden="true"/>출발까지 남은 시간</p>
+            <p className="when-answer">{secondsToDeparture>0?<><strong>{Math.ceil(secondsToDeparture/60)}분</strong>{secondsToDeparture<60&&<span className="when-unit">이내</span>}</>:<strong>지금</strong>}</p>
+            <p className="departure-countdown-caption">{secondsToDeparture>0?'뒤에 출발하세요':'출발할 시간이에요'}</p>
+            <p className="departure-countdown-estimate">현재 교통 정보 기준 예상</p>
+          </div>
           {departure.reasons?.includes('DEPARTURE_UNCONFIRMED_NEXT_VEHICLE')&&<p>출발 확인 없이 권장 시각에서 접근 시간의 절반이 지나, 다음 차량 기준으로 다시 계산했어요.</p>}
           {departure.reasons?.includes('NEXT_REACHABLE_VEHICLE')&&<p>접근 시간이 부족한 앞 차량을 제외하고 다음 차량 기준으로 계산했어요.</p>}
-          <p className="when-answer">{secondsToDeparture>0?<><strong>{Math.ceil(secondsToDeparture/60)}분</strong>{secondsToDeparture<60&&<span className="when-unit">이내</span>}</>:<strong>지금</strong>}</p>
           {secondsToDeparture<=0&&<p role="status">지금 출발 기준으로 다시 확인해주세요.</p>}
           <p>{secondsToDeparture>0?'그때':'지금'} 출발하면 정류장 도착 후 예상 {bufferText(displaySlack)} 여유가 있어요.</p>
           <p className="candidate-note">{departure.provider_approach_source==='boarding_walk'?'정류소까지 도보는 별도로 조회한 추정이에요.':'공급자 접근 도보를 추정에 사용했어요.'}</p>

@@ -67,14 +67,14 @@ export default function RoutineDeparture({routine,onRouteChange}) {
   if(recovery)return <><WalkingGuidance route={routine.route} source="routine" phase="expired"/><div className="info-box">루틴을 복구한 뒤 최신 출발 안내를 확인할 수 있어요.</div></>;
   const wrapper=state.response?.data;
   return <div aria-label="루틴 최신 출발 안내">
+    {wrapper?.status==='ready'&&<FirstArrivals key={searchId} searchId={searchId} candidateId={wrapper.candidate_id} includeDeparture loader={loader}
+      initialResponse={state.initial} routineId={routine.routine_id} onReported={onReported} onCancelled={onCancelled}/>}
     <WalkingGuidance route={routine.route} source="routine" phase={['error','expired'].includes(ai.phase)?ai.phase:'needs_data'} errorCode={ai.code} estimate={wrapper?.departure?.personal_walk}/>
     {wrapper?.status==='ready'&&!hasReported&&<div className="button-row"><button className="secondary" disabled={ai.phase==='loading'} onClick={applyWalk}>{ai.phase==='loading'?'개인 도보 산정 중…':'개인 도보 산정·저장값 적용'}</button></div>}
     {ai.phase==='needs_data'&&<p role="status">승차 지점과 보행 경로를 먼저 확인해야 개인 도보를 적용할 수 있어요.</p>}
     {state.phase==='loading'&&<p className="info-box" role="status">저장한 루틴의 최신 경로와 출발 정보를 확인하고 있어요…</p>}
     {state.phase==='expired'&&<p className="info-box" role="status">검색 정보가 만료됐어요. 최신 경로를 다시 확인해요.</p>}
     {state.phase==='error'&&<p className="info-box" role="alert">{state.message}</p>}
-    {wrapper?.status==='ready'&&<FirstArrivals key={searchId} searchId={searchId} candidateId={wrapper.candidate_id} includeDeparture loader={loader}
-      initialResponse={state.initial} routineId={routine.routine_id} onReported={onReported} onCancelled={onCancelled}/>}
     {wrapper&&wrapper.status!=='ready'&&<div className="info-box" role="status"><p>{unavailable[wrapper.status]||'경로 검색이 아직 진행 중이에요.'}</p><button className="secondary" onClick={()=>onRouteChange(routine)}>경로 다시 선택</button></div>}
     <p className="candidate-note">저장한 장소에서 출발하는 첫 승차 기준 추정이에요. 목표 도착은 현재 선택 경로의 추정 평가예요. 출발할 때 수동 확인을 남길 수 있어요.</p>
     <button className="secondary" disabled={state.phase==='loading'} onClick={()=>setAttempt(n=>n+1)}>최신 출발 다시 확인</button>

@@ -59,7 +59,16 @@
 
 .walking-guidance{color:var(--ink);font-size:14px;overflow-wrap:anywhere}.walking-guidance h3{display:flex;align-items:center;gap:8px;font-size:16px;margin:0 0 10px}.walking-guidance h3 svg{flex-shrink:0}.walking-guidance p{margin:8px 0}.walking-guidance ul{padding-left:20px;margin:10px 0}.walking-guidance li{margin:7px 0;line-height:1.6}
 
-/* F07-05: '언제이니?' countdown reuses the existing hero departure-number sizes. */
+/* Departure countdown: primary information uses the existing green/surface palette. */
+.first-arrivals .departure-countdown{background:var(--green);color:var(--surface);border-radius:18px;padding:28px 32px;margin:16px 0 22px}
+.first-arrivals .departure-countdown p{color:var(--surface)}
+.first-arrivals .departure-countdown-label{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;margin:0 0 20px}
+.first-arrivals .departure-countdown .when-answer{margin:0;flex-wrap:wrap}
+.first-arrivals .departure-countdown .when-answer strong{font-weight:700;font-variant-numeric:tabular-nums}
+.first-arrivals .departure-countdown .when-unit{color:var(--surface)}
+.first-arrivals .departure-countdown-caption{font-size:20px;font-weight:600;margin:12px 0 0}
+.first-arrivals .departure-countdown-estimate{font-size:14px;margin:16px 0 0}
+@media(max-width:680px){.first-arrivals .departure-countdown{padding:24px 20px}.first-arrivals .departure-countdown-caption{font-size:18px}}
 .first-arrivals .when-answer{display:flex;align-items:baseline;gap:10px;margin:10px 0 6px;line-height:1.05}.first-arrivals .when-answer strong{font-size:88px;font-weight:600;letter-spacing:-5px}.first-arrivals .when-answer .when-unit{font-size:24px;font-weight:600;letter-spacing:-.5px;color:var(--muted)}
 @media(min-width:1500px){.first-arrivals .when-answer strong{font-size:98px}}
 @media(max-width:680px){.first-arrivals .when-answer strong{font-size:75px}.first-arrivals .when-answer .when-unit{font-size:20px}}
