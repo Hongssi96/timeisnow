@@ -108,3 +108,14 @@ backend/.venv/Scripts/python.exe -m app.retention
 ```
 
 checked/changed/rebuilt/failed 집계만 출력하며 실패가 있으면 종료코드1이다. 실패 사용자는 롤백·나머지 계속, 다음 실행에서 재시도한다. 별도 외부 API·DDL·화면 변경 없음. 계약/보관/동시성/정확한 범위는 ../retention_api.md, 검증은 ../development_log.md.
+
+
+### F11-01 개인 이동 설정
+
+PATCH /api/v1/me/profile을 구현했습니다. 본인/CSRF·expected_version·여유0~1800 정수 초·부분 변경·같은 값 유지와 유효 도보 산정 동기 갱신을 제공합니다. 기존 테이블/가입 기본값·계수/기한을 유지하며 서버 재시작만 필요합니다. 상세는 ../profile_settings_api.md와 Notion5.16, 검증의 간헐 실패 범위는 ../development_log.md F11-01을 따릅니다.
+
+프로젝트 루트에서 전체 테스트를 실행할 때는 app 모듈 경로를 먼저 지정합니다(접근 도보 테스트의 독립 import 포함).
+
+```powershell
+& backend/.venv/Scripts/python.exe -c "import sys,unittest;sys.path.insert(0,'backend');r=unittest.TextTestRunner().run(unittest.defaultTestLoader.discover('backend/tests'));sys.exit(not r.wasSuccessful())"
+```

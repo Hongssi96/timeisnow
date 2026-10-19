@@ -1,7 +1,8 @@
 """Request and response bodies for the auth endpoints."""
 import re
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from typing import Literal
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class LoginInput(BaseModel):
@@ -49,3 +50,19 @@ class RegisterInput(LoginInput):
 
 class EmptyInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
+
+
+class ProfileInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    expected_version: int = Field(strict=True, ge=1)
+    walking_preference: Literal['slow','normal','fast'] | None = None
+    first_boarding_buffer_seconds: int | None = Field(default=None, strict=True, ge=0, le=1800)
+    transfer_buffer_seconds: int | None = Field(default=None, strict=True, ge=0, le=1800)
+    route_preference: Literal['balanced','fewer_transfers','less_walking'] | None = None
+
+    @model_validator(mode='after')
+    def changes(self):
+        fields=self.model_fields_set-{'expected_version'}
+        if not fields or any(getattr(self,key) is None for key in fields):
+            raise ValueError('At least one non-null setting is required')
+        return self

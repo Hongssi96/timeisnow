@@ -60,6 +60,14 @@ def insert_profile(connection, user_id):
     connection.execute('INSERT INTO user_profiles(user_id) VALUES(%s)', (user_id,))
 
 
+def update_profile(connection, user_id, values):
+    return connection.execute('''UPDATE user_profiles SET walking_preference=%s,
+        first_boarding_buffer_seconds=%s,transfer_buffer_seconds=%s,route_preference=%s,
+        version=version+1 WHERE user_id=%s RETURNING *''',
+        (values['walking_preference'],values['first_boarding_buffer_seconds'],
+         values['transfer_buffer_seconds'],values['route_preference'],user_id)).fetchone()
+
+
 def clock_now(connection):
     return connection.execute('SELECT clock_timestamp() AS now').fetchone()['now']
 

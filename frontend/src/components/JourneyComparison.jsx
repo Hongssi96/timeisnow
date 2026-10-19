@@ -1,4 +1,5 @@
 import WalkingGuidance from './WalkingGuidance';
+import {getProfile} from '../lib/profile';
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, MapPin, ArrowRight } from 'lucide-react';
 import { apiRequest, ApiError } from '../lib/api';
@@ -40,6 +41,12 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
   const [saveMessage,setSaveMessage]=useState(null);
   const [reloadNeeded,setReloadNeeded]=useState(false);
   const [preference,setPreference]=useState('balanced');
+  const preferenceEdited=useRef(false);
+  useEffect(()=>{
+    const controller=new AbortController();
+    getProfile(controller.signal).then(value=>{if(!controller.signal.aborted&&!preferenceEdited.current)setPreference(value.profile.route_preference);}).catch(()=>{});
+    return()=>controller.abort();
+  },[]);
   const [state,setState]=useState({phase:'idle'});
   const [saves,setSaves]=useState({});
   const pending=useRef(null),snapshot=useRef(null),saver=useRef(null),saveAttempts=useRef({});
@@ -88,6 +95,7 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
   }
   async function run(retry=false,readOnly=false){
     if(pending.current)return;
+    preferenceEdited.current=true;
     if(!origin||!destination||Math.min(origin.deadline,destination.deadline)<=Date.now()){expire();return;}
     const controller=new AbortController();pending.current=controller;
     if(!retry||!snapshot.current){
@@ -185,7 +193,7 @@ export default function JourneyComparison({ initialOrigin, onBack, onLogin, onAu
         initialLocation={editingMode==='new' && (editing==='origin'?origin:destination)?.origin?.type==='map_pin' ? (editing==='origin'?origin:destination).location : null}
         onSelect={choose} onLogin={onLogin} onAuthError={authFailure} onBusyChange={setEditingBusy}/></div>}
       {origin&&destination&&!canSave&&<div className="info-box routine-save-help"><p>{placeRef(origin)&&placeRef(destination)?'출발지와 도착지는 서로 다른 저장 장소를 선택해주세요.':SAVED_PLACE_REQUIRED}</p><p>새 장소를 이 화면에서 저장하고 선택할 수 있어요. 장소를 선택한 뒤 경로를 다시 조회해주세요.</p><div className="button-row"><button className="secondary" disabled={editingBusy} onClick={()=>edit('origin','saved')}>출발지 저장 장소 선택</button><button className="secondary" disabled={editingBusy} onClick={()=>edit('destination','saved')}>도착지 저장 장소 선택</button><button className="secondary" disabled={editingBusy} onClick={()=>edit('origin','new')}>출발 장소 새로 저장</button><button className="secondary" disabled={editingBusy} onClick={()=>edit('destination','new')}>도착 장소 새로 저장</button></div></div>}
-      <label className="comparison-sort">비교 기준<select value={preference} disabled={busy} onChange={event=>{setPreference(event.target.value);if(!['ready','empty','failed'].includes(state.phase))reset();}}><option value="balanced">전체 예상 시간순</option><option value="fewer_transfers">환승 적은 순</option><option value="less_walking">제공된 도보 시간순</option></select></label>
+      <label className="comparison-sort">비교 기준<select value={preference} disabled={busy} onChange={event=>{preferenceEdited.current=true;setPreference(event.target.value);if(!['ready','empty','failed'].includes(state.phase))reset();}}><option value="balanced">전체 예상 시간순</option><option value="fewer_transfers">환승 적은 순</option><option value="less_walking">제공된 도보 시간순</option></select></label>
       <p className="candidate-note">조회된 후보 안에서 정렬해요. 빠진 도보 구간과 실제 운행 방향은 따로 확인해야 해요.</p>
       <button className="primary" disabled={reloadNeeded||busy||!!editing||!origin||!destination||!!state.retryAt} onClick={()=>state.phase==='error'&&snapshot.current?run(true,!!snapshot.current.accepted):run()}>{busy?'경로 확인 중…':state.phase==='error'&&snapshot.current?(snapshot.current.accepted?'결과 다시 확인':'같은 요청 다시 확인'):state.phase==='failed'?'경로 후보 다시 조회':'경로 후보 조회'}<ArrowRight size={18}/></button>
     </section>

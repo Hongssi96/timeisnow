@@ -10,8 +10,8 @@ afterEach(()=>{vi.resetAllMocks();vi.useRealTimers();});
 const accepted={search_id:'search_test',job_id:'job_test',status:'queued'};
 const reply=(data,status=200)=>({data,status,meta:{server_time:new Date().toISOString()}});
 const result=(candidates=[fixtures.direct,fixtures.mixed],status='succeeded')=>reply({...accepted,status,candidates:structuredClone(candidates),unavailable_reasons:[],error:status==='failed'?{code:'PROVIDER_TIMEOUT',message:'private upstream'}:null,expires_at:new Date(Date.now()+290000).toISOString()});
-function mockApi(get=()=>result(),post=()=>reply(accepted,202)){
-  apiRequest.mockImplementation((path)=>path==='/api/v1/auth/csrf'?Promise.resolve(reply({csrf_token:'csrf_test'})):path==='/api/v1/journey-searches'?Promise.resolve(post()):Promise.resolve(get()));
+function mockApi(get=()=>result(),post=()=>reply(accepted,202),preference='balanced'){
+  apiRequest.mockImplementation((path)=>path==='/api/v1/me'?Promise.resolve(reply({user_id:'member',profile:{walking_preference:'normal',route_preference:preference,walking_duration_factor:1,first_boarding_buffer_seconds:300,transfer_buffer_seconds:120,timezone:'Asia/Seoul',version:1}})):path==='/api/v1/auth/csrf'?Promise.resolve(reply({csrf_token:'csrf_test'})):path==='/api/v1/journey-searches'?Promise.resolve(post()):Promise.resolve(get()));
 }
 async function open(props={}){
   vi.useFakeTimers();const user={click:async node=>{await act(async()=>fireEvent.click(node));},selectOptions:async(node,value)=>{await act(async()=>fireEvent.change(node,{target:{value}}));}};render(<JourneyComparison {...props}/>);
@@ -21,7 +21,7 @@ async function open(props={}){
 async function search(user){await user.click(screen.getByRole('button',{name:'경로 후보 조회'}));await act(()=>vi.advanceTimersByTimeAsync(2000));}
 
 it('only submits after explicit endpoints and click; shows estimates and safe detail',async()=>{
-  mockApi();const user=await open();expect(apiRequest).not.toHaveBeenCalled();
+  mockApi();const user=await open();expect(apiRequest.mock.calls.some(([path])=>path==='/api/v1/journey-searches')).toBe(false);
   await search(user);expect(screen.getByRole('heading',{name:'경로 후보 2개'})).toBeTruthy();
   const post=apiRequest.mock.calls.find(([path])=>path==='/api/v1/journey-searches')[1];
   expect(post.body.origin.place_id).toBe('place_origin');expect(post.body.destination.place_id).toBe('place_destination');expect(post.headers['Idempotency-Key']).toBeTruthy();
@@ -116,4 +116,10 @@ it('hides candidate times and shows walking recovery when results expire',async(
   mockApi();const user=await open();await search(user);
   await act(()=>vi.advanceTimersByTimeAsync(290000));
   expect(screen.queryByRole('article')).toBeNull();expect(screen.getByText(/이전 경로의 시간을 사용하지/)).toBeTruthy();
+});
+
+it('initializes comparison with the saved route preference while allowing an explicit override',async()=>{
+ mockApi(undefined,undefined,'less_walking');const user=await open();expect(screen.getByLabelText('비교 기준').value).toBe('less_walking');
+ await user.selectOptions(screen.getByLabelText('비교 기준'),'fewer_transfers');await search(user);
+ expect(apiRequest.mock.calls.find(([path])=>path==='/api/v1/journey-searches')[1].body.preferences.route_preference).toBe('fewer_transfers');
 });

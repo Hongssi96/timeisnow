@@ -8,6 +8,7 @@ import { apiRequest, ApiError, isServerTime } from '../lib/api';
 import AccountForm from '../components/AccountForm';
 import PlacesCard from '../components/PlacesCard';
 import PersonalizationCard from '../components/PersonalizationCard';
+import ProfileSettingsCard from '../components/ProfileSettingsCard';
 import TripRecords from '../components/TripRecords';
 import OriginSelector from '../components/OriginSelector';
 import JourneyComparison from '../components/JourneyComparison';
@@ -22,7 +23,6 @@ export default function App() {
   const routines = routineState.items;
   const [routineToReplace, setRoutineToReplace] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [buffer, setBuffer] = useState(5);
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
 
@@ -75,7 +75,7 @@ export default function App() {
         {page==='routines'&&<><PageHeading eyebrow="MY ROUTINES" title="매일 가는 길을 기억해요." description="한 번 저장한 경로로, 내일 아침은 조금 더 간단하게."/><RoutinesPanel state={routineState} onRetry={()=>loadRoutines()} onMore={()=>loadRoutines(true)} onLogin={()=>setModal('account')} onAdd={addRoutine} onSelect={value=>{setSelected(value.routine_id);setOrigin(null);setOriginExpired(false);navigate('home');}} onRouteChange={changeRoute} onChanged={message=>{refreshRoutines();notify(message);}} onAuthError={()=>{clearRoutines();setSelected(null);}}/></>}
         {page==='history'&&<><PageHeading eyebrow="MY JOURNEYS" title="내 걸음이 쌓이는 곳." description="이동 기록을 확인하고 잘못된 입력을 바로잡아요."/>{modal!=='account'&&<TripRecords onLogin={()=>setModal('account')}/>}</>}
         {page==='journeys'&&<JourneyComparison initialOrigin={originExpired?null:origin} onBack={()=>navigate('home')} onLogin={()=>setModal('account')} onAuthError={()=>{setOrigin(null);setOriginExpired(false);clearRoutines();setSelected(null);setRoutineToReplace(null);}} routineToReplace={routineToReplace} onRoutineSaved={savedRoutine} onRoutineReload={()=>{setRoutineToReplace(null);refreshRoutines();navigate('routines');}}/>}
-        {page==='settings'&&<><PageHeading eyebrow="MADE FOR YOU" title="나에게 맞는 작은 설정." description="익숙한 장소와 편안한 여유를 기억해둘게요."/><div className="settings-grid">{modal!=='account'&&<PlacesCard onLogin={()=>setModal('account')}/>}<section className="card"><h2>첫 탑승 여유</h2><p className="muted">정류장에 얼마나 여유 있게 도착할까요?</p><div className="buffer-control"><button aria-label="여유 1분 줄이기" disabled={buffer<=1} onClick={()=>setBuffer(b=>b-1)}>−</button><strong>{buffer}<small>분</small></strong><button aria-label="여유 1분 늘리기" disabled={buffer>=10} onClick={()=>setBuffer(b=>b+1)}>+</button></div><p className="small muted">처음에는 5분으로 시작해요.<br/>내 걸음을 학습해도 여유는 자동으로 줄이지 않아요.</p><p className="small">화면 체험 범위: 1~10분 · 서버 저장 전</p></section>{modal!=='account'&&<PersonalizationCard/>}<section className="card"><h2>계정과 알림</h2><button className="place-row" onClick={()=>{clearRoutines();setSelected(null);setModal('account');}}><LogIn size={20}/><span>회원가입 · 로그인</span><ChevronRight size={18}/></button><p className="muted small">백그라운드 출발 알림은 아직 제공하지 않아요. 이 화면을 닫으면 알림이 오지 않습니다.</p></section><section className="card"><h2>서버 연결</h2><p className="muted small">이 화면이 백엔드 서버와 통신되는지 확인해요. 화면 체험용 예시와는 별개예요.</p><ServerCheck/></section></div></>}
+        {page==='settings'&&<><PageHeading eyebrow="MADE FOR YOU" title="나에게 맞는 작은 설정." description="익숙한 장소와 편안한 여유를 기억해둘게요."/><div className="settings-grid">{modal!=='account'&&<PlacesCard onLogin={()=>setModal('account')}/>}{modal!=='account'&&<ProfileSettingsCard onLogin={()=>setModal('account')} onSaved={refreshRoutines}/>}{modal!=='account'&&<PersonalizationCard key={revision}/>}<section className="card"><h2>계정과 알림</h2><button className="place-row" onClick={()=>{clearRoutines();setSelected(null);setModal('account');}}><LogIn size={20}/><span>회원가입 · 로그인</span><ChevronRight size={18}/></button><p className="muted small">백그라운드 출발 알림은 아직 제공하지 않아요. 이 화면을 닫으면 알림이 오지 않습니다.</p></section><section className="card"><h2>서버 연결</h2><p className="muted small">이 화면이 백엔드 서버와 통신되는지 확인해요. 화면 체험용 예시와는 별개예요.</p><ServerCheck/></section></div></>}
         <footer><span>지금이니? <span className="footer-dot">·</span> 기다림을 줄이는 작은 습관</span><span>{page==='journeys'?'경로와 첫 승차 출발은 공급자 근거에 따른 추정입니다.':'첫 승차 출발은 추정 안내이며 이동 기록은 본인 신고입니다.'}</span></footer>
       </main>
     </div>

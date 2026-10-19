@@ -59,7 +59,7 @@ it('starts recovery with saved places and ignores an unrelated home origin witho
   expect(screen.queryByText('다른 곳')).toBeNull();
   await act(async()=>fireEvent.click(screen.getByRole('button',{name:'출발지 선택'})));
   expect(screen.getByRole('button',{name:'검증 위치 적용'}).dataset.mode).toBe('saved');
-  expect(apiRequest).not.toHaveBeenCalled();
+  expect(apiRequest.mock.calls.some(([path,options])=>options?.method==='POST'||path.includes('journey-searches'))).toBe(false);
 });
 
 it('saves a candidate as a named routine with idempotency key',async()=>{

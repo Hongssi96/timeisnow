@@ -2,8 +2,8 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
-from app.auth import security, service
-from app.auth.dto import EmptyInput, LoginInput, RegisterInput
+from app.auth import security, service, profile_service
+from app.auth.dto import EmptyInput, LoginInput, RegisterInput, ProfileInput
 from app.auth.security import set_cookie, settings
 from app.common.response import answer
 from app.common.timeutil import iso
@@ -48,3 +48,8 @@ def logout(request: Request, body: EmptyInput):
     response = Response(status_code=204, headers={'Cache-Control': 'no-store'})
     response.delete_cookie(security.cookie_name(secure), path='/', httponly=True, secure=secure, samesite='lax')
     return response
+
+
+@router.patch('/me/profile')
+def profile(request: Request, body: ProfileInput):
+    return answer(request,profile_service.update(request,body))

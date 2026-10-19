@@ -1,5 +1,7 @@
 # 지금이니? — 기본 회원 인증 계약
 
+F11-01(2026-10-19): PATCH /me/profile 본인/CSRF·부분 변경·버전 충돌·유효 산정 동기 갱신을 연결한다. 상세 profile_settings_api.md·Notion v0.97/5.16. 기존 GET /me·가입 기본값 유지.
+
 - 버전0.5 / 2026-10-07 / Notion v0.34 기준
 - 메일 인증은 후순위, 개발 loopback 주소 호환 및 운영 origin 검증을 유지한다.
 
